@@ -34,10 +34,10 @@ func ToCSV(r io.Reader, w io.Writer) error {
 
 	switch trimmed[0] {
 	case '{':
-		return errors.New("unsupported input: expected CSV JSON (array of objects), got Workbook JSON (object)")
+		return errors.New("unsupported input: expected csvtk csv2json JSON (array of objects), got sheet2xlsx Workbook JSON (object)")
 	case '[':
 	default:
-		return errors.New("unsupported input: expected JSON array starting with '['")
+		return errors.New("unsupported input: expected csvtk csv2json JSON array starting with '['")
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(trimmed))
