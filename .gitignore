@@ -1,3 +1,5 @@
 /sheet2xlsx
 *.xlsx
 !examples/*.xlsx
+test.csv
+test.md

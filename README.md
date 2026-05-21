@@ -39,16 +39,40 @@ go install github.com/yourname/sheet2xlsx/cmd/sheet2xlsx@latest
 
 ## 使い方
 
-ファイル入力:
+`sheet2xlsx` は単一バイナリの CLI で、XLSX と JSON を相互変換します。サブコマンドは `to-json` (XLSX → JSON) と `to-xlsx` (JSON → XLSX) の 2 種類で、**サブコマンドを省略した場合は `to-json` として動作**します。
+
+### `to-json` — XLSX → JSON (デフォルト)
+
+XLSX を読み込み、`sheet2xlsx` に入力可能な JSON (セルマップ形式) を出力します。
 
 ```bash
-sheet2xlsx -i input.json -o output.xlsx --sheet Sheet1
+sheet2xlsx to-json -i input.xlsx -o output.json
 ```
 
-標準入力:
+サブコマンド省略時も同じ動作になります。
 
 ```bash
-cat input.json | sheet2xlsx -o output.xlsx
+sheet2xlsx -i input.xlsx -o output.json
+```
+
+`-i` を省略すると標準入力、`-o` を省略すると標準出力を使います。
+
+```bash
+cat input.xlsx | sheet2xlsx to-json > output.json
+```
+
+### `to-xlsx` — JSON → XLSX
+
+JSON を読み込み、`.xlsx` を出力します。`-sheet` でシート名未指定時のデフォルトを指定できます。
+
+```bash
+sheet2xlsx to-xlsx -i input.json -o output.xlsx -sheet Sheet1
+```
+
+標準入力からも受け付けます。
+
+```bash
+cat input.json | sheet2xlsx to-xlsx -o output.xlsx
 ```
 
 ## 入力JSONの考え方
