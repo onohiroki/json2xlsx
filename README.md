@@ -75,6 +75,41 @@ sheet2xlsx to-xlsx -i input.json -o output.xlsx -sheet Sheet1
 cat input.json | sheet2xlsx to-xlsx -o output.xlsx
 ```
 
+### `to-md` — JSON / XLSX → Markdown
+
+`Workbook` を Markdown のテーブルに変換します。入力は **JSON (sheet2xlsx 互換 Workbook) と XLSX の両方** に対応し、先頭 4 バイトの magic byte (`PK\x03\x04`) で自動判定します。AI への提示や `cat` での内容確認用の中間表現として使えます。
+
+```bash
+sheet2xlsx to-md -i input.json -o output.md
+sheet2xlsx to-md -i input.xlsx -o output.md
+cat input.xlsx | sheet2xlsx to-md > output.md
+```
+
+#### オプション
+
+- `-mode f` (デフォルト): 数式があれば `=B1*2` を表示、無ければ `v` を表示。
+- `-mode v`: `v` を優先表示。`v` が無ければ `=B1*2` にフォールバック。
+- `-mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記。
+- `-row-index`: 先頭に行番号列 (`1`, `2`, …) を追加。Excel と座標を照合したい時に便利。
+
+#### 出力例 (`-mode f`)
+
+```text
+| A | B | C |
+| --- | --- | --- |
+| 100 | 5000 | =B2*C2 |
+```
+
+#### 複数シート
+
+複数シートの `Workbook` を渡すと、シートごとに `## <シート名>` 見出し付きのテーブルが連結されます。単一シート時は見出しは省略されます。
+
+#### 注意点
+
+- セル内の `|`, `\`, 改行は GFM のテーブルセルとして安全な形 (`\|`, `\\`, `<br />`) にエスケープされます。
+- スタイル (色・罫線・フォント)、列幅、行高は Markdown には反映されません。
+- マージセルは左上セルの値のみ出力され、それ以外は空セルになります。
+
 ## 入力JSONの考え方
 
 `sheet2xlsx` は、SheetJS 互換を意識した JSON を受け取り、セル単位で `.xlsx` に変換します。[3][4]
