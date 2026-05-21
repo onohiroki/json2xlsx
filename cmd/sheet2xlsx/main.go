@@ -16,8 +16,8 @@ Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
   sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--row-index]
-  sheet2xlsx to-csv  [-i input.json] [-o output.csv]
-  sheet2xlsx        [-i input.xlsx] [-o output.json]   # to-json として動作
+  sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk csv2json の逆変換
+  sheet2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
 
 オプション:
   -i           入力ファイル (省略時 stdin)
@@ -28,12 +28,13 @@ Usage:
 
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
-to-md は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。`)
+to-md は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
+to-csv は csvtk csv2json の出力する JSON を CSV に戻す。`) 
 }
 
 func main() {
 	args := os.Args[1:]
-	sub := "to-json"
+	sub := "to-xlsx"
 	if len(args) > 0 {
 		switch args[0] {
 		case "to-json", "to-xlsx", "to-md", "to-csv":
