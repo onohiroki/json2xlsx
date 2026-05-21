@@ -63,10 +63,10 @@ cat input.xlsx | sheet2xlsx to-json > output.json
 
 ### `to-xlsx` — JSON → XLSX
 
-JSON を読み込み、`.xlsx` を出力します。`-sheet` でシート名未指定時のデフォルトを指定できます。
+JSON を読み込み、`.xlsx` を出力します。`--sheet` でシート名未指定時のデフォルトを指定できます。
 
 ```bash
-sheet2xlsx to-xlsx -i input.json -o output.xlsx -sheet Sheet1
+sheet2xlsx to-xlsx -i input.json -o output.xlsx --sheet Sheet1
 ```
 
 標準入力からも受け付けます。
@@ -87,12 +87,14 @@ cat input.xlsx | sheet2xlsx to-md > output.md
 
 #### オプション
 
-- `-mode f` (デフォルト): 数式があれば `=B1*2` を表示、無ければ `v` を表示。
-- `-mode v`: `v` を優先表示。`v` が無ければ `=B1*2` にフォールバック。
-- `-mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記。
-- `-row-index`: 先頭に行番号列 (`1`, `2`, …) を追加。Excel と座標を照合したい時に便利。
+- `--mode f` (デフォルト): 数式があれば `=B1*2` を表示、無ければ `v` を表示。
+- `--mode v`: `v` を優先表示。`v` が無ければ `=B1*2` にフォールバック。
+- `--mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記。
+- `--row-index`: 先頭に行番号列 (`1`, `2`, …) を追加。Excel と座標を照合したい時に便利。
 
-#### 出力例 (`-mode f`)
+ロングオプションは `--name` 形式で表記しています。短い `-i` / `-o` はそのまま `-` 1 文字で指定します。`-mode` のようにハイフン 1 つでも受け付けますが、ドキュメント上の表記は `--` に統一しています。
+
+#### 出力例 (`--mode f`)
 
 ```text
 | A | B | C |
