@@ -39,20 +39,14 @@ go install github.com/yourname/sheet2xlsx/cmd/sheet2xlsx@latest
 
 ## 使い方
 
-`sheet2xlsx` は単一バイナリの CLI で、XLSX と JSON を相互変換します。サブコマンドは `to-json` (XLSX → JSON) と `to-xlsx` (JSON → XLSX) の 2 種類で、**サブコマンドを省略した場合は `to-json` として動作**します。
+`sheet2xlsx` は単一バイナリの CLI で、XLSX と JSON を相互変換します。サブコマンドは `to-json` (XLSX → JSON)、`to-xlsx` (JSON → XLSX)、`to-csv` (csvtk csv2json の逆変換) の 3 種類で、**サブコマンドを省略した場合は `to-xlsx` として動作**します。
 
-### `to-json` — XLSX → JSON (デフォルト)
+### `to-json` — XLSX → JSON
 
 XLSX を読み込み、`sheet2xlsx` に入力可能な JSON (セルマップ形式) を出力します。
 
 ```bash
 sheet2xlsx to-json -i input.xlsx -o output.json
-```
-
-サブコマンド省略時も同じ動作になります。
-
-```bash
-sheet2xlsx -i input.xlsx -o output.json
 ```
 
 `-i` を省略すると標準入力、`-o` を省略すると標準出力を使います。
@@ -61,12 +55,18 @@ sheet2xlsx -i input.xlsx -o output.json
 cat input.xlsx | sheet2xlsx to-json > output.json
 ```
 
-### `to-xlsx` — JSON → XLSX
+### `to-xlsx` — JSON → XLSX (デフォルト)
 
 JSON を読み込み、`.xlsx` を出力します。`--sheet` でシート名未指定時のデフォルトを指定できます。
 
 ```bash
 sheet2xlsx to-xlsx -i input.json -o output.xlsx --sheet Sheet1
+```
+
+サブコマンド省略時も同じ動作になります。
+
+```bash
+sheet2xlsx -i input.json -o output.xlsx
 ```
 
 標準入力からも受け付けます。
@@ -111,6 +111,16 @@ cat input.xlsx | sheet2xlsx to-md > output.md
 - セル内の `|`, `\`, 改行は GFM のテーブルセルとして安全な形 (`\|`, `\\`, `<br />`) にエスケープされます。
 - スタイル (色・罫線・フォント)、列幅、行高は Markdown には反映されません。
 - マージセルは左上セルの値のみ出力され、それ以外は空セルになります。
+
+### `to-csv` — csvtk csv2json の逆変換
+
+`csvtk csv2json` が出力する JSON (オブジェクトの配列) を CSV に戻します。
+`to-json` が出力する sheet2xlsx 形式の JSON (Workbook オブジェクト) は受け付けず、エラー終了します。
+
+```bash
+sheet2xlsx to-csv -i input.json -o output.csv
+cat input.json | sheet2xlsx to-csv > output.csv
+```
 
 ## 入力JSONの考え方
 
