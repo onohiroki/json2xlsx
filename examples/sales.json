@@ -1,0 +1,49 @@
+{
+  "name": "売上",
+  "cells": {
+    "A1": {"t": "s", "v": "製品", "s": 2},
+    "B1": {"t": "s", "v": "数量", "s": 2},
+    "C1": {"t": "s", "v": "単価", "s": 2},
+    "D1": {"t": "s", "v": "合計", "s": 2},
+    "A2": {"t": "s", "v": "商品A\n特価"},
+    "B2": {"t": "n", "v": 100},
+    "C2": {"t": "n", "v": 5000, "s": 1},
+    "D2": {"t": "f", "f": "B2*C2", "s": 1},
+    "A3": {"t": "s", "v": "商品B"},
+    "B3": {"t": "n", "v": 50},
+    "C3": {"t": "n", "v": 8000, "s": 1},
+    "D3": {"t": "f", "f": "B3*C3", "s": 1},
+    "A4": {"t": "s", "v": "合計", "s": 2},
+    "D4": {"t": "f", "f": "SUM(D2:D3)", "s": 3}
+  },
+  "cols": [
+    {"col": "A", "width": 18},
+    {"col": "B", "width": 10},
+    {"col": "C", "width": 12},
+    {"col": "D", "width": 14}
+  ],
+  "rowDims": [
+    {"row": 2, "height": 30}
+  ],
+  "styles": [
+    {
+      "id": 1,
+      "numFmt": "#,##0",
+      "border": [{"style": "thin", "color": "#000000"}]
+    },
+    {
+      "id": 2,
+      "fill": {"type": "pattern", "pattern": 1, "color": ["#E0EBF5"]},
+      "border": [{"style": "thin", "color": "#000000"}],
+      "font": {"bold": true},
+      "alignment": {"horizontal": "center", "wrapText": true}
+    },
+    {
+      "id": 3,
+      "fill": {"type": "pattern", "pattern": 1, "color": ["#FFE4B5"]},
+      "border": [{"style": "medium", "color": "#000000"}],
+      "font": {"bold": true},
+      "numFmt": "#,##0"
+    }
+  ]
+}
