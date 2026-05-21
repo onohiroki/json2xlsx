@@ -16,6 +16,7 @@ Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
   sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--row-index]
+  sheet2xlsx to-csv  [-i input.json] [-o output.csv]
   sheet2xlsx        [-i input.xlsx] [-o output.json]   # to-json として動作
 
 オプション:
@@ -35,7 +36,7 @@ func main() {
 	sub := "to-json"
 	if len(args) > 0 {
 		switch args[0] {
-		case "to-json", "to-xlsx", "to-md":
+		case "to-json", "to-xlsx", "to-md", "to-csv":
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
@@ -51,6 +52,8 @@ func main() {
 		runToXLSX(args)
 	case "to-md":
 		runToMD(args)
+	case "to-csv":
+		runToCSV(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -152,6 +155,34 @@ func runToMD(args []string) {
 	}
 	if err := sheet2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runToCSV(args []string) {
+	fs := flag.NewFlagSet("to-csv", flag.ExitOnError)
+	fs.Usage = usage
+	var input, output string
+	fs.StringVar(&input, "i", "", "input CSV JSON file (default: stdin)")
+	fs.StringVar(&output, "o", "", "output CSV file (default: stdout)")
+	_ = fs.Parse(args)
+
+	r, closeR, err := openInput(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open input: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeR()
+
+	w, closeW, err := openOutput(output)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create output: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeW()
+
+	if err := sheet2xlsx.ToCSV(r, w); err != nil {
+		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
 		os.Exit(1)
 	}
 }
