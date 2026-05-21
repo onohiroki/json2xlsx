@@ -24,6 +24,27 @@ func ToJSON(r io.Reader, out io.Writer) error {
 	}
 	defer f.Close()
 
+	wb, err := extractWorkbook(f)
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(&wb); err != nil {
+		return fmt.Errorf("encode json: %w", err)
+	}
+	return nil
+}
+
+// sheetJSON は単一シート出力用の補助構造体 (ref を含む)。
+// Sheet 型に ref フィールドを追加してもよいが、JSON 出力を簡潔に保つために
+// Cells map のキー集合から導出する方針も可能。ここでは Sheet をそのまま使う。
+
+// extractWorkbook は excelize で開いた XLSX から Workbook 構造を抽出する。
+// ToJSON と ToMarkdown (XLSX 経路) の両方で再利用される。
+func extractWorkbook(f *excelize.File) (Workbook, error) {
 	sc := newStyleCollector()
 
 	sheetNames := f.GetSheetList()
@@ -31,7 +52,7 @@ func ToJSON(r io.Reader, out io.Writer) error {
 	for _, name := range sheetNames {
 		sh, err := extractSheet(f, name, sc)
 		if err != nil {
-			return fmt.Errorf("extract sheet %q: %w", name, err)
+			return Workbook{}, fmt.Errorf("extract sheet %q: %w", name, err)
 		}
 		sheets = append(sheets, sh)
 	}
@@ -48,19 +69,8 @@ func ToJSON(r io.Reader, out io.Writer) error {
 		wb.Sheets = sheets
 	}
 	wb.Styles = sc.styles
-
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(&wb); err != nil {
-		return fmt.Errorf("encode json: %w", err)
-	}
-	return nil
+	return wb, nil
 }
-
-// sheetJSON は単一シート出力用の補助構造体 (ref を含む)。
-// Sheet 型に ref フィールドを追加してもよいが、JSON 出力を簡潔に保つために
-// Cells map のキー集合から導出する方針も可能。ここでは Sheet をそのまま使う。
 
 func extractSheet(f *excelize.File, name string, sc *styleCollector) (Sheet, error) {
 	sh := Sheet{Name: name, Cells: map[string]Cell{}}

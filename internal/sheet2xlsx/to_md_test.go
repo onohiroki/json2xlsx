@@ -1,0 +1,172 @@
+package sheet2xlsx
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
+
+func runToMD(t *testing.T, input string, opts MarkdownOptions) string {
+	t.Helper()
+	var out bytes.Buffer
+	if err := ToMarkdown(strings.NewReader(input), &out, opts); err != nil {
+		t.Fatalf("ToMarkdown: %v", err)
+	}
+	return out.String()
+}
+
+func TestToMarkdown_JSON_ModeFormula(t *testing.T) {
+	in := `{
+	  "name": "Sheet1",
+	  "cells": {
+	    "A1": {"t":"n","v":42},
+	    "B1": {"t":"n","v":7},
+	    "C1": {"t":"f","f":"A1*B1","v":294}
+	  }
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
+	want := "| A | B | C |\n" +
+		"| --- | --- | --- |\n" +
+		"| 42 | 7 | =A1*B1 |\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToMarkdown_JSON_ModeValue(t *testing.T) {
+	in := `{
+	  "name": "S",
+	  "cells": {
+	    "A1": {"t":"f","f":"1+2","v":3},
+	    "B1": {"t":"f","f":"X"}
+	  }
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeValue})
+	want := "| A | B |\n" +
+		"| --- | --- |\n" +
+		"| 3 | =X |\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToMarkdown_JSON_ModeBoth(t *testing.T) {
+	in := `{
+	  "cells": {
+	    "A1": {"t":"f","f":"B1*2","v":84},
+	    "B1": {"t":"n","v":42}
+	  }
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeBoth})
+	want := "| A | B |\n" +
+		"| --- | --- |\n" +
+		"| 84<br />=B1*2 | 42 |\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToMarkdown_RowIndex(t *testing.T) {
+	in := `{
+	  "cells": {
+	    "A1": {"t":"s","v":"a"},
+	    "B1": {"t":"s","v":"b"},
+	    "A2": {"t":"n","v":1},
+	    "B2": {"t":"n","v":2}
+	  }
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true})
+	want := "|   | A | B |\n" +
+		"| --- | --- | --- |\n" +
+		"| 1 | a | b |\n" +
+		"| 2 | 1 | 2 |\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToMarkdown_MultiSheet(t *testing.T) {
+	in := `{
+	  "sheets": [
+	    {"name":"First","cells":{"A1":{"t":"s","v":"x"}}},
+	    {"name":"Second","cells":{"A1":{"t":"n","v":1}}}
+	  ]
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
+	want := "## First\n\n" +
+		"| A |\n| --- |\n| x |\n" +
+		"\n## Second\n\n" +
+		"| A |\n| --- |\n| 1 |\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestToMarkdown_Escaping(t *testing.T) {
+	in := `{
+	  "cells": {
+	    "A1": {"t":"s","v":"a|b"},
+	    "B1": {"t":"s","v":"line1\nline2"},
+	    "C1": {"t":"s","v":"back\\slash"}
+	  }
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
+	want := "| A | B | C |\n" +
+		"| --- | --- | --- |\n" +
+		`| a\|b | line1<br />line2 | back\\slash |` + "\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToMarkdown_InvalidMode(t *testing.T) {
+	var out bytes.Buffer
+	err := ToMarkdown(strings.NewReader(`{"cells":{}}`), &out, MarkdownOptions{Mode: MarkdownMode("xxx")})
+	if err == nil {
+		t.Fatalf("expected error for invalid mode")
+	}
+}
+
+func TestToMarkdown_InvalidInput(t *testing.T) {
+	var out bytes.Buffer
+	err := ToMarkdown(strings.NewReader("\x00\x01"), &out, MarkdownOptions{})
+	if err == nil {
+		t.Fatalf("expected error for too-short / unknown input")
+	}
+}
+
+func TestToMarkdown_UnknownBinary(t *testing.T) {
+	var out bytes.Buffer
+	err := ToMarkdown(strings.NewReader("\xFF\xFE\xFD\xFCxxxx"), &out, MarkdownOptions{})
+	if err == nil {
+		t.Fatalf("expected error for binary that's neither JSON nor XLSX")
+	}
+}
+
+func TestToMarkdown_XLSXPath(t *testing.T) {
+	// JSON -> XLSX (Convert) -> Markdown と、JSON 直接 -> Markdown が同等。
+	jsonIn := `{
+	  "name": "Sheet1",
+	  "cells": {
+	    "A1": {"t":"s","v":"hello"},
+	    "B1": {"t":"n","v":3}
+	  }
+	}`
+	var xlsxBuf bytes.Buffer
+	if err := Convert(strings.NewReader(jsonIn), &xlsxBuf, ""); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+
+	var mdFromXLSX bytes.Buffer
+	if err := ToMarkdown(bytes.NewReader(xlsxBuf.Bytes()), &mdFromXLSX, MarkdownOptions{Mode: MarkdownModeFormula}); err != nil {
+		t.Fatalf("ToMarkdown(xlsx): %v", err)
+	}
+	got := mdFromXLSX.String()
+	// XLSX 経路では Sheet 名は Convert 既定 (Sheet1) になるはず。ヘッダ A B と値が出ること。
+	if !strings.Contains(got, "| A | B |") {
+		t.Fatalf("missing header. got:\n%s", got)
+	}
+	if !strings.Contains(got, "hello") || !strings.Contains(got, "3") {
+		t.Fatalf("missing values. got:\n%s", got)
+	}
+}
