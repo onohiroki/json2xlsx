@@ -15,12 +15,17 @@ func usage() {
 Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [-sheet name]
+  sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [-mode f|v|both] [-row-index]
   sheet2xlsx        [-i input.xlsx] [-o output.json]   # to-json として動作
 
 オプション:
-  -i  入力ファイル (省略時 stdin)
-  -o  出力ファイル (省略時 stdout)
-  -sheet  to-xlsx でシート名未指定時のデフォルト`)
+  -i          入力ファイル (省略時 stdin)
+  -o          出力ファイル (省略時 stdout)
+  -sheet      to-xlsx でシート名未指定時のデフォルト
+  -mode       to-md のセル表示モード (f=数式優先, v=値優先, both=併記). デフォルト f
+  -row-index  to-md で行番号列を先頭に出力する
+
+to-md は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。`)
 }
 
 func main() {
@@ -28,7 +33,7 @@ func main() {
 	sub := "to-json"
 	if len(args) > 0 {
 		switch args[0] {
-		case "to-json", "to-xlsx":
+		case "to-json", "to-xlsx", "to-md":
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
@@ -42,6 +47,8 @@ func main() {
 		runToJSON(args)
 	case "to-xlsx":
 		runToXLSX(args)
+	case "to-md":
+		runToMD(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -101,6 +108,48 @@ func runToXLSX(args []string) {
 
 	if err := sheet2xlsx.Convert(r, w, sheet); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runToMD(args []string) {
+	fs := flag.NewFlagSet("to-md", flag.ExitOnError)
+	fs.Usage = usage
+	var input, output, mode string
+	var rowIndex bool
+	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
+	fs.StringVar(&output, "o", "", "output Markdown file (default: stdout)")
+	fs.StringVar(&mode, "mode", "f", "cell display mode: f|v|both")
+	fs.BoolVar(&rowIndex, "row-index", false, "prepend row number column")
+	_ = fs.Parse(args)
+
+	switch sheet2xlsx.MarkdownMode(mode) {
+	case sheet2xlsx.MarkdownModeFormula, sheet2xlsx.MarkdownModeValue, sheet2xlsx.MarkdownModeBoth:
+	default:
+		fmt.Fprintf(os.Stderr, "to-md: invalid -mode %q (expected f|v|both)\n", mode)
+		os.Exit(2)
+	}
+
+	r, closeR, err := openInput(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open input: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeR()
+
+	w, closeW, err := openOutput(output)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create output: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeW()
+
+	opts := sheet2xlsx.MarkdownOptions{
+		Mode:     sheet2xlsx.MarkdownMode(mode),
+		RowIndex: rowIndex,
+	}
+	if err := sheet2xlsx.ToMarkdown(r, w, opts); err != nil {
+		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
 		os.Exit(1)
 	}
 }
