@@ -14,17 +14,19 @@ func usage() {
 
 Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json]
-  sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [-sheet name]
-  sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [-mode f|v|both] [-row-index]
+  sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
+  sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--row-index]
   sheet2xlsx        [-i input.xlsx] [-o output.json]   # to-json として動作
 
 オプション:
-  -i          入力ファイル (省略時 stdin)
-  -o          出力ファイル (省略時 stdout)
-  -sheet      to-xlsx でシート名未指定時のデフォルト
-  -mode       to-md のセル表示モード (f=数式優先, v=値優先, both=併記). デフォルト f
-  -row-index  to-md で行番号列を先頭に出力する
+  -i           入力ファイル (省略時 stdin)
+  -o           出力ファイル (省略時 stdout)
+  --sheet      to-xlsx でシート名未指定時のデフォルト
+  --mode       to-md のセル表示モード (f=数式優先, v=値優先, both=併記). デフォルト f
+  --row-index  to-md で行番号列を先頭に出力する
 
+ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
+(-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
 to-md は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。`)
 }
 
