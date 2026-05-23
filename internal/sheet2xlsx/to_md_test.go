@@ -119,6 +119,31 @@ func TestToMarkdown_Escaping(t *testing.T) {
 	}
 }
 
+func TestToMarkdown_JSON_DateSerial(t *testing.T) {
+	in := `{
+	  "name": "Sheet1",
+	  "cells": {
+	    "A1": {"t":"n","v":45678,"z":"yyyy-mm-dd"},
+	    "B1": {"t":"n","v":0.04623843,"z":"h:mm:ss"},
+	    "C1": {"t":"s","v":"hello","z":"yyyy-mm-dd"},
+	    "D1": {"t":"n","v":42,"z":"#,##0"}
+	  }
+	}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
+	if !strings.Contains(got, "2025-01-21T00:00:00") {
+		t.Fatalf("date serial 45678 should become RFC3339. got:\n%s", got)
+	}
+	if !strings.Contains(got, "01:06:35") {
+		t.Fatalf("time serial 0.04623843 should become RFC3339. got:\n%s", got)
+	}
+	if !strings.Contains(got, "hello") {
+		t.Fatalf("string value with date z should stay as-is. got:\n%s", got)
+	}
+	if !strings.Contains(got, "42") {
+		t.Fatalf("non-date format #,##0 should remain numeric. got:\n%s", got)
+	}
+}
+
 func TestToMarkdown_InvalidMode(t *testing.T) {
 	var out bytes.Buffer
 	err := ToMarkdown(strings.NewReader(`{"cells":{}}`), &out, MarkdownOptions{Mode: MarkdownMode("xxx")})
