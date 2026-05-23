@@ -133,8 +133,8 @@ func TestToMarkdown_JSON_DateSerial(t *testing.T) {
 	if !strings.Contains(got, "2025-01-21T00:00:00") {
 		t.Fatalf("date serial 45678 should become RFC3339. got:\n%s", got)
 	}
-	if !strings.Contains(got, "01:06:35") {
-		t.Fatalf("time serial 0.04623843 should become RFC3339. got:\n%s", got)
+	if !strings.Contains(got, "1:06:35") {
+		t.Fatalf("time serial 0.04623843 should become h:mm:ss format. got:\n%s", got)
 	}
 	if !strings.Contains(got, "hello") {
 		t.Fatalf("string value with date z should stay as-is. got:\n%s", got)

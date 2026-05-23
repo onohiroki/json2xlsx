@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 
@@ -79,7 +80,7 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 }
 
 // normalizeDateCells は z に日付/時刻書式コードを持つセルの T を "d" に書き換える。
-// これにより formatCell の case "d" / dateCellToString が適切に処理する。
+// これにより formatCell の case "d" が適切に処理する。
 func normalizeDateCells(wb *Workbook) {
 	for axis, cell := range wb.Cells {
 		if cell.Z != "" && cell.T != "d" && cell.T != "f" {
@@ -99,6 +100,58 @@ func normalizeDateCells(wb *Workbook) {
 			}
 		}
 	}
+}
+
+// isTimeOnlyFormat は書式コードが時刻のみ（日付コンポーネントなし）かどうかを判定する。
+func isTimeOnlyFormat(code string) bool {
+	if code == "" {
+		return false
+	}
+	lc := strings.ToLower(code)
+	hasTime := strings.Contains(lc, "h") || strings.Contains(lc, "mm") || strings.Contains(lc, "ss")
+	hasDate := strings.Contains(lc, "y") || strings.Contains(lc, "d")
+	return hasTime && !hasDate
+}
+
+// formatTimeOnly は時刻シリアル値を書式コードに従って文字列化する。
+func formatTimeOnly(serial float64, z string) string {
+	totalSec := int(math.Round(serial * 86400))
+	abs := totalSec
+	sign := ""
+	if abs < 0 {
+		sign = "-"
+		abs = -abs
+	}
+
+	h := abs / 3600
+	m := (abs % 3600) / 60
+	s := abs % 60
+
+	lc := strings.ToLower(z)
+	hasSeconds := strings.Contains(lc, "ss")
+	hourLeadZero := strings.Contains(lc, "hh")
+	hasHours := strings.Contains(lc, "h") || strings.Contains(lc, "[h]")
+
+	if hasHours {
+		if hasSeconds {
+			if hourLeadZero {
+				return fmt.Sprintf("%s%02d:%02d:%02d", sign, h, m, s)
+			}
+			return fmt.Sprintf("%s%01d:%02d:%02d", sign, h, m, s)
+		}
+		if hourLeadZero {
+			return fmt.Sprintf("%s%02d:%02d", sign, h, m)
+		}
+		return fmt.Sprintf("%s%01d:%02d", sign, h, m)
+	}
+
+	// No hours (e.g. "mm:ss") → total minutes:seconds
+	totalMin := abs / 60
+	sec := abs % 60
+	if hasSeconds {
+		return fmt.Sprintf("%02d:%02d", totalMin, sec)
+	}
+	return fmt.Sprintf("%02d:%02d", totalMin, sec)
 }
 
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
@@ -240,7 +293,11 @@ func formatCell(cell Cell, mode MarkdownMode) string {
 		}
 	case "d":
 		if hasV {
-			raw = dateCellToString(cell.V)
+			if cell.Z != "" && isTimeOnlyFormat(cell.Z) {
+				raw = formatTimeOnly(toFloat64(cell.V), cell.Z)
+			} else {
+				raw = dateCellToString(cell.V)
+			}
 		}
 	default:
 		// t = s/n/b/空 はすべて v を文字列化。
@@ -288,6 +345,36 @@ func scalarToString(v interface{}) string {
 		return x.String()
 	default:
 		return fmt.Sprint(v)
+	}
+}
+
+// toFloat64 は interface{} から float64 を抽出する。失敗時は 0 を返す。
+func toFloat64(v interface{}) float64 {
+	if v == nil {
+		return 0
+	}
+	switch x := v.(type) {
+	case float64:
+		return x
+	case float32:
+		return float64(x)
+	case int:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case json.Number:
+		f, err := x.Float64()
+		if err == nil {
+			return f
+		}
+		return 0
+	default:
+		if s, ok := v.(string); ok {
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				return f
+			}
+		}
+		return 0
 	}
 }
 
