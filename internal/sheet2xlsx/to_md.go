@@ -27,8 +27,9 @@ const (
 
 // MarkdownOptions は Markdown レンダリング設定。
 type MarkdownOptions struct {
-	Mode     MarkdownMode
-	RowIndex bool
+	Mode            MarkdownMode
+	RowIndex        bool
+	FirstRowHeader  bool
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -215,38 +216,11 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 
 	var b strings.Builder
 
-	// ヘッダ行
-	b.WriteString("|")
-	if opts.RowIndex {
-		b.WriteString("   |")
-	}
-	for c := 1; c <= maxCol; c++ {
-		b.WriteString(" ")
-		b.WriteString(colNames[c])
-		b.WriteString(" |")
-	}
-	b.WriteString("\n")
-
-	// 区切り行
-	b.WriteString("|")
-	if opts.RowIndex {
-		b.WriteString(" --- |")
-	}
-	for c := 1; c <= maxCol; c++ {
-		b.WriteString(" --- |")
-	}
-	b.WriteString("\n")
-
-	// 本文
-	for r := 1; r <= maxRow; r++ {
+	if opts.FirstRowHeader {
+		// 1行目をヘッダとして出力
 		b.WriteString("|")
-		if opts.RowIndex {
-			b.WriteString(" ")
-			b.WriteString(strconv.Itoa(r))
-			b.WriteString(" |")
-		}
 		for c := 1; c <= maxCol; c++ {
-			axis := colNames[c] + strconv.Itoa(r)
+			axis := colNames[c] + "1"
 			cell, ok := sh.Cells[axis]
 			b.WriteString(" ")
 			if ok {
@@ -255,6 +229,70 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
+
+		// 区切り行
+		b.WriteString("|")
+		for c := 1; c <= maxCol; c++ {
+			b.WriteString(" --- |")
+		}
+		b.WriteString("\n")
+
+		// 本文 (r=2..maxRow)
+		for r := 2; r <= maxRow; r++ {
+			b.WriteString("|")
+			for c := 1; c <= maxCol; c++ {
+				axis := colNames[c] + strconv.Itoa(r)
+				cell, ok := sh.Cells[axis]
+				b.WriteString(" ")
+				if ok {
+					b.WriteString(formatCell(cell, opts.Mode))
+				}
+				b.WriteString(" |")
+			}
+			b.WriteString("\n")
+		}
+	} else {
+		// ヘッダ行 (ABC)
+		b.WriteString("|")
+		if opts.RowIndex {
+			b.WriteString("   |")
+		}
+		for c := 1; c <= maxCol; c++ {
+			b.WriteString(" ")
+			b.WriteString(colNames[c])
+			b.WriteString(" |")
+		}
+		b.WriteString("\n")
+
+		// 区切り行
+		b.WriteString("|")
+		if opts.RowIndex {
+			b.WriteString(" --- |")
+		}
+		for c := 1; c <= maxCol; c++ {
+			b.WriteString(" --- |")
+		}
+		b.WriteString("\n")
+
+		// 本文 (r=1..maxRow)
+		for r := 1; r <= maxRow; r++ {
+			b.WriteString("|")
+			if opts.RowIndex {
+				b.WriteString(" ")
+				b.WriteString(strconv.Itoa(r))
+				b.WriteString(" |")
+			}
+			for c := 1; c <= maxCol; c++ {
+				axis := colNames[c] + strconv.Itoa(r)
+				cell, ok := sh.Cells[axis]
+				b.WriteString(" ")
+				if ok {
+					b.WriteString(formatCell(cell, opts.Mode))
+				}
+				b.WriteString(" |")
+			}
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()
