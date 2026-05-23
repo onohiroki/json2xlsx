@@ -16,6 +16,7 @@ Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
   sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--no-header]
+  sheet2xlsx to-html [-i input.(json|xlsx)] [-o output.html]   # JSON / XLSX → HTML <table>
   sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
   sheet2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
 
@@ -31,7 +32,7 @@ Usage:
 
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
-to-md は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
+to-md / to-html は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
 to-csv は csvtk csv2json または xlsx-cli -j の JSON を CSV に戻す。`)
 }
 
@@ -40,7 +41,7 @@ func main() {
 	sub := "to-xlsx"
 	if len(args) > 0 {
 		switch args[0] {
-		case "to-json", "to-xlsx", "to-md", "to-csv":
+		case "to-json", "to-xlsx", "to-md", "to-html", "to-csv":
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
@@ -56,6 +57,8 @@ func main() {
 		runToXLSX(args)
 	case "to-md":
 		runToMD(args)
+	case "to-html":
+		runToHTML(args)
 	case "to-csv":
 		runToCSV(args)
 	default:
@@ -192,6 +195,34 @@ func runToMD(args []string) {
 	}
 	if err := sheet2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runToHTML(args []string) {
+	fs := flag.NewFlagSet("to-html", flag.ExitOnError)
+	fs.Usage = usage
+	var input, output string
+	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
+	fs.StringVar(&output, "o", "", "output HTML file (default: stdout)")
+	_ = fs.Parse(args)
+
+	r, closeR, err := openInput(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open input: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeR()
+
+	w, closeW, err := openOutput(output)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create output: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeW()
+
+	if err := sheet2xlsx.ToHTML(r, w, sheet2xlsx.HTMLOptions{}); err != nil {
+		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
 		os.Exit(1)
 	}
 }
