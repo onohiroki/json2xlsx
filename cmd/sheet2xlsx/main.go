@@ -13,23 +13,26 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `sheet2xlsx - XLSX <-> JSON 相互変換 CLI
 
 Usage:
-  sheet2xlsx to-json [-i input.xlsx] [-o output.json]
+  sheet2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
   sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--row-index]
-  sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk csv2json の逆変換
+  sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
   sheet2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
 
 オプション:
   -i           入力ファイル (省略時 stdin)
   -o           出力ファイル (省略時 stdout)
   --sheet      to-xlsx でシート名未指定時のデフォルト
+  --date-serial    to-json で日時セルを Excel シリアル値で出力する (既定)
+  --date-display   to-json で日時セルを表示文字列で出力する
+  --date-rfc3339   to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
   --mode       to-md のセル表示モード (f=数式優先, v=値優先, both=併記). デフォルト f
   --row-index  to-md で行番号列を先頭に出力する
 
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
 to-md は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
-to-csv は csvtk csv2json の出力する JSON を CSV に戻す。`) 
+to-csv は csvtk csv2json または xlsx-cli -j の JSON を CSV に戻す。`)
 }
 
 func main() {
@@ -65,9 +68,19 @@ func runToJSON(args []string) {
 	fs := flag.NewFlagSet("to-json", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output string
+	var dateDisplay, dateRFC3339, dateSerial bool
 	fs.StringVar(&input, "i", "", "input XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output JSON file (default: stdout)")
+	fs.BoolVar(&dateDisplay, "date-display", false, "emit date cells as display strings")
+	fs.BoolVar(&dateRFC3339, "date-rfc3339", false, "reinterpret date/time serial values as RFC3339 (UTC)")
+	fs.BoolVar(&dateSerial, "date-serial", false, "emit date cells as Excel serial values")
 	_ = fs.Parse(args)
+
+	dateMode, err := resolveDateMode(dateDisplay, dateRFC3339, dateSerial)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+		os.Exit(2)
+	}
 
 	r, closeR, err := openInput(input)
 	if err != nil {
@@ -83,10 +96,32 @@ func runToJSON(args []string) {
 	}
 	defer closeW()
 
-	if err := sheet2xlsx.ToJSON(r, w); err != nil {
+	opts := sheet2xlsx.ToJSONOptions{DateMode: dateMode}
+	if err := sheet2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func resolveDateMode(dateDisplay, dateRFC3339, dateSerial bool) (sheet2xlsx.DateMode, error) {
+	count := 0
+	mode := sheet2xlsx.DateModeSerial
+	if dateDisplay {
+		count++
+		mode = sheet2xlsx.DateModeDisplay
+	}
+	if dateRFC3339 {
+		count++
+		mode = sheet2xlsx.DateModeRFC3339
+	}
+	if dateSerial {
+		count++
+		mode = sheet2xlsx.DateModeSerial
+	}
+	if count > 1 {
+		return "", fmt.Errorf("choose only one of --date-display, --date-rfc3339, --date-serial")
+	}
+	return mode, nil
 }
 
 func runToXLSX(args []string) {

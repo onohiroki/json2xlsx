@@ -1,0 +1,56 @@
+{
+  "name": "勤務時間サンプル",
+  "cells": {
+    "A1": {"t": "s", "v": "ケース", "s": 4},
+    "B1": {"t": "s", "v": "開始", "s": 4},
+    "C1": {"t": "s", "v": "終了", "s": 4},
+    "D1": {"t": "s", "v": "差分", "s": 4},
+    "E1": {"t": "s", "v": "開始 (d例)", "s": 4},
+    "F1": {"t": "s", "v": "終了 (d例)", "s": 4},
+    "G1": {"t": "s", "v": "備考", "s": 4},
+    "A2": {"t": "s", "v": "t=n (Excel 時刻小数)"},
+    "B2": {"t": "n", "v": 0.3784722222222222, "s": 1},
+    "C2": {"t": "n", "v": 0.7847222222222222, "s": 1},
+    "D2": {"t": "f", "f": "C2-B2", "v": 0.40625, "s": 2},
+    "E2": {"t": "d", "v": "2026-05-22T09:05:00+09:00", "s": 3},
+    "F2": {"t": "d", "v": "2026-05-22T18:50:00+09:00", "s": 3},
+    "G2": {"t": "s", "v": "差分の期待表示は 9:45"}
+  },
+  "cols": [
+    {"col": "A", "width": 24},
+    {"col": "B", "width": 11},
+    {"col": "C", "width": 11},
+    {"col": "D", "width": 11},
+    {"col": "E", "width": 22},
+    {"col": "F", "width": 22},
+    {"col": "G", "width": 28}
+  ],
+  "styles": [
+    {
+      "id": 1,
+      "numFmt": "h:mm",
+      "border": [{"style": "thin", "color": "#000000"}],
+      "alignment": {"horizontal": "center"}
+    },
+    {
+      "id": 2,
+      "numFmt": "[h]:mm",
+      "border": [{"style": "thin", "color": "#000000"}],
+      "fill": {"type": "pattern", "pattern": 1, "color": ["#EAF4FF"]},
+      "alignment": {"horizontal": "center"}
+    },
+    {
+      "id": 3,
+      "numFmt": "yyyy-mm-dd hh:mm",
+      "border": [{"style": "thin", "color": "#000000"}]
+    },
+    {
+      "id": 4,
+      "fill": {"type": "pattern", "pattern": 1, "color": ["#E0EBF5"]},
+      "border": [{"style": "thin", "color": "#000000"}],
+      "font": {"bold": true},
+      "alignment": {"horizontal": "center", "wrapText": true}
+    }
+  ]
+}
+

@@ -3,6 +3,7 @@ package sheet2xlsx
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -10,12 +11,17 @@ import (
 // roundTrip は JSON 文字列を Convert → ToJSON し、結果の Workbook を返す。
 func roundTrip(t *testing.T, jsonStr string) Workbook {
 	t.Helper()
+	return roundTripWithOptions(t, jsonStr, ToJSONOptions{DateMode: DateModeSerial})
+}
+
+func roundTripWithOptions(t *testing.T, jsonStr string, opts ToJSONOptions) Workbook {
+	t.Helper()
 	var xlsx bytes.Buffer
 	if err := Convert(strings.NewReader(jsonStr), &xlsx, ""); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	var out bytes.Buffer
-	if err := ToJSON(bytes.NewReader(xlsx.Bytes()), &out); err != nil {
+	if err := ToJSONWithOptions(bytes.NewReader(xlsx.Bytes()), &out, opts); err != nil {
 		t.Fatalf("ToJSON: %v", err)
 	}
 	var wb Workbook
@@ -23,6 +29,10 @@ func roundTrip(t *testing.T, jsonStr string) Workbook {
 		t.Fatalf("Unmarshal: %v\n%s", err, out.String())
 	}
 	return wb
+}
+
+func cellText(c Cell) string {
+	return fmt.Sprint(c.V)
 }
 
 func TestToJSON_BasicTypes(t *testing.T) {
@@ -168,3 +178,61 @@ func TestToJSON_MultipleSheets(t *testing.T) {
 		t.Errorf("First!A1=%+v", wb.Sheets[0].Cells["A1"])
 	}
 }
+
+func TestToJSON_DateCells_DefaultSerial(t *testing.T) {
+	js := `{
+		"cells": {
+			"A1": {"t": "n", "v": 0.3784722222222222, "s": 1},
+			"B1": {"t": "n", "v": 0.7847222222222222, "s": 1}
+		},
+		"styles": [
+			{"id": 1, "numFmt": "h:mm"}
+		]
+	}`
+	wb := roundTrip(t, js)
+	if got := cellText(wb.Cells["A1"]); got != "0.3784722222222222" {
+		t.Fatalf("A1=%q, want serial", got)
+	}
+	if got := cellText(wb.Cells["B1"]); got != "0.7847222222222222" {
+		t.Fatalf("B1=%q, want serial", got)
+	}
+}
+
+func TestToJSON_DateCells_DisplayOption(t *testing.T) {
+	js := `{
+		"cells": {
+			"A1": {"t": "n", "v": 0.3784722222222222, "s": 1},
+			"B1": {"t": "n", "v": 0.7847222222222222, "s": 1}
+		},
+		"styles": [
+			{"id": 1, "numFmt": "h:mm"}
+		]
+	}`
+	wb := roundTripWithOptions(t, js, ToJSONOptions{DateMode: DateModeDisplay})
+	if got := cellText(wb.Cells["A1"]); got != "9:05" && got != "09:05" {
+		t.Fatalf("A1=%q, want display time", got)
+	}
+	if got := cellText(wb.Cells["B1"]); got != "18:50" {
+		t.Fatalf("B1=%q, want display time", got)
+	}
+}
+
+func TestToJSON_DateCells_RFC3339Option(t *testing.T) {
+	js := `{
+		"cells": {
+			"A1": {"t": "n", "v": 0.3784722222222222, "s": 1},
+			"B1": {"t": "n", "v": 0.7847222222222222, "s": 1}
+		},
+		"styles": [
+			{"id": 1, "numFmt": "h:mm"}
+		]
+	}`
+	wb := roundTripWithOptions(t, js, ToJSONOptions{DateMode: DateModeRFC3339})
+	if got := cellText(wb.Cells["A1"]); got != "1899-12-30T09:05:00Z" {
+		t.Fatalf("A1=%q, want RFC3339", got)
+	}
+	if got := cellText(wb.Cells["B1"]); got != "1899-12-30T18:50:00Z" {
+		t.Fatalf("B1=%q, want RFC3339", got)
+	}
+}
+

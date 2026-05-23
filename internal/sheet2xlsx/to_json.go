@@ -12,8 +12,23 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// ToJSONOptions は to-json の出力オプション。
+type ToJSONOptions struct {
+	// DateMode は日時セル (t=d) の出力モード。未指定時は DateModeSerial。
+	DateMode DateMode
+}
+
 // ToJSON は XLSX を読み込み、sheet2xlsx 互換 JSON (セルマップ形式) を out に書き出す。
 func ToJSON(r io.Reader, out io.Writer) error {
+	return ToJSONWithOptions(r, out, ToJSONOptions{DateMode: DateModeSerial})
+}
+
+// ToJSONWithOptions はオプション付きで XLSX を sheet2xlsx 互換 JSON に変換する。
+func ToJSONWithOptions(r io.Reader, out io.Writer, opts ToJSONOptions) error {
+	if opts.DateMode == "" {
+		opts.DateMode = DateModeSerial
+	}
+
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
@@ -22,9 +37,9 @@ func ToJSON(r io.Reader, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("open xlsx: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
-	wb, err := extractWorkbook(f)
+	wb, err := extractWorkbookWithOptions(f, opts)
 	if err != nil {
 		return err
 	}
@@ -45,12 +60,16 @@ func ToJSON(r io.Reader, out io.Writer) error {
 // extractWorkbook は excelize で開いた XLSX から Workbook 構造を抽出する。
 // ToJSON と ToMarkdown (XLSX 経路) の両方で再利用される。
 func extractWorkbook(f *excelize.File) (Workbook, error) {
+	return extractWorkbookWithOptions(f, ToJSONOptions{DateMode: DateModeSerial})
+}
+
+func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook, error) {
 	sc := newStyleCollector()
 
 	sheetNames := f.GetSheetList()
 	sheets := make([]Sheet, 0, len(sheetNames))
 	for _, name := range sheetNames {
-		sh, err := extractSheet(f, name, sc)
+		sh, err := extractSheet(f, name, sc, opts)
 		if err != nil {
 			return Workbook{}, fmt.Errorf("extract sheet %q: %w", name, err)
 		}
@@ -72,14 +91,14 @@ func extractWorkbook(f *excelize.File) (Workbook, error) {
 	return wb, nil
 }
 
-func extractSheet(f *excelize.File, name string, sc *styleCollector) (Sheet, error) {
+func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSONOptions) (Sheet, error) {
 	sh := Sheet{Name: name, Cells: map[string]Cell{}}
 
 	rows, err := f.Rows(name)
 	if err != nil {
 		return sh, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	rowIdx := 0
 	for rows.Next() {
@@ -93,7 +112,7 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector) (Sheet, err
 			if err != nil {
 				return sh, err
 			}
-			cell, ok, err := extractCell(f, name, axis, sc)
+			cell, ok, err := extractCell(f, name, axis, sc, opts)
 			if err != nil {
 				return sh, err
 			}
@@ -157,7 +176,7 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector) (Sheet, err
 	return sh, nil
 }
 
-func extractCell(f *excelize.File, sheet, axis string, sc *styleCollector) (Cell, bool, error) {
+func extractCell(f *excelize.File, sheet, axis string, sc *styleCollector, opts ToJSONOptions) (Cell, bool, error) {
 	formula, err := f.GetCellFormula(sheet, axis)
 	if err != nil {
 		return Cell{}, false, err
@@ -209,36 +228,44 @@ func extractCell(f *excelize.File, sheet, axis string, sc *styleCollector) (Cell
 			}
 		} else if isDateFmt {
 			cell.T = "d"
-			if serial, err := strconv.ParseFloat(rawVal, 64); err == nil {
-				if t, err := excelize.ExcelDateToTime(serial, false); err == nil {
-					cell.V = t.UTC().Format(time.RFC3339)
-				} else {
-					cell.V = rawVal
-				}
-			} else {
-				cell.V = rawVal
-			}
+			cell.V = resolveDateCellValue(f, sheet, axis, rawVal, opts)
 		} else {
 			cell.T = "n"
 			cell.V = parseScalar(rawVal)
 		}
 	case ct == excelize.CellTypeDate:
 		cell.T = "d"
-		if serial, err := strconv.ParseFloat(rawVal, 64); err == nil {
-			if t, err := excelize.ExcelDateToTime(serial, false); err == nil {
-				cell.V = t.UTC().Format(time.RFC3339)
-			} else {
-				cell.V = rawVal
-			}
-		} else {
-			cell.V = rawVal
-		}
+		cell.V = resolveDateCellValue(f, sheet, axis, rawVal, opts)
 	default: // 文字列系
 		cell.T = "s"
 		cell.V = normalizeNewlines(rawVal)
 	}
 
 	return cell, true, nil
+}
+
+func resolveDateCellValue(f *excelize.File, sheet, axis, rawVal string, opts ToJSONOptions) interface{} {
+	switch opts.DateMode {
+	case DateModeDisplay:
+		if displayed, err := f.GetCellValue(sheet, axis); err == nil && displayed != "" {
+			return normalizeNewlines(displayed)
+		}
+		return rawVal
+	case DateModeRFC3339:
+		if serial, err := strconv.ParseFloat(rawVal, 64); err == nil {
+			if t, err := excelize.ExcelDateToTime(serial, false); err == nil {
+				return t.UTC().Format(time.RFC3339)
+			}
+		}
+		return rawVal
+	case DateModeSerial:
+		if serial, err := strconv.ParseFloat(rawVal, 64); err == nil {
+			return serial
+		}
+		return rawVal
+	default:
+		return rawVal
+	}
 }
 
 // parseScalar は数値文字列なら数値、真偽値文字列なら bool、それ以外は文字列として返す。

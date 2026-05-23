@@ -50,6 +50,57 @@ func TestToCSV_Basic(t *testing.T) {
 	}
 }
 
+func TestToCSV_XLSXCLIInput(t *testing.T) {
+	in := "売上\n" + `[
+  {
+    "製品": "商品A\n特価",
+    "数量": 100,
+    "単価": 5000,
+    "合計": ""
+  },
+  {
+    "製品": "商品B",
+    "数量": 50,
+    "単価": 8000,
+    "合計": ""
+  },
+  {
+    "製品": "合計",
+    "合計": ""
+  }
+]`
+	got, err := runToCSV(t, in)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	want := "製品,数量,単価,合計\n" +
+		"\"商品A\n特価\",100,5000,\n" +
+		"商品B,50,8000,\n" +
+		"合計,,,\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestToCSV_XLSXCLIMultiSheet_FirstOnly(t *testing.T) {
+	in := "Sheet1\n[{\"a\":1}]\nSheet2\n[{\"a\":2}]"
+	got, err := runToCSV(t, in)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	want := "a\n1\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestToCSV_XLSXCLISheetWithoutArray(t *testing.T) {
+	_, err := runToCSV(t, "売上\n")
+	if err == nil {
+		t.Fatal("expected error for sheet name without array")
+	}
+}
+
 func TestToCSV_EmptyArray(t *testing.T) {
 	_, err := runToCSV(t, `[]`)
 	if err == nil {
@@ -92,6 +143,13 @@ func TestToCSV_NullValues(t *testing.T) {
 	want := "a,b,c\n,x,\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestToCSV_RejectBoolValue(t *testing.T) {
+	_, err := runToCSV(t, `[{"a":true}]`)
+	if err == nil {
+		t.Fatal("expected error for bool value")
 	}
 }
 
@@ -143,6 +201,18 @@ func TestToCSV_DifferentKeys(t *testing.T) {
 	}
 }
 
+func TestToCSV_NumberLexemePreserved(t *testing.T) {
+	in := `[{"n":1e3,"m":1.0,"p":-2E-3}]`
+	got, err := runToCSV(t, in)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	want := "n,m,p\n1e3,1.0,-2E-3\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 func TestToCSV_BOM(t *testing.T) {
 	in := "\xef\xbb\xbf[{\"a\":\"1\"}]"
 	got, err := runToCSV(t, in)
@@ -154,3 +224,29 @@ func TestToCSV_BOM(t *testing.T) {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
 	}
 }
+
+func TestToCSV_XLSXCLIAndCSVTKEquivalent(t *testing.T) {
+	xlsxCLI := "売上\n" + `[
+  {"製品":"商品A\n特価","数量":100,"単価":5000,"合計":""},
+  {"製品":"商品B","数量":50,"単価":8000,"合計":""},
+  {"製品":"合計","合計":""}
+]`
+	csvtk := `[
+  {"製品":"商品A\n特価","数量":"100","単価":"5000","合計":null},
+  {"製品":"商品B","数量":"50","単価":"8000","合計":null},
+  {"製品":"合計","数量":null,"単価":null,"合計":null}
+]`
+
+	xlsxOut, err := runToCSV(t, xlsxCLI)
+	if err != nil {
+		t.Fatalf("ToCSV(xlsx-cli): %v", err)
+	}
+	csvtkOut, err := runToCSV(t, csvtk)
+	if err != nil {
+		t.Fatalf("ToCSV(csvtk): %v", err)
+	}
+	if xlsxOut != csvtkOut {
+		t.Fatalf("xlsx-cli and csvtk outputs differ.\nxlsx-cli:\n%q\ncsvtk:\n%q", xlsxOut, csvtkOut)
+	}
+}
+

@@ -20,27 +20,13 @@ func ToCSV(r io.Reader, w io.Writer) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	trimmed := bytes.TrimLeft(data, " \t\r\n")
-	if len(trimmed) == 0 {
-		return errors.New("empty input")
-	}
-
-	if len(trimmed) >= 3 && trimmed[0] == 0xEF && trimmed[1] == 0xBB && trimmed[2] == 0xBF {
-		trimmed = trimmed[3:]
-	}
-	if len(trimmed) == 0 {
-		return errors.New("empty input")
-	}
-
-	switch trimmed[0] {
-	case '{':
-		return errors.New("unsupported input: expected csvtk csv2json JSON (array of objects), got sheet2xlsx Workbook JSON (object)")
-	case '[':
-	default:
-		return errors.New("unsupported input: expected csvtk csv2json JSON array starting with '['")
+	trimmed, err := normalizeCSVInput(data)
+	if err != nil {
+		return err
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(trimmed))
+	dec.UseNumber()
 
 	t, err := dec.Token()
 	if err != nil {
@@ -60,7 +46,8 @@ func ToCSV(r io.Reader, w io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("parse object: %w", err)
 		}
-		if _, ok := t.(json.Delim); !ok {
+		delim, ok := t.(json.Delim)
+		if !ok || delim != '{' {
 			return fmt.Errorf("expected JSON object, got %v", t)
 		}
 
@@ -75,9 +62,14 @@ func ToCSV(r io.Reader, w io.Writer) error {
 				return fmt.Errorf("expected string key, got %v", key)
 			}
 
-			var val *string
-			if err := dec.Decode(&val); err != nil {
+			var raw interface{}
+			if err := dec.Decode(&raw); err != nil {
 				return fmt.Errorf("parse value for key %q: %w", k, err)
+			}
+
+			val, err := normalizeCSVValue(k, raw)
+			if err != nil {
+				return err
 			}
 
 			row = append(row, csvKeyValue{Key: k, Value: val})
@@ -86,6 +78,10 @@ func ToCSV(r io.Reader, w io.Writer) error {
 		t, err = dec.Token()
 		if err != nil {
 			return fmt.Errorf("parse object end: %w", err)
+		}
+		delim, ok = t.(json.Delim)
+		if !ok || delim != '}' {
+			return fmt.Errorf("expected end of JSON object, got %v", t)
 		}
 
 		if len(row) == 0 {
@@ -112,7 +108,8 @@ func ToCSV(r io.Reader, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("parse json: %w", err)
 	}
-	if _, ok := t.(json.Delim); !ok {
+	delim, ok = t.(json.Delim)
+	if !ok || delim != ']' {
 		return fmt.Errorf("expected end of array, got %v", t)
 	}
 
@@ -149,3 +146,56 @@ func ToCSV(r io.Reader, w io.Writer) error {
 	csvw.Flush()
 	return csvw.Error()
 }
+
+func normalizeCSVInput(data []byte) ([]byte, error) {
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	if len(trimmed) == 0 {
+		return nil, errors.New("empty input")
+	}
+
+	if len(trimmed) >= 3 && trimmed[0] == 0xEF && trimmed[1] == 0xBB && trimmed[2] == 0xBF {
+		trimmed = bytes.TrimLeft(trimmed[3:], " \t\r\n")
+	}
+	if len(trimmed) == 0 {
+		return nil, errors.New("empty input")
+	}
+
+	switch trimmed[0] {
+	case '[':
+		return trimmed, nil
+	case '{':
+		return nil, errors.New("unsupported input: expected csvtk/xlsx-cli JSON (array of objects), got sheet2xlsx Workbook JSON (object)")
+	default:
+		lineEnd := bytes.IndexAny(trimmed, "\r\n")
+		if lineEnd < 0 {
+			return nil, errors.New("unsupported input: expected JSON array starting with '[' or xlsx-cli sheet name followed by JSON array")
+		}
+		rest := bytes.TrimLeft(trimmed[lineEnd+1:], " \t\r\n")
+		if len(rest) == 0 {
+			return nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name")
+		}
+		if rest[0] == '{' {
+			return nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name, got JSON object")
+		}
+		if rest[0] != '[' {
+			return nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name")
+		}
+		return rest, nil
+	}
+}
+
+func normalizeCSVValue(key string, raw interface{}) (*string, error) {
+	switch v := raw.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		vv := v
+		return &vv, nil
+	case json.Number:
+		vv := v.String()
+		return &vv, nil
+	default:
+		return nil, fmt.Errorf("unsupported value for key %q: expected string, number, or null, got %T", key, raw)
+	}
+}
+
