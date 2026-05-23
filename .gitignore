@@ -1,5 +1,9 @@
 /sheet2xlsx
+dist/
+\~\$*
 *.xlsx
 !examples/*.xlsx
 test.csv
 test.md
+test.json
+local-build.sh
