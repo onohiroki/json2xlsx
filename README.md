@@ -1,29 +1,29 @@
 # sheet2xlsx
 
-`sheet2xlsx` は、SheetJS風の JSON から Excel の `.xlsx` ファイルを生成する Go 製 CLI ツールです。Go 側は **JSON → XLSX 変換だけ** を担当し、AI 呼び出しは含みません。[1][2]
+`sheet2xlsx` は，SheetJS風の JSON から Excel の `.xlsx` ファイルを生成する Go 製 CLI ツールです．Go 側は **JSON → XLSX 変換だけ** を担当し，AI 呼び出しは含みません．[1][2]
 
-あわせて、AI に SheetJS 風 JSON を安定して出力させるためのスキル `sheetjs-json-writer` を併用する想定です。[3][4]
+あわせて，AI に SheetJS 風 JSON を安定して出力させるためのスキル `sheetjs-json-writer` を併用する想定です．[3][4]
 
 ## 目的
 
-このプロジェクトの目的は、次の 2 段階を分離して扱うことです。
+このプロジェクトの目的は，次の 2 段階を分離して扱うことです．
 
-1. AI が表や集計内容を **SheetJS 風 JSON** として出力する。
-2. `sheet2xlsx` がその JSON を読み取り、`.xlsx` に変換する。[5][6]
+1. AI が表や集計内容を **SheetJS 風 JSON** として出力する．
+2. `sheet2xlsx` がその JSON を読み取り，`.xlsx` に変換する．[5][6]
 
-この分離により、Go ツールは軽量・テスト容易・OSS 公開しやすい構成になります。[7][8]
+この分離により，Go ツールは軽量・テスト容易・OSS 公開しやすい構成になります．[7][8]
 
 ## 特徴
 
-- Go 1.22+ で動作する軽量 CLI。[2]
-- 主要依存は `excelize` のみ。[1]
-- SheetJS 風の Cell Object を意識した JSON を入力できる。[4][3]
-- 基本表、数式、改行、枠線、色、数値書式、リンクなどを段階的にサポートできる。[6][9][10]
-- AI 生成部を切り離しているため、任意の LLM と組み合わせやすい。[11][12]
+- Go 1.22+ で動作する軽量 CLI．[2]
+- 主要依存は `excelize` のみ．[1]
+- SheetJS 風の Cell Object を意識した JSON を入力できる．[4][3]
+- 基本表，数式，改行，枠線，色，数値書式，リンクなどを段階的にサポートできる．[6][9][10]
+- AI 生成部を切り離しているため，任意の LLM と組み合わせやすい．[11][12]
 
 ## インストール方針
 
-初期段階では、ローカルでビルドして利用する前提です。
+初期段階では，ローカルでビルドして利用する前提です．
 
 ```bash
 git clone <your-repo-url>
@@ -31,7 +31,7 @@ cd sheet2xlsx
 go build -o sheet2xlsx ./cmd/sheet2xlsx
 ```
 
-将来的には `go install` 対応を想定します。
+将来的には `go install` 対応を想定します．
 
 ```bash
 go install github.com/yourname/sheet2xlsx/cmd/sheet2xlsx@latest
@@ -39,11 +39,11 @@ go install github.com/yourname/sheet2xlsx/cmd/sheet2xlsx@latest
 
 ## 使い方
 
-`sheet2xlsx` は単一バイナリの CLI で、XLSX と JSON を相互変換します。サブコマンドは `to-json` (XLSX → JSON)、`to-xlsx` (JSON → XLSX)、`to-csv` (csvtk csv2json の逆変換) の 3 種類で、**サブコマンドを省略した場合は `to-xlsx` として動作**します。
+`sheet2xlsx` は単一バイナリの CLI で，XLSX と JSON を相互変換します．サブコマンドは `to-json` (XLSX → JSON)，`to-xlsx` (JSON → XLSX)，`to-csv` (csvtk csv2json の逆変換) の 3 種類で，**サブコマンドを省略した場合は `to-xlsx` として動作**します．
 
 ### `to-json` — XLSX → JSON
 
-XLSX を読み込み、`sheet2xlsx` に入力可能な JSON (セルマップ形式) を出力します。
+XLSX を読み込み，`sheet2xlsx` に入力可能な JSON (セルマップ形式) を出力します．
 
 ```bash
 sheet2xlsx to-json -i input.xlsx -o output.json
@@ -52,33 +52,33 @@ sheet2xlsx to-json -i input.xlsx -o output.json --date-display
 sheet2xlsx to-json -i input.xlsx -o output.json --date-rfc3339
 ```
 
-`-i` を省略すると標準入力、`-o` を省略すると標準出力を使います。
+`-i` を省略すると標準入力，`-o` を省略すると標準出力を使います．
 
 ```bash
 cat input.xlsx | sheet2xlsx to-json > output.json
 ```
 
-日時セル (`t: "d"`) は、デフォルトでは Excel の内部シリアル値を `v` に出力します。
-`--date-display` を指定した場合のみ、Excel の表示文字列を `v` に出力します。
-`--date-rfc3339` を指定した場合のみ、シリアル値から RFC3339 (UTC) に再解釈した値を `v` に出力します。
-`--date-serial` を指定した場合は、Excel の内部シリアル値をそのまま数値として出力します。
-時刻だけの値 (`9:05`) は **日付なしの時刻** として扱います。
+日時セル (`t: "d"`) は，デフォルトでは Excel の内部シリアル値を `v` に出力します．
+`--date-display` を指定した場合のみ，Excel の表示文字列を `v` に出力します．
+`--date-rfc3339` を指定した場合のみ，シリアル値から RFC3339 (UTC) に再解釈した値を `v` に出力します．
+`--date-serial` を指定した場合は，Excel の内部シリアル値をそのまま数値として出力します．
+時刻だけの値 (`9:05`) は **日付なしの時刻** として扱います．
 
 ### `to-xlsx` — JSON → XLSX (デフォルト)
 
-JSON を読み込み、`.xlsx` を出力します。`--sheet` でシート名未指定時のデフォルトを指定できます。
+JSON を読み込み，`.xlsx` を出力します．`--sheet` でシート名未指定時のデフォルトを指定できます．
 
 ```bash
 sheet2xlsx to-xlsx -i input.json -o output.xlsx --sheet Sheet1
 ```
 
-サブコマンド省略時も同じ動作になります。
+サブコマンド省略時も同じ動作になります．
 
 ```bash
 sheet2xlsx -i input.json -o output.xlsx
 ```
 
-標準入力からも受け付けます。
+標準入力からも受け付けます．
 
 ```bash
 cat input.json | sheet2xlsx to-xlsx -o output.xlsx
@@ -86,7 +86,7 @@ cat input.json | sheet2xlsx to-xlsx -o output.xlsx
 
 ### `to-md` — JSON / XLSX → Markdown
 
-`Workbook` を Markdown のテーブルに変換します。入力は **JSON (sheet2xlsx 互換 Workbook) と XLSX の両方** に対応し、先頭 4 バイトの magic byte (`PK\x03\x04`) で自動判定します。AI への提示や `cat` での内容確認用の中間表現として使えます。
+`Workbook` を Markdown のテーブルに変換します．入力は **JSON (sheet2xlsx 互換 Workbook) と XLSX の両方** に対応し，先頭 4 バイトの magic byte (`PK\x03\x04`) で自動判定します．AI への提示や `cat` での内容確認用の中間表現として使えます．
 
 ```bash
 sheet2xlsx to-md -i input.json -o output.md
@@ -96,12 +96,12 @@ cat input.xlsx | sheet2xlsx to-md > output.md
 
 #### オプション
 
-- `--mode f` (デフォルト): 数式があれば `=B1*2` を表示、無ければ `v` を表示。
-- `--mode v`: `v` を優先表示。`v` が無ければ `=B1*2` にフォールバック。
-- `--mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記。
-- `--row-index`: 先頭に行番号列 (`1`, `2`, …) を追加。Excel と座標を照合したい時に便利。
+- `--mode f` (デフォルト): 数式があれば `=B1*2` を表示，無ければ `v` を表示．
+- `--mode v`: `v` を優先表示．`v` が無ければ `=B1*2` にフォールバック．
+- `--mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記．
+- `--row-index`: 先頭に行番号列 (`1`, `2`, …) を追加．Excel と座標を照合したい時に便利．
 
-ロングオプションは `--name` 形式で表記しています。短い `-i` / `-o` はそのまま `-` 1 文字で指定します。`-mode` のようにハイフン 1 つでも受け付けますが、ドキュメント上の表記は `--` に統一しています。
+ロングオプションは `--name` 形式で表記しています．短い `-i` / `-o` はそのまま `-` 1 文字で指定します．`-mode` のようにハイフン 1 つでも受け付けますが，ドキュメント上の表記は `--` に統一しています．
 
 #### 出力例 (`--mode f`)
 
@@ -113,19 +113,19 @@ cat input.xlsx | sheet2xlsx to-md > output.md
 
 #### 複数シート
 
-複数シートの `Workbook` を渡すと、シートごとに `## <シート名>` 見出し付きのテーブルが連結されます。単一シート時は見出しは省略されます。
+複数シートの `Workbook` を渡すと，シートごとに `## <シート名>` 見出し付きのテーブルが連結されます．単一シート時は見出しは省略されます．
 
 #### 注意点
 
-- セル内の `|`, `\`, 改行は GFM のテーブルセルとして安全な形 (`\|`, `\\`, `<br />`) にエスケープされます。
-- スタイル (色・罫線・フォント)、列幅、行高は Markdown には反映されません。
-- マージセルは左上セルの値のみ出力され、それ以外は空セルになります。
+- セル内の `|`, `\`, 改行は GFM のテーブルセルとして安全な形 (`\|`, `\\`, `<br />`) にエスケープされます．
+- スタイル (色・罫線・フォント)，列幅，行高は Markdown には反映されません．
+- マージセルは左上セルの値のみ出力され，それ以外は空セルになります．
 
 ### `to-csv` — csvtk / xlsx-cli JSON -> CSV
 
-`csvtk csv2json` が出力する JSON (オブジェクト配列) と、`xlsx-cli -j` が出力する JSON を CSV に変換します。
-`xlsx-cli -j` 形式は先頭シートのみ処理し、シート名行は無視します。シート名行の後に配列が無い場合はエラー終了します。
-`to-json` が出力する sheet2xlsx 形式の JSON (Workbook オブジェクト) は受け付けず、エラー終了します。
+`csvtk csv2json` が出力する JSON (オブジェクト配列) と，`xlsx-cli -j` が出力する JSON を CSV に変換します．
+`xlsx-cli -j` 形式は先頭シートのみ処理し，シート名行は無視します．シート名行の後に配列が無い場合はエラー終了します．
+`to-json` が出力する sheet2xlsx 形式の JSON (Workbook オブジェクト) は受け付けず，エラー終了します．
 
 ```bash
 sheet2xlsx to-csv -i input.json -o output.csv
@@ -134,9 +134,9 @@ cat input.json | sheet2xlsx to-csv > output.csv
 
 ## 入力JSONの考え方
 
-`sheet2xlsx` は、SheetJS 互換を意識した JSON を受け取り、セル単位で `.xlsx` に変換します。[3][4]
+`sheet2xlsx` は，SheetJS 互換を意識した JSON を受け取り，セル単位で `.xlsx` に変換します．[3][4]
 
-想定する入力表現は次の 3 系統です。
+想定する入力表現は次の 3 系統です．
 
 - 配列オブジェクト形式
 - セル参照形式 (`A1`, `B2` など)
@@ -183,13 +183,13 @@ cat input.json | sheet2xlsx to-csv > output.csv
 
 ## Goの依存パッケージ
 
-現時点の基本方針では、依存は最小限にします。
+現時点の基本方針では，依存は最小限にします．
 
 ```go
 require github.com/xuri/excelize/v2 v2.8.1
 ```
 
-`excelize` は Go で Excel ファイルを読み書きする代表的な OSS ライブラリです。[2][1]
+`excelize` は Go で Excel ファイルを読み書きする代表的な OSS ライブラリです．[2][1]
 
 ## Goのデータ構造案
 
@@ -227,24 +227,24 @@ type Style struct {
 
 ## `sheetjs-json-writer` との関係
 
-別途用意する `sheetjs-json-writer` は、AI に対して次のような制約を与えるための SKILL.md です。
+別途用意する `sheetjs-json-writer` は，AI に対して次のような制約を与えるための SKILL.md です．
 
-- JSON だけを出力する。
-- Markdown の説明を付けない。
-- `t`, `v`, `f`, `s` などのフィールドを正しく使う。
-- 数式、改行、スタイルを決まった形式で出す。[4][6][3]
+- JSON だけを出力する．
+- Markdown の説明を付けない．
+- `t`, `v`, `f`, `s` などのフィールドを正しく使う．
+- 数式，改行，スタイルを決まった形式で出す．[4][6][3]
 
-このため、`sheet2xlsx` 側は「正しい形式の JSON が来る」前提でシンプルに保てます。
+このため，`sheet2xlsx` 側は「正しい形式の JSON が来る」前提でシンプルに保てます．
 
 ## ライセンス方針
 
-この構成は OSS として公開可能です。`excelize` は BSD 3-Clause、`openai-go` は Apache 2.0 ですが、本ツール自体は AI 呼び出しを含まないため、主要依存は `excelize` のみです。[8][7]
+この構成は OSS として公開可能です．`excelize` は BSD 3-Clause，`openai-go` は Apache 2.0 ですが，本ツール自体は AI 呼び出しを含まないため，主要依存は `excelize` のみです．[8][7]
 
-また、SheetJS 互換の仕様を参考にした再実装は、互換実装として整理可能です。[5][4]
+また，SheetJS 互換の仕様を参考にした再実装は，互換実装として整理可能です．[5][4]
 
 ## 開発方針
 
-実装は次の順で進める想定です。
+実装は次の順で進める想定です．
 
 1. JSON 読み込み
 2. 基本表の出力
@@ -256,7 +256,7 @@ type Style struct {
 
 ## 今後の成果物
 
-このリポジトリでは、将来的に以下を揃える想定です。
+このリポジトリでは，将来的に以下を揃える想定です．
 
 - `README.md`
 - `SKILL.md` (`sheetjs-json-writer` 用)
