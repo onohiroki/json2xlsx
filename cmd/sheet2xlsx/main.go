@@ -16,7 +16,7 @@ Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
   sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--no-header]
-  sheet2xlsx to-html [-i input.(json|xlsx)] [-o output.html]   # JSON / XLSX → HTML <table>
+  sheet2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both]  # JSON / XLSX → HTML <table>
   sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
   sheet2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
 
@@ -27,7 +27,7 @@ Usage:
   --date-serial    to-json で日時セルを Excel シリアル値で出力する (既定)
   --date-display   to-json で日時セルを表示文字列で出力する
   --date-rfc3339   to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
-  --mode             to-md のセル表示モード (f=数式優先, v=値優先, both=併記). デフォルト f
+  --mode             セル表示モード (f=数式優先, v=値優先, both=併記). to-md デフォルト f, to-html デフォルト v
   --no-header        to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
 
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
@@ -202,10 +202,18 @@ func runToMD(args []string) {
 func runToHTML(args []string) {
 	fs := flag.NewFlagSet("to-html", flag.ExitOnError)
 	fs.Usage = usage
-	var input, output string
+	var input, output, mode string
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output HTML file (default: stdout)")
+	fs.StringVar(&mode, "mode", "v", "cell display mode: f|v|both (default: v)")
 	_ = fs.Parse(args)
+
+	switch sheet2xlsx.MarkdownMode(mode) {
+	case sheet2xlsx.MarkdownModeFormula, sheet2xlsx.MarkdownModeValue, sheet2xlsx.MarkdownModeBoth:
+	default:
+		fmt.Fprintf(os.Stderr, "to-html: invalid --mode %q (expected f|v|both)\n", mode)
+		os.Exit(2)
+	}
 
 	r, closeR, err := openInput(input)
 	if err != nil {
@@ -221,7 +229,8 @@ func runToHTML(args []string) {
 	}
 	defer closeW()
 
-	if err := sheet2xlsx.ToHTML(r, w, sheet2xlsx.HTMLOptions{}); err != nil {
+	opts := sheet2xlsx.HTMLOptions{Mode: sheet2xlsx.MarkdownMode(mode)}
+	if err := sheet2xlsx.ToHTML(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
 		os.Exit(1)
 	}
