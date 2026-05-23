@@ -3,7 +3,7 @@ dist/
 \~\$*
 *.xlsx
 !examples/*.xlsx
-test.*
+/test.*
 local-build.sh
 .idea/
 
