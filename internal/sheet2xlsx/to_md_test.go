@@ -66,7 +66,7 @@ func TestToMarkdown_JSON_ModeBoth(t *testing.T) {
 	}
 }
 
-func TestToMarkdown_RowIndex(t *testing.T) {
+func TestToMarkdown_Default(t *testing.T) {
 	in := `{
 	  "cells": {
 	    "A1": {"t":"s","v":"a"},
@@ -75,7 +75,7 @@ func TestToMarkdown_RowIndex(t *testing.T) {
 	    "B2": {"t":"n","v":2}
 	  }
 	}`
-	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true})
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: false, RowIndex: true})
 	want := "|   | A | B |\n" +
 		"| --- | --- | --- |\n" +
 		"| 1 | a | b |\n" +
@@ -168,7 +168,7 @@ func TestToMarkdown_UnknownBinary(t *testing.T) {
 	}
 }
 
-func TestToMarkdown_FirstRowHeader(t *testing.T) {
+func TestToMarkdown_NoHeader(t *testing.T) {
 	in := `{
 	  "cells": {
 	    "A1": {"t":"s","v":"Name"},

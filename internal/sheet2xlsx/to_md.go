@@ -26,6 +26,9 @@ const (
 )
 
 // MarkdownOptions は Markdown レンダリング設定。
+//
+// デフォルト (FirstRowHeader=false, RowIndex=true): A/B/C 列名ヘッダ + 行番号列を表示する。
+// --no-header 相当 (FirstRowHeader=true, RowIndex=false): 1行目をテーブルヘッダとして扱う。
 type MarkdownOptions struct {
 	Mode            MarkdownMode
 	RowIndex        bool
@@ -81,7 +84,6 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 }
 
 // normalizeDateCells は z に日付/時刻書式コードを持つセルの T を "d" に書き換える。
-// これにより formatCell の case "d" が適切に処理する。
 func normalizeDateCells(wb *Workbook) {
 	for axis, cell := range wb.Cells {
 		if cell.Z != "" && cell.T != "d" && cell.T != "f" {
@@ -186,6 +188,8 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
 }
 
 // renderSheet は単一シートをテーブルとしてレンダリングする。空シートは空文字を返す。
+// FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--no-header）。
+// それ以外は A/B/C 列名ヘッダ + 行番号を表示する（デフォルト）。
 func renderSheet(sh Sheet, opts MarkdownOptions) string {
 	if len(sh.Cells) == 0 {
 		return ""
