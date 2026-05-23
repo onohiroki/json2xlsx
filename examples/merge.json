@@ -1,0 +1,21 @@
+{
+  "name": "マージセルテスト",
+  "cells": {
+    "A1": {"t": "s", "v": "結合ヘッダ", "s": 1},
+    "C1": {"t": "s", "v": "単独", "s": 2},
+    "A2": {"t": "s", "v": "縦結合", "s": 1},
+    "B2": {"t": "n", "v": 100, "s": 2},
+    "C2": {"t": "n", "v": 200, "s": 2},
+    "A3": {"t": "n", "v": 300, "s": 2},
+    "B3": {"t": "n", "v": 400, "s": 2},
+    "C3": {"t": "n", "v": 500, "s": 2}
+  },
+  "styles": [
+    {"id": 1, "fill": {"type": "pattern", "pattern": 1, "color": ["#E0EBF5"]}, "font": {"bold": true}, "alignment": {"horizontal": "center"}, "border": [{"style": "thin", "color": "#000000"}]},
+    {"id": 2, "border": [{"style": "thin", "color": "#000000"}], "alignment": {"horizontal": "right"}}
+  ],
+  "merges": [
+    {"range": "A1:B1"},
+    {"range": "A2:A3"}
+  ]
+}

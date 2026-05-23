@@ -1,0 +1,25 @@
+{
+  "name": "スタイルサンプル",
+  "cells": {
+    "A1": {"t": "s", "v": "塗りつぶし", "s": 1},
+    "B1": {"t": "s", "v": "太字", "s": 2},
+    "C1": {"t": "s", "v": "斜体", "s": 3},
+    "D1": {"t": "s", "v": "配置", "s": 4},
+    "E1": {"t": "s", "v": "枠線", "s": 5},
+    "F1": {"t": "s", "v": "複合", "s": 6},
+    "A2": {"t": "n", "v": 100, "s": 1},
+    "B2": {"t": "n", "v": 200, "s": 2},
+    "C2": {"t": "s", "v": "italic", "s": 3},
+    "D2": {"t": "s", "v": "右寄せ", "s": 4},
+    "E2": {"t": "n", "v": 999, "s": 5},
+    "F2": {"t": "n", "v": 42, "s": 6}
+  },
+  "styles": [
+    {"id": 1, "fill": {"type": "pattern", "pattern": 1, "color": ["#FFFF00"]}},
+    {"id": 2, "font": {"bold": true}},
+    {"id": 3, "font": {"italic": true}},
+    {"id": 4, "alignment": {"horizontal": "right"}},
+    {"id": 5, "border": [{"style": "thin", "color": "#FF0000"}]},
+    {"id": 6, "fill": {"type": "pattern", "pattern": 1, "color": ["#E0EBF5"]}, "font": {"bold": true, "color": "#FF0000"}, "border": [{"style": "medium", "color": "#0000FF"}], "alignment": {"horizontal": "center"}}
+  ]
+}
