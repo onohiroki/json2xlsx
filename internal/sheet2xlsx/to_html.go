@@ -13,10 +13,21 @@ import (
 )
 
 // HTMLOptions は HTML レンダリング設定。
-type HTMLOptions struct{}
+type HTMLOptions struct {
+	Mode MarkdownMode
+}
 
 // ToHTML は入力 (JSON Workbook または XLSX) を HTML <table> に変換して書き出す。
 func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
+	if opts.Mode == "" {
+		opts.Mode = MarkdownModeValue
+	}
+	switch opts.Mode {
+	case MarkdownModeFormula, MarkdownModeValue, MarkdownModeBoth:
+	default:
+		return fmt.Errorf("invalid mode: %q (expected f|v|both)", opts.Mode)
+	}
+
 	br := bufio.NewReader(r)
 	head, err := br.Peek(4)
 	if err != nil {
@@ -46,7 +57,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		normalizeDateCells(&wb)
 	}
 
-	out := renderHTML(wb)
+	out := renderHTML(wb, opts.Mode)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
@@ -54,7 +65,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 }
 
 // renderHTML は Workbook を HTML 文字列にレンダリングする。
-func renderHTML(wb Workbook) string {
+func renderHTML(wb Workbook, mode MarkdownMode) string {
 	sheets := wb.Sheets
 	if len(sheets) == 0 && (wb.Cells != nil || wb.Name != "" || wb.Merges != nil) {
 		sheets = []Sheet{{
@@ -70,7 +81,7 @@ func renderHTML(wb Workbook) string {
 
 	var b strings.Builder
 	for _, sh := range sheets {
-		b.WriteString(renderSheetHTML(sh, stylesByID))
+		b.WriteString(renderSheetHTML(sh, stylesByID, mode))
 	}
 	return b.String()
 }
@@ -219,7 +230,7 @@ func buildMergeMap(merges []Merge) (hidden map[string]bool, anchors map[string]m
 }
 
 // renderSheetHTML は単一シートを <table> としてレンダリングする。
-func renderSheetHTML(sh Sheet, stylesByID map[int]Style) string {
+func renderSheetHTML(sh Sheet, stylesByID map[int]Style, mode MarkdownMode) string {
 	if len(sh.Cells) == 0 {
 		return ""
 	}
@@ -248,10 +259,31 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style) string {
 
 	hidden, anchors := buildMergeMap(sh.Merges)
 
+	const thStyle = `style="font-weight:bold;border:1px solid #000"`
+
 	var b strings.Builder
+	withHeader := mode != MarkdownModeValue
+
 	b.WriteString("<table>\n")
+	if withHeader {
+		b.WriteString("<tr>")
+		b.WriteString("<th " + thStyle + ">")
+		b.WriteString(htmlEsc(""))
+		b.WriteString("</th>")
+		for c := 1; c <= maxCol; c++ {
+			b.WriteString("<th " + thStyle + ">")
+			b.WriteString(htmlEsc(colNames[c]))
+			b.WriteString("</th>")
+		}
+		b.WriteString("</tr>\n")
+	}
 	for r := 1; r <= maxRow; r++ {
 		b.WriteString("<tr>")
+		if withHeader {
+			b.WriteString("<th " + thStyle + ">")
+			b.WriteString(strconv.Itoa(r))
+			b.WriteString("</th>")
+		}
 		for c := 1; c <= maxCol; c++ {
 			axis := colNames[c] + strconv.Itoa(r)
 			if hidden[axis] {
@@ -284,7 +316,11 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style) string {
 			}
 			b.WriteString(">")
 			if ok {
-				b.WriteString(formatCellHTML(cell))
+				if withHeader {
+					b.WriteString(formatCellHTMLMode(cell, mode))
+				} else {
+					b.WriteString(formatCellHTML(cell))
+				}
 			}
 			b.WriteString("</td>")
 		}
@@ -337,6 +373,25 @@ func formatCellHTML(cell Cell) string {
 	raw = strings.ReplaceAll(raw, "&", "&amp;")
 	raw = strings.ReplaceAll(raw, "<", "&lt;")
 	raw = strings.ReplaceAll(raw, ">", "&gt;")
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	raw = strings.ReplaceAll(raw, "\r", "\n")
+	raw = strings.ReplaceAll(raw, "\n", "<br />")
+	return raw
+}
+
+// formatCellHTMLMode は 1 セルの HTML 表現を返す。
+// formatCell の結果（markdown エスケープ済み、<br /> を含む場合あり）を
+// HTML 表現に変換する。（mode=f/both 用）
+func formatCellHTMLMode(cell Cell, mode MarkdownMode) string {
+	raw := formatCell(cell, mode)
+
+	raw = strings.ReplaceAll(raw, "\\|", "|")
+	raw = strings.ReplaceAll(raw, "\\\\", "\\")
+	raw = strings.ReplaceAll(raw, "<br />", "\x00")
+	raw = strings.ReplaceAll(raw, "&", "&amp;")
+	raw = strings.ReplaceAll(raw, "<", "&lt;")
+	raw = strings.ReplaceAll(raw, ">", "&gt;")
+	raw = strings.ReplaceAll(raw, "\x00", "<br />")
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	raw = strings.ReplaceAll(raw, "\r", "\n")
 	raw = strings.ReplaceAll(raw, "\n", "<br />")

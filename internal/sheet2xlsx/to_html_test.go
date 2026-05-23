@@ -6,10 +6,14 @@ import (
 	"testing"
 )
 
-func runToHTML(t *testing.T, input string) string {
+func runToHTML(t *testing.T, input string, opts ...HTMLOptions) string {
 	t.Helper()
+	var o HTMLOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	var out bytes.Buffer
-	if err := ToHTML(strings.NewReader(input), &out, HTMLOptions{}); err != nil {
+	if err := ToHTML(strings.NewReader(input), &out, o); err != nil {
 		t.Fatalf("ToHTML: %v", err)
 	}
 	return out.String()
@@ -185,6 +189,61 @@ func TestToHTML_EmptyWorkbook(t *testing.T) {
 	got := runToHTML(t, `{"cells":{}}`)
 	if got != "" {
 		t.Fatalf("expected empty output for empty workbook. got:\n%q", got)
+	}
+}
+
+func TestToHTML_ModeFormula(t *testing.T) {
+	in := `{
+	  "cells": {
+	    "A1": {"t":"f","f":"SUM(B1:C1)","v":300},
+	    "B1": {"t":"n","v":100},
+	    "C1": {"t":"n","v":200},
+	    "A2": {"t":"f","f":"B2*C2"},
+	    "B2": {"t":"n","v":5},
+	    "C2": {"t":"n","v":10}
+	  }
+	}`
+	got := runToHTML(t, in, HTMLOptions{Mode: MarkdownModeFormula})
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">A</th>`) {
+		t.Fatalf("expected column header 'A'. got:\n%s", got)
+	}
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">B</th>`) {
+		t.Fatalf("expected column header 'B'. got:\n%s", got)
+	}
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">C</th>`) {
+		t.Fatalf("expected column header 'C'. got:\n%s", got)
+	}
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">1</th>`) {
+		t.Fatalf("expected row number '1'. got:\n%s", got)
+	}
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">2</th>`) {
+		t.Fatalf("expected row number '2'. got:\n%s", got)
+	}
+	if !strings.Contains(got, "=SUM(B1:C1)") {
+		t.Fatalf("expected formula =SUM(B1:C1). got:\n%s", got)
+	}
+	if !strings.Contains(got, "=B2*C2") {
+		t.Fatalf("expected formula =B2*C2. got:\n%s", got)
+	}
+}
+
+func TestToHTML_ModeBoth(t *testing.T) {
+	in := `{
+	  "cells": {
+	    "A1": {"t":"f","f":"SUM(B1:C1)","v":300},
+	    "B1": {"t":"n","v":100},
+	    "C1": {"t":"n","v":200}
+	  }
+	}`
+	got := runToHTML(t, in, HTMLOptions{Mode: MarkdownModeBoth})
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">A</th>`) {
+		t.Fatalf("expected column header 'A'. got:\n%s", got)
+	}
+	if !strings.Contains(got, `<th style="font-weight:bold;border:1px solid #000">1</th>`) {
+		t.Fatalf("expected row number '1'. got:\n%s", got)
+	}
+	if !strings.Contains(got, "300<br />=SUM(B1:C1)") {
+		t.Fatalf("expected value+formula. got:\n%s", got)
 	}
 }
 
