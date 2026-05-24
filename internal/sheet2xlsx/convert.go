@@ -19,9 +19,22 @@ func Convert(r io.Reader, out io.Writer, defaultSheetName string) error {
 
 	var wb Workbook
 	if err := json.Unmarshal(data, &wb); err != nil {
+		if schemaErr := ValidateJSON(data); schemaErr != nil {
+			return fmt.Errorf("%v\n\n%v", err, schemaErr)
+		}
 		return fmt.Errorf("parse json: %w", err)
 	}
 
+	if err := convertWorkbook(data, &wb, out, defaultSheetName); err != nil {
+		if schemaErr := ValidateJSON(data); schemaErr != nil {
+			return fmt.Errorf("%v\n\n%v", err, schemaErr)
+		}
+		return err
+	}
+	return nil
+}
+
+func convertWorkbook(data []byte, wb *Workbook, out io.Writer, defaultSheetName string) error {
 	f := excelize.NewFile()
 	defer f.Close()
 

@@ -69,11 +69,20 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 			return err
 		}
 	} else {
-		dec := json.NewDecoder(br)
-		if err := dec.Decode(&wb); err != nil {
+		data, err := io.ReadAll(br)
+		if err != nil {
+			return fmt.Errorf("read input: %w", err)
+		}
+		if err := json.Unmarshal(data, &wb); err != nil {
+			if schemaErr := ValidateJSON(data); schemaErr != nil {
+				return fmt.Errorf("%v\n\n%v", err, schemaErr)
+			}
 			return fmt.Errorf("unsupported input: expected JSON Workbook or XLSX: %w", err)
 		}
 		normalizeDateCells(&wb)
+		if schemaErr := ValidateJSON(data); schemaErr != nil {
+			return schemaErr
+		}
 	}
 
 	out := renderMarkdown(wb, opts)
