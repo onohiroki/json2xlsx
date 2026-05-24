@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/anomalyco/sheet2xlsx/schema",
+  "title": "Sheet2XLSX JSON Schema",
+  "description": "SheetJS 風 JSON から XLSX へ変換するためのスキーマ",
+  "oneOf": [
+    { "$ref": "#/$defs/singleSheet" },
+    { "$ref": "#/$defs/multiSheet" }
+  ],
+
+  "$defs": {
+    "singleSheet": {
+      "type": "object",
+      "properties": {
+        "name":    { "$ref": "#/$defs/sheetName" },
+        "cells":   { "$ref": "#/$defs/cells" },
+        "rows":    { "$ref": "#/$defs/rows" },
+        "cols":    { "$ref": "#/$defs/cols" },
+        "rowDims": { "$ref": "#/$defs/rowDims" },
+        "merges":  { "$ref": "#/$defs/merges" },
+        "styles":  { "$ref": "#/$defs/styles" }
+      },
+      "required": ["cells"],
+      "additionalProperties": false
+    },
+
+    "multiSheet": {
+      "type": "object",
+      "properties": {
+        "sheets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name":    { "$ref": "#/$defs/sheetName" },
+              "cells":   { "$ref": "#/$defs/cells" },
+              "rows":    { "$ref": "#/$defs/rows" },
+              "cols":    { "$ref": "#/$defs/cols" },
+              "rowDims": { "$ref": "#/$defs/rowDims" },
+              "merges":  { "$ref": "#/$defs/merges" }
+            },
+            "required": ["cells"],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "styles": { "$ref": "#/$defs/styles" }
+      },
+      "required": ["sheets"],
+      "additionalProperties": false
+    },
+
+    "sheetName": {
+      "type": "string",
+      "description": "シート名"
+    },
+
+    "cells": {
+      "type": "object",
+      "description": "キーは A1 形式のセル参照",
+      "patternProperties": {
+        "^[A-Z]+[1-9][0-9]*$": { "$ref": "#/$defs/cell" }
+      },
+      "additionalProperties": false
+    },
+
+    "cell": {
+      "type": "object",
+      "description": "セルオブジェクト",
+      "properties": {
+        "t": { "$ref": "#/$defs/cellType" },
+        "v": {},
+        "f": { "type": "string", "description": "数式本体（= を含まない）" },
+        "z": { "type": "string", "description": "数値書式コード" },
+        "s": { "$ref": "#/$defs/styleRef" },
+        "l": { "$ref": "#/$defs/hyperlink" }
+      },
+      "required": ["t"],
+      "additionalProperties": false
+    },
+
+    "cellType": {
+      "type": "string",
+      "enum": ["s", "n", "b", "f", "d"],
+      "description": "s=文字列, n=数値, b=真偽, f=数式, d=日付"
+    },
+
+    "styleRef": {
+      "type": "integer",
+      "description": "styles[].id への参照"
+    },
+
+    "hyperlink": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "target":  { "type": "string" },
+            "tooltip": { "type": "string" }
+          },
+          "required": ["target"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "rows": {
+      "type": "array",
+      "description": "行データ配列（拡張用）",
+      "items": {}
+    },
+
+    "cols": {
+      "type": "array",
+      "description": "列幅設定",
+      "items": { "$ref": "#/$defs/col" }
+    },
+
+    "col": {
+      "type": "object",
+      "properties": {
+        "col":   { "type": "string", "description": "列記号 (A, B, ...)" },
+        "width": { "type": "number", "description": "列幅" }
+      },
+      "required": ["col", "width"],
+      "additionalProperties": false
+    },
+
+    "rowDims": {
+      "type": "array",
+      "description": "行高設定",
+      "items": { "$ref": "#/$defs/rowDim" }
+    },
+
+    "rowDim": {
+      "type": "object",
+      "properties": {
+        "row":    { "type": "integer", "description": "行番号 (1始まり)" },
+        "height": { "type": "number",  "description": "行高" }
+      },
+      "required": ["row", "height"],
+      "additionalProperties": false
+    },
+
+    "merges": {
+      "type": "array",
+      "description": "セル結合設定",
+      "items": { "$ref": "#/$defs/merge" }
+    },
+
+    "merge": {
+      "type": "object",
+      "properties": {
+        "range": { "type": "string", "description": "結合範囲 (例: A1:B1)" }
+      },
+      "required": ["range"],
+      "additionalProperties": false
+    },
+
+    "styles": {
+      "type": "array",
+      "description": "スタイル定義一覧",
+      "items": { "$ref": "#/$defs/style" }
+    },
+
+    "style": {
+      "type": "object",
+      "description": "スタイル定義",
+      "properties": {
+        "id":        { "type": "integer" },
+        "fill":      { "$ref": "#/$defs/fill" },
+        "border":    { "$ref": "#/$defs/border" },
+        "font":      { "$ref": "#/$defs/font" },
+        "alignment": { "$ref": "#/$defs/alignment" },
+        "numFmt":    { "type": "string", "description": "数値書式コード" }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+
+    "fill": {
+      "type": "object",
+      "description": "塗りつぶし設定",
+      "properties": {
+        "type":    { "type": "string", "enum": ["pattern"], "default": "pattern" },
+        "pattern": { "type": "integer", "default": 1 },
+        "color": {
+          "type": "array",
+          "description": "色の配列（#RRGGBB 形式）",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "required": ["type", "pattern", "color"],
+      "additionalProperties": false
+    },
+
+    "border": {
+      "type": "array",
+      "description": "罫線設定",
+      "items": { "$ref": "#/$defs/borderItem" }
+    },
+
+    "borderItem": {
+      "type": "object",
+      "properties": {
+        "side": {
+          "type": "string",
+          "enum": ["left", "right", "top", "bottom"],
+          "description": "省略時は四辺すべてに適用"
+        },
+        "style": {
+          "type": "string",
+          "enum": ["thin", "medium", "thick", "dashed", "dotted", "double", "hair", "mediumDashed", "dashDot", "mediumDashDot", "dashDotDot", "mediumDashDotDot", "slantDashDot"]
+        },
+        "color": { "type": "string" }
+      },
+      "required": ["style", "color"],
+      "additionalProperties": false
+    },
+
+    "font": {
+      "type": "object",
+      "description": "フォント設定",
+      "properties": {
+        "name":   { "type": "string", "default": "Calibri" },
+        "size":   { "type": "number", "default": 11 },
+        "bold":   { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "color":  { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "alignment": {
+      "type": "object",
+      "description": "セル配置設定",
+      "properties": {
+        "horizontal": {
+          "type": "string",
+          "enum": ["left", "center", "right"]
+        },
+        "vertical": {
+          "type": "string",
+          "enum": ["top", "center", "bottom"]
+        },
+        "wrapText": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
