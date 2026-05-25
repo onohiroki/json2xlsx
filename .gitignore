@@ -7,3 +7,7 @@ dist/
 local-build.sh
 .idea/
 
+.goreleaser.yaml
+release.sh
+test_data/
+update.bash
