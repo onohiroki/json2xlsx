@@ -9,6 +9,11 @@
   ],
 
   "$defs": {
+    "colorValue": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "description": "#RRGGBB 形式の色指定"
+    },
     "singleSheet": {
       "type": "object",
       "properties": {
@@ -188,7 +193,7 @@
         "color": {
           "type": "array",
           "description": "色の配列（#RRGGBB 形式）",
-          "items": { "type": "string" },
+          "items": { "$ref": "#/$defs/colorValue" },
           "minItems": 1
         }
       },
@@ -214,12 +219,11 @@
           "type": "string",
           "enum": ["thin", "medium", "thick", "dashed", "dotted", "double", "hair", "mediumDashed", "dashDot", "mediumDashDot", "dashDotDot", "mediumDashDotDot", "slantDashDot"]
         },
-        "color": { "type": "string" }
+        "color": { "$ref": "#/$defs/colorValue" }
       },
       "required": ["style", "color"],
       "additionalProperties": false
     },
-
     "font": {
       "type": "object",
       "description": "フォント設定",
@@ -228,7 +232,7 @@
         "size":   { "type": "number", "default": 11 },
         "bold":   { "type": "boolean" },
         "italic": { "type": "boolean" },
-        "color":  { "type": "string" }
+        "color":  { "$ref": "#/$defs/colorValue" }
       },
       "additionalProperties": false
     },
