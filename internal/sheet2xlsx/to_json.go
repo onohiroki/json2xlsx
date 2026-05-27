@@ -94,6 +94,13 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSONOptions) (Sheet, error) {
 	sh := Sheet{Name: name, Cells: map[string]Cell{}}
 
+	// GetCols でシート全体の最大列数を取得する（グラフシートなどでは失敗するためエラーは無視）。
+	// Rows().Columns() は値のあるセルまでしか返さないため、スタイルのみの空セルを見逃さないために必要。
+	var maxCol int
+	if allCols, err := f.GetCols(name); err == nil {
+		maxCol = len(allCols)
+	}
+
 	rows, err := f.Rows(name)
 	if err != nil {
 		return sh, err
@@ -108,6 +115,20 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSON
 			return sh, err
 		}
 		for colIdx := 1; colIdx <= len(cols); colIdx++ {
+			axis, err := excelize.CoordinatesToCellName(colIdx, rowIdx)
+			if err != nil {
+				return sh, err
+			}
+			cell, ok, err := extractCell(f, name, axis, sc, opts)
+			if err != nil {
+				return sh, err
+			}
+			if ok {
+				sh.Cells[axis] = cell
+			}
+		}
+		// Rows().Columns() で取得できなかったスタイルのみの空セルを補完する。
+		for colIdx := len(cols) + 1; colIdx <= maxCol; colIdx++ {
 			axis, err := excelize.CoordinatesToCellName(colIdx, rowIdx)
 			if err != nil {
 				return sh, err
