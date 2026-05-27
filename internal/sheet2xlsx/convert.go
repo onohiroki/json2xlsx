@@ -85,7 +85,7 @@ func convertWorkbook(data []byte, wb *Workbook, out io.Writer, defaultSheetName 
 			}
 		}
 
-		if err := writeSheet(f, name, sh, styleMap); err != nil {
+		if err := writeSheet(f, name, sh, styleMap, wb.Styles); err != nil {
 			return fmt.Errorf("write sheet %q: %w", name, err)
 		}
 	}
@@ -96,7 +96,7 @@ func convertWorkbook(data []byte, wb *Workbook, out io.Writer, defaultSheetName 
 	return nil
 }
 
-func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int) error {
+func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style) error {
 	// AoA 形式 (rows) の展開: 1 行目 = 1 行目に配置
 	for r, row := range sh.Rows {
 		for c, v := range row {
@@ -112,7 +112,7 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int) e
 
 	// Cell Object 形式
 	for axis, cell := range sh.Cells {
-		if err := setCell(f, name, axis, cell, styleMap); err != nil {
+		if err := setCell(f, name, axis, cell, styleMap, styles); err != nil {
 			return fmt.Errorf("set cell %s: %w", axis, err)
 		}
 	}
@@ -159,7 +159,7 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int) e
 	return nil
 }
 
-func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int) error {
+func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int, styles []Style) error {
 	switch c.T {
 	case "f":
 		if c.F == "" {
@@ -219,21 +219,30 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int)
 	}
 
 	// スタイル適用 (z 単独指定にも対応)
-	styleID, ok := styleMap[c.S]
-	if c.S != 0 && ok {
-		if c.Z != "" {
-			// z を一時的に追加したスタイルを作る
-			id, err := mergeNumFmt(f, styleID, c.Z)
+	if c.S != 0 {
+		if baseIdx, ok := styleMap[c.S]; ok {
+			styleID := baseIdx
+			if c.Z != "" {
+				var mergeErr error
+				styleID, mergeErr = mergeStyleWithNumFmt(f, styles, c.S, c.Z)
+				if mergeErr != nil {
+					return mergeErr
+				}
+			}
+			if err := f.SetCellStyle(sheet, axis, axis, styleID); err != nil {
+				return err
+			}
+		} else if c.Z != "" {
+			id, err := f.NewStyle(&excelize.Style{CustomNumFmt: &c.Z})
 			if err != nil {
 				return err
 			}
-			styleID = id
-		}
-		if err := f.SetCellStyle(sheet, axis, axis, styleID); err != nil {
-			return err
+			if err := f.SetCellStyle(sheet, axis, axis, id); err != nil {
+				return err
+			}
 		}
 	} else if c.Z != "" {
-		id, err := f.NewStyle(&excelize.Style{NumFmt: 0, CustomNumFmt: &c.Z})
+		id, err := f.NewStyle(&excelize.Style{CustomNumFmt: &c.Z})
 		if err != nil {
 			return err
 		}
@@ -243,6 +252,20 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int)
 	}
 
 	return nil
+}
+
+func mergeStyleWithNumFmt(f *excelize.File, styles []Style, styleID int, numFmt string) (int, error) {
+	for i := range styles {
+		if styles[i].ID == styleID {
+			es, err := toExcelizeStyle(styles[i])
+			if err != nil {
+				return 0, err
+			}
+			es.CustomNumFmt = &numFmt
+			return f.NewStyle(es)
+		}
+	}
+	return f.NewStyle(&excelize.Style{CustomNumFmt: &numFmt})
 }
 
 func parseLink(l interface{}) (target, tooltip string) {
@@ -260,9 +283,3 @@ func parseLink(l interface{}) (target, tooltip string) {
 	return
 }
 
-func mergeNumFmt(f *excelize.File, baseID int, numFmt string) (int, error) {
-	// シンプル化: 既存スタイルをコピーして numFmt を上書きするのは API 上難しいため
-	// 新規スタイルを作成して numFmt のみ追加する。
-	// (見た目の優先度として z はセル単位の数値書式上書きとして扱う)
-	return f.NewStyle(&excelize.Style{CustomNumFmt: &numFmt})
-}
