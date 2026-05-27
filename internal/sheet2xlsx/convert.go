@@ -2,12 +2,23 @@ package sheet2xlsx
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
+
+// WarningError は非 fatal な警告を表す。
+// 処理は継続され、XLSX 出力は行われるが、exit code は非零になる。
+type WarningError struct {
+	Err error
+}
+
+func (w *WarningError) Error() string { return w.Err.Error() }
+func (w *WarningError) Unwrap() error { return w.Err }
 
 // Convert は JSON を読み込み、XLSX を out に書き出す。
 // defaultSheetName が空でない場合、シート名未指定時のデフォルトとして使う。
@@ -62,6 +73,8 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 	defaultName := f.GetSheetName(0)
 	firstAssigned := false
 
+	var warnings int
+
 	for i, sh := range sheets {
 		name := sh.Name
 		if name == "" {
@@ -85,18 +98,23 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 			}
 		}
 
-		if err := writeSheet(f, name, sh, styleMap, wb.Styles); err != nil {
+		if err := writeSheet(f, name, sh, styleMap, wb.Styles, &warnings); err != nil {
 			return fmt.Errorf("write sheet %q: %w", name, err)
 		}
 	}
 
+	// 警告があっても XLSX 出力は常に行う
 	if err := f.Write(out); err != nil {
 		return fmt.Errorf("write xlsx: %w", err)
+	}
+
+	if warnings > 0 {
+		return fmt.Errorf("conversion completed with %d warning(s)", warnings)
 	}
 	return nil
 }
 
-func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style) error {
+func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *int) error {
 	// AoA 形式 (rows) の展開: 1 行目 = 1 行目に配置
 	for r, row := range sh.Rows {
 		for c, v := range row {
@@ -110,10 +128,16 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 	}
 
-	// Cell Object 形式
+	// Cell Object 形式 (WarningError は非 fatal として継続)
 	for axis, cell := range sh.Cells {
 		if err := setCell(f, name, axis, cell, styleMap, styles); err != nil {
-			return fmt.Errorf("set cell %s: %w", axis, err)
+			var we *WarningError
+			if errors.As(err, &we) {
+				fmt.Fprintf(os.Stderr, "warning: %v\n", we.Err)
+				*warnings++
+			} else {
+				return fmt.Errorf("set cell %s: %w", axis, err)
+			}
 		}
 	}
 
@@ -235,6 +259,8 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int,
 			if err := f.SetCellStyle(sheet, axis, axis, id); err != nil {
 				return err
 			}
+		} else {
+			return &WarningError{Err: fmt.Errorf("cell %s: style id %d not defined in styles", axis, c.S)}
 		}
 	} else if c.Z != "" {
 		id, err := f.NewStyle(&excelize.Style{CustomNumFmt: &c.Z})

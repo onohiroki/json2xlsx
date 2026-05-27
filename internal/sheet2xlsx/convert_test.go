@@ -2,6 +2,7 @@ package sheet2xlsx
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 
@@ -161,5 +162,113 @@ func TestMergeAndDimensions(t *testing.T) {
 	h, _ := f.GetRowHeight("Sheet1", 1)
 	if h != 40 {
 		t.Errorf("row 1 height = %v, want 40", h)
+	}
+}
+
+// convertWithStderr は Convert を実行し、stderr 出力をキャプチャする。
+func convertWithStderr(t *testing.T, jsonStr string) (xlsxData []byte, stderrOutput string, convertErr error) {
+	t.Helper()
+	r := strings.NewReader(jsonStr)
+	var buf bytes.Buffer
+
+	// stderr を差し替え
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = stderrW
+
+	convertErr = Convert(r, &buf, "")
+
+	// stderr を戻して読み込み
+	stderrW.Close()
+	os.Stderr = origStderr
+	var stderrBuf bytes.Buffer
+	if _, err := stderrBuf.ReadFrom(stderrR); err != nil {
+		t.Fatal(err)
+	}
+
+	return buf.Bytes(), stderrBuf.String(), convertErr
+}
+
+func TestUnknownStyleID_Warning(t *testing.T) {
+	js := `{
+		"cells": {
+			"A1": {"t":"s","v":"hello", "s": 99}
+		}
+	}`
+	xlsxData, stderrOut, err := convertWithStderr(t, js)
+	if err == nil {
+		t.Fatal("expected error for unknown style id, got nil")
+	}
+	if !strings.Contains(err.Error(), "warning") {
+		t.Errorf("error message should mention warning, got: %v", err)
+	}
+	if !strings.Contains(stderrOut, "style id 99") {
+		t.Errorf("stderr should mention style id 99, got: %q", stderrOut)
+	}
+	if len(xlsxData) == 0 {
+		t.Fatal("expected XLSX output despite warning")
+	}
+	f, openErr := excelize.OpenReader(bytes.NewReader(xlsxData))
+	if openErr != nil {
+		t.Fatalf("OpenReader after warning: %v", openErr)
+	}
+	defer f.Close()
+	v, _ := f.GetCellValue("Sheet1", "A1")
+	if v != "hello" {
+		t.Errorf("A1 = %q, want hello", v)
+	}
+}
+
+func TestUnknownStyleID_ValidStyleStillWorks(t *testing.T) {
+	// A1 は有効な style ID 1、A2 は不明な style ID 99
+	js := `{
+		"cells": {
+			"A1": {"t":"n","v":123, "s": 1},
+			"A2": {"t":"s","v":"no-style", "s": 99}
+		},
+		"styles": [
+			{"id": 1, "numFmt": "#,##0"}
+		]
+	}`
+	xlsxData, stderrOut, err := convertWithStderr(t, js)
+	if err == nil {
+		t.Fatal("expected error for unknown style id, got nil")
+	}
+	if !strings.Contains(stderrOut, "style id 99") {
+		t.Errorf("stderr should mention style id 99, got: %q", stderrOut)
+	}
+	if len(xlsxData) == 0 {
+		t.Fatal("expected XLSX output despite warning")
+	}
+	f, openErr := excelize.OpenReader(bytes.NewReader(xlsxData))
+	if openErr != nil {
+		t.Fatalf("OpenReader after warning: %v", openErr)
+	}
+	defer f.Close()
+	// A1 (valid style) should still be formatted
+	got, _ := f.GetCellValue("Sheet1", "A1")
+	if got != "123" {
+		t.Errorf("A1 formatted = %q, want 123", got)
+	}
+	// A2 (unknown style) should still have the value
+	v, _ := f.GetCellValue("Sheet1", "A2")
+	if v != "no-style" {
+		t.Errorf("A2 = %q, want no-style", v)
+	}
+}
+
+func TestUnknownStyleID_StyleIDZeroIsValid(t *testing.T) {
+	// s=0 は「スタイル未指定」なので警告にならない
+	js := `{
+		"cells": {
+			"A1": {"t":"s","v":"ok", "s": 0}
+		}
+	}`
+	_, _, err := convertWithStderr(t, js)
+	if err != nil {
+		t.Fatalf("unexpected error for s=0: %v", err)
 	}
 }
