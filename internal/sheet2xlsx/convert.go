@@ -117,22 +117,30 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int) e
 		}
 	}
 
-	// 列幅
+	// 列幅 (Excel 制限: 0 < width <= 255)
 	for _, c := range sh.Cols {
 		if c.Col == "" || c.Width <= 0 {
 			continue
 		}
-		if err := f.SetColWidth(name, c.Col, c.Col, c.Width); err != nil {
+		w := c.Width
+		if w > 255 {
+			w = 255
+		}
+		if err := f.SetColWidth(name, c.Col, c.Col, w); err != nil {
 			return err
 		}
 	}
 
-	// 行高
+	// 行高 (Excel 制限: 0 < height <= 409)
 	for _, rd := range sh.RowDims {
 		if rd.Row <= 0 || rd.Height <= 0 {
 			continue
 		}
-		if err := f.SetRowHeight(name, rd.Row, rd.Height); err != nil {
+		h := rd.Height
+		if h > 409 {
+			h = 409
+		}
+		if err := f.SetRowHeight(name, rd.Row, h); err != nil {
 			return err
 		}
 	}
