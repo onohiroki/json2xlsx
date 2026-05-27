@@ -15,7 +15,7 @@ func usage() {
 Usage:
   sheet2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
   sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
-  sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--no-header]
+  sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
   sheet2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both]  # JSON / XLSX → HTML <table>
   sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
   sheet2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
@@ -28,7 +28,7 @@ Usage:
   --date-display   to-json で日時セルを表示文字列で出力する
   --date-rfc3339   to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
   --mode             セル表示モード (f=数式優先, v=値優先, both=併記). to-md デフォルト f, to-html デフォルト v
-  --no-header        to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
+  --first-row-header to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
 
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
@@ -160,11 +160,11 @@ func runToMD(args []string) {
 	fs := flag.NewFlagSet("to-md", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output, mode string
-	var noHeader bool
+	var firstRowHeader bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output Markdown file (default: stdout)")
 	fs.StringVar(&mode, "mode", "f", "cell display mode: f|v|both")
-	fs.BoolVar(&noHeader, "no-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
+	fs.BoolVar(&firstRowHeader, "first-row-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
 	_ = fs.Parse(args)
 
 	switch sheet2xlsx.MarkdownMode(mode) {
@@ -190,8 +190,8 @@ func runToMD(args []string) {
 
 	opts := sheet2xlsx.MarkdownOptions{
 		Mode:            sheet2xlsx.MarkdownMode(mode),
-		FirstRowHeader:  noHeader,
-		RowIndex:        !noHeader,
+		FirstRowHeader:  firstRowHeader,
+		RowIndex:        !firstRowHeader,
 	}
 	if err := sheet2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)

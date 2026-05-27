@@ -28,7 +28,7 @@ const (
 // MarkdownOptions は Markdown レンダリング設定。
 //
 // デフォルト (FirstRowHeader=false, RowIndex=true): A/B/C 列名ヘッダ + 行番号列を表示する。
-// --no-header 相当 (FirstRowHeader=true, RowIndex=false): 1行目をテーブルヘッダとして扱う。
+// --first-row-header 相当 (FirstRowHeader=true, RowIndex=false): 1行目をテーブルヘッダとして扱う。
 type MarkdownOptions struct {
 	Mode            MarkdownMode
 	RowIndex        bool
@@ -197,7 +197,7 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
 }
 
 // renderSheet は単一シートをテーブルとしてレンダリングする。空シートは空文字を返す。
-// FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--no-header）。
+// FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--first-row-header）。
 // それ以外は A/B/C 列名ヘッダ + 行番号を表示する（デフォルト）。
 func renderSheet(sh Sheet, opts MarkdownOptions) string {
 	if len(sh.Cells) == 0 {
