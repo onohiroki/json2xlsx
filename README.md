@@ -34,7 +34,7 @@ go build -o sheet2xlsx ./cmd/sheet2xlsx
 将来的には `go install` 対応を想定します．
 
 ```bash
-go install github.com/yourname/sheet2xlsx/cmd/sheet2xlsx@latest
+go install sheet2xlsx/cmd/sheet2xlsx@latest
 ```
 
 ## 使い方

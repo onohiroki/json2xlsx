@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/yourname/sheet2xlsx/internal/sheet2xlsx"
+	"sheet2xlsx/internal/sheet2xlsx"
 )
 
 func usage() {

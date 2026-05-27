@@ -1,4 +1,4 @@
-module github.com/yourname/sheet2xlsx
+module sheet2xlsx
 
 go 1.22
 
