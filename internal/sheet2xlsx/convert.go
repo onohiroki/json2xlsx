@@ -165,18 +165,13 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int,
 		if c.F == "" {
 			return fmt.Errorf("cell %s: type=f but formula empty", axis)
 		}
-		if err := f.SetCellFormula(sheet, axis, c.F); err != nil {
-			return err
-		}
-		// 計算済み値があれば設定 (excelize は値を自動計算しないため任意)
 		if c.V != nil {
 			if err := f.SetCellValue(sheet, axis, c.V); err != nil {
 				return err
 			}
-			// SetCellValue は数式を上書きしてしまうため再設定
-			if err := f.SetCellFormula(sheet, axis, c.F); err != nil {
-				return err
-			}
+		}
+		if err := f.SetCellFormula(sheet, axis, c.F); err != nil {
+			return err
 		}
 	case "b":
 		bv, ok := c.V.(bool)
