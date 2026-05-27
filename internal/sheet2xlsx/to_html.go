@@ -388,14 +388,53 @@ func formatCellHTML(cell Cell) string {
 	return raw
 }
 
-// formatCellHTMLMode は 1 セルの HTML 表現を返す。
-// formatCell の結果（markdown エスケープ済み、<br /> を含む場合あり）を
-// HTML 表現に変換する。（mode=f/both 用）
+// formatCellHTMLMode は mode に応じてセル値を HTML 表現に変換する。
 func formatCellHTMLMode(cell Cell, mode MarkdownMode) string {
-	raw := formatCell(cell, mode)
+	vStr := scalarToString(cell.V)
+	hasV := cell.V != nil && vStr != ""
+	hasF := cell.F != ""
 
-	raw = strings.ReplaceAll(raw, "\\|", "|")
-	raw = strings.ReplaceAll(raw, "\\\\", "\\")
+	var raw string
+	switch cell.T {
+	case "f":
+		switch mode {
+		case MarkdownModeValue:
+			if hasV {
+				raw = vStr
+			} else if hasF {
+				raw = "=" + cell.F
+			}
+		case MarkdownModeBoth:
+			if hasV && hasF {
+				raw = vStr + "<br />=" + cell.F
+			} else if hasF {
+				raw = "=" + cell.F
+			} else if hasV {
+				raw = vStr
+			}
+		default: // MarkdownModeFormula
+			if hasF {
+				raw = "=" + cell.F
+			} else if hasV {
+				raw = vStr
+			}
+		}
+	case "d":
+		if hasV {
+			if cell.Z != "" && isTimeOnlyFormat(cell.Z) {
+				raw = formatTimeOnly(toFloat64(cell.V), cell.Z)
+			} else {
+				raw = dateCellToString(cell.V)
+			}
+		}
+	default:
+		if hasV {
+			raw = vStr
+		} else if hasF {
+			raw = "=" + cell.F
+		}
+	}
+
 	raw = strings.ReplaceAll(raw, "<br />", "\x00")
 	raw = strings.ReplaceAll(raw, "&", "&amp;")
 	raw = strings.ReplaceAll(raw, "<", "&lt;")
