@@ -260,6 +260,159 @@ func TestUnknownStyleID_ValidStyleStillWorks(t *testing.T) {
 	}
 }
 
+func TestChartEmbedded(t *testing.T) {
+	js := `{
+		"version": "0.2",
+		"book": {
+			"sheets": {
+				"Data": {
+					"cells": {
+						"A1": {"t":"s","v":"cat"},
+						"B1": {"t":"s","v":"val"},
+						"A2": {"t":"s","v":"X"}, "B2": {"t":"n","v":1},
+						"A3": {"t":"s","v":"Y"}, "B3": {"t":"n","v":2}
+					}
+				}
+			},
+			"charts": [
+				{
+					"id": "ch1",
+					"t": "chart",
+					"mode": "embedded",
+					"ct": "col",
+					"sheet": "Data",
+					"anchor": "D2",
+					"title": {"tx":"Test Chart"},
+					"ser": [{"name":"S1","cat":"Data!$A$2:$A$3","val":"Data!$B$2:$B$3"}]
+				}
+			]
+		}
+	}`
+	f := convertAndOpen(t, js)
+	defer f.Close()
+
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == "Data" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("sheet Data not found")
+	}
+}
+
+func TestChartSheet(t *testing.T) {
+	js := `{
+		"version": "0.2",
+		"book": {
+			"sheets": {
+				"Data": {
+					"cells": {
+						"A1": {"t":"s","v":"cat"},
+						"B1": {"t":"s","v":"val"},
+						"A2": {"t":"s","v":"X"}, "B2": {"t":"n","v":1},
+						"A3": {"t":"s","v":"Y"}, "B3": {"t":"n","v":2}
+					}
+				}
+			},
+			"charts": [
+				{
+					"id": "ch2",
+					"t": "chart",
+					"mode": "chartSheet",
+					"ct": "col",
+					"sheet": "Chart1",
+					"title": {"tx":"Chart Sheet"},
+					"ser": [{"name":"S1","cat":"Data!$A$2:$A$3","val":"Data!$B$2:$B$3"}]
+				}
+			]
+		}
+	}`
+	f := convertAndOpen(t, js)
+	defer f.Close()
+
+	sheets := f.GetSheetList()
+	foundData := false
+	foundChart := false
+	for _, s := range sheets {
+		switch s {
+		case "Data":
+			foundData = true
+		case "Chart1":
+			foundChart = true
+		}
+	}
+	if !foundData {
+		t.Fatal("sheet Data not found")
+	}
+	if !foundChart {
+		t.Fatal("chartsheet Chart1 not found")
+	}
+}
+
+func TestChartUnknownMode(t *testing.T) {
+	js := `{
+		"version": "0.2",
+		"book": {
+			"sheets": {
+				"S1": {
+					"cells": {"A1":{"t":"s","v":"a"},"B1":{"t":"n","v":1}}
+				}
+			},
+			"charts": [
+				{
+					"id": "ch_bad",
+					"t": "chart",
+					"mode": "bogus",
+					"ct": "line",
+					"sheet": "S1",
+					"anchor": "D2",
+					"ser": [{"name":"X","cat":"S1!$A$1:$A$1","val":"S1!$B$1:$B$1"}]
+				}
+			]
+		}
+	}`
+	var buf bytes.Buffer
+	err := Convert(strings.NewReader(js), &buf, "")
+	if err == nil {
+		t.Fatal("expected error for unknown mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "bogus") {
+		t.Errorf("error should mention unknown mode, got: %v", err)
+	}
+}
+
+func TestChartInvalidType(t *testing.T) {
+	js := `{
+		"version": "0.2",
+		"book": {
+			"sheets": {
+				"S1": {
+					"cells": {"A1":{"t":"s","v":"a"},"B1":{"t":"n","v":1}}
+				}
+			},
+			"charts": [
+				{
+					"id": "ch_bad",
+					"t": "chart",
+					"ct": "nope",
+					"sheet": "S1",
+					"anchor": "D2",
+					"ser": [{"name":"X","cat":"S1!$A$1:$A$1","val":"S1!$B$1:$B$1"}]
+				}
+			]
+		}
+	}`
+	var buf bytes.Buffer
+	err := Convert(strings.NewReader(js), &buf, "")
+	if err == nil {
+		t.Fatal("expected error for unknown chart type, got nil")
+	}
+}
+
 func TestUnknownStyleID_StyleIDZeroIsValid(t *testing.T) {
 	// s=0 は「スタイル未指定」なので警告にならない
 	js := `{
