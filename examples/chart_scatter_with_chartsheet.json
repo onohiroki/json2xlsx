@@ -1,0 +1,79 @@
+{
+  "version": "0.2",
+  "book": {
+    "props": {
+      "title": "実験データ散布図"
+    },
+    "sheets": {
+      "測定データ": {
+        "cells": {
+          "A1": {"t":"s","v":"サンプル"},
+          "B1": {"t":"s","v":"温度(℃)"},
+          "C1": {"t":"s","v":"圧力(kPa)"},
+          "D1": {"t":"s","v":"収率(%)"},
+          "A2": {"t":"s","v":"S01"},"B2":{"t":"n","v":20},"C2":{"t":"n","v":101},"D2":{"t":"n","v":62},
+          "A3": {"t":"s","v":"S02"},"B3":{"t":"n","v":25},"C3":{"t":"n","v":105},"D3":{"t":"n","v":68},
+          "A4": {"t":"s","v":"S03"},"B4":{"t":"n","v":30},"C4":{"t":"n","v":110},"D4":{"t":"n","v":75},
+          "A5": {"t":"s","v":"S04"},"B5":{"t":"n","v":35},"C5":{"t":"n","v":108},"D5":{"t":"n","v":71},
+          "A6": {"t":"s","v":"S05"},"B6":{"t":"n","v":40},"C6":{"t":"n","v":115},"D6":{"t":"n","v":82},
+          "A7": {"t":"s","v":"S06"},"B7":{"t":"n","v":45},"C7":{"t":"n","v":120},"D7":{"t":"n","v":88},
+          "A8": {"t":"s","v":"S07"},"B8":{"t":"n","v":50},"C8":{"t":"n","v":125},"D8":{"t":"n","v":91},
+          "A9": {"t":"s","v":"S08"},"B9":{"t":"n","v":55},"C9":{"t":"n","v":130},"D9":{"t":"n","v":94},
+          "A10":{"t":"s","v":"S09"},"B10":{"t":"n","v":60},"C10":{"t":"n","v":133},"D10":{"t":"n","v":95},
+          "A11":{"t":"s","v":"S10"},"B11":{"t":"n","v":65},"C11":{"t":"n","v":138},"D11":{"t":"n","v":93},
+          "A12":{"t":"s","v":"S11"},"B12":{"t":"n","v":70},"C12":{"t":"n","v":142},"D12":{"t":"n","v":89},
+          "A13":{"t":"s","v":"S12"},"B13":{"t":"n","v":75},"C13":{"t":"n","v":145},"D13":{"t":"n","v":85}
+        },
+        "cols":[
+          {"col":"A","width":10},
+          {"col":"B","width":12},
+          {"col":"C","width":12},
+          {"col":"D","width":10}
+        ]
+      }
+    },
+    "charts": [
+      {
+        "id":"chart_yield_vs_temp",
+        "mode":"chartSheet",
+        "ct":"scatter",
+        "sheet":"収率vs温度",
+        "dim":{"w":640,"h":400},
+        "title":{"tx":"温度と収率の関係"},
+        "legend":{"show":true,"pos":"bottom"},
+        "xAxis":{"title":"温度(℃)","majorGridLines":true,"minimum":15,"maximum":80},
+        "yAxis":{"title":"収率(%)","majorGridLines":true,"minimum":55,"maximum":100},
+        "ser":[
+          {
+            "name":"収率",
+            "cat":"測定データ!$B$2:$B$13",
+            "val":"測定データ!$D$2:$D$13",
+            "marker":{"symbol":"circle","size":8},
+            "line":{"width":1.5}
+          }
+        ]
+      },
+      {
+        "id":"chart_pressure_vs_temp",
+        "mode":"chartSheet",
+        "ct":"scatter",
+        "sheet":"圧力vs温度",
+        "dim":{"w":640,"h":400},
+        "title":{"tx":"温度と圧力の関係"},
+        "legend":{"show":false},
+        "xAxis":{"title":"温度(℃)","majorGridLines":true,"minorGridLines":true},
+        "yAxis":{"title":"圧力(kPa)","majorGridLines":true,"numFmt":"#,##0"},
+        "ser":[
+          {
+            "name":"圧力",
+            "cat":"測定データ!$B$2:$B$13",
+            "val":"測定データ!$C$2:$C$13",
+            "fill":{"color":"#E74C3C"},
+            "marker":{"symbol":"diamond","size":7},
+            "line":{"width":1.5}
+          }
+        ]
+      }
+    ]
+  }
+}
