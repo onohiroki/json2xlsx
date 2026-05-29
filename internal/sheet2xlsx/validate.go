@@ -100,7 +100,7 @@ func collectIssues(ve *jsonschema.ValidationError) []schemaIssue {
 		var issues []schemaIssue
 		issues = append(issues, schemaIssue{
 			path:    instPathToJQ(ve.InstanceLocation),
-			message: `must be either a single sheet with "name" and "cells", or multiple sheets with a "sheets" array`,
+			message: `must be either a single sheet with "name" and "cells", a "sheets" array, or a "book" wrapper with version/sheets/charts (mode: embedded|chartSheet)`,
 		})
 		for _, cause := range ve.Causes {
 			issues = append(issues, collectIssues(cause)...)

@@ -87,10 +87,112 @@ type Sheet struct {
 	Merges  []Merge          `json:"merges,omitempty"`
 }
 
+// Chart はグラフオブジェクト。chart-json-spec.md の ChartObject に対応。
+type Chart struct {
+	ID     string        `json:"id,omitempty"`
+	T      string        `json:"t,omitempty"`
+	Mode   string        `json:"mode,omitempty"` // "embedded"(default) | "chartSheet"
+	Ct     string        `json:"ct,omitempty"`
+	Sheet  string        `json:"sheet,omitempty"`
+	Anchor string        `json:"anchor,omitempty"`
+	Dim    *ChartDim     `json:"dim,omitempty"`
+	Title  *ChartTitle   `json:"title,omitempty"`
+	Legend *ChartLegend  `json:"legend,omitempty"`
+	Plot   *ChartPlot    `json:"plot,omitempty"`
+	XAxis  *ChartAxis    `json:"xAxis,omitempty"`
+	YAxis  *ChartAxis    `json:"yAxis,omitempty"`
+	Ser    []ChartSeries `json:"ser,omitempty"`
+	Style  interface{}   `json:"style,omitempty"`
+	Meta   interface{}   `json:"meta,omitempty"`
+}
+
+type ChartDim struct {
+	W    float64 `json:"w,omitempty"`
+	H    float64 `json:"h,omitempty"`
+	OffX float64 `json:"offx,omitempty"`
+	OffY float64 `json:"offy,omitempty"`
+	Sx   float64 `json:"sx,omitempty"`
+	Sy   float64 `json:"sy,omitempty"`
+}
+
+type ChartTitle struct {
+	Tx      string `json:"tx,omitempty"`
+	Overlay bool   `json:"overlay,omitempty"`
+}
+
+type ChartLegend struct {
+	Show bool   `json:"show,omitempty"`
+	Pos  string `json:"pos,omitempty"`
+}
+
+type ChartPlot struct {
+	VaryColors   bool   `json:"varyColors,omitempty"`
+	ShowBlanksAs string `json:"showBlanksAs,omitempty"`
+}
+
+type ChartAxis struct {
+	Title          string   `json:"title,omitempty"`
+	Minimum        *float64 `json:"minimum,omitempty"`
+	Maximum        *float64 `json:"maximum,omitempty"`
+	MajorUnit      *float64 `json:"majorUnit,omitempty"`
+	MinorUnit      *float64 `json:"minorUnit,omitempty"`
+	ReverseOrder   bool     `json:"reverseOrder,omitempty"`
+	MajorGridLines bool     `json:"majorGridLines,omitempty"`
+	MinorGridLines bool     `json:"minorGridLines,omitempty"`
+	NumFmt         string   `json:"numFmt,omitempty"`
+}
+
+type ChartSeries struct {
+	Name   string         `json:"name,omitempty"`
+	Cat    string         `json:"cat,omitempty"`
+	Val    string         `json:"val,omitempty"`
+	XVal   *string        `json:"xVal,omitempty"`
+	YVal   *string        `json:"yVal,omitempty"`
+	Bubble *string        `json:"bubble,omitempty"`
+	Line   *ChartLine     `json:"line,omitempty"`
+	Fill   *ChartFill     `json:"fill,omitempty"`
+	Marker *ChartMarker   `json:"marker,omitempty"`
+	DLbls  *ChartDLbls    `json:"dLbls,omitempty"`
+}
+
+type ChartLine struct {
+	Width float64 `json:"width,omitempty"`
+}
+
+type ChartFill struct {
+	Color string `json:"color,omitempty"`
+}
+
+type ChartMarker struct {
+	Symbol string  `json:"symbol,omitempty"`
+	Size   float64 `json:"size,omitempty"`
+}
+
+type ChartDLbls struct {
+	ShowVal      bool `json:"showVal,omitempty"`
+	ShowCatName  bool `json:"showCatName,omitempty"`
+	ShowSerName  bool `json:"showSerName,omitempty"`
+	ShowPercent  bool `json:"showPercent,omitempty"`
+	ShowLeaderLn bool `json:"showLeaderLn,omitempty"`
+}
+
+// Book は book ラッパー形式の内部構造。
+type Book struct {
+	Props  interface{}      `json:"props,omitempty"`
+	Sheets map[string]Sheet `json:"sheets,omitempty"`
+	Charts []Chart          `json:"charts,omitempty"`
+	Styles []Style          `json:"styles,omitempty"`
+}
+
 // Workbook はトップレベルの JSON 構造。
 //
-// 単一シート形式 (cells を直接持つ) と複数シート形式 (sheets) の両方に対応する。
+// 単一シート形式 (cells を直接持つ), 複数シート形式 (sheets 配列),
+// book ラッパー形式 (version + book) のすべてに対応する。
 type Workbook struct {
+	// book ラッパー形式
+	Version string `json:"version,omitempty"`
+	Book    *Book  `json:"book,omitempty"`
+
 	// 複数シート
 	Sheets []Sheet `json:"sheets,omitempty"`
 

@@ -5,7 +5,8 @@
   "description": "SheetJS 風 JSON から XLSX へ変換するためのスキーマ",
   "oneOf": [
     { "$ref": "#/$defs/singleSheet" },
-    { "$ref": "#/$defs/multiSheet" }
+    { "$ref": "#/$defs/multiSheet" },
+    { "$ref": "#/$defs/bookWrapped" }
   ],
 
   "$defs": {
@@ -250,6 +251,213 @@
           "enum": ["top", "center", "bottom"]
         },
         "wrapText": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "bookWrapped": {
+      "type": "object",
+      "description": "book ラッパー形式（version + book 配下に sheets/charts/props を持つ）",
+      "properties": {
+        "version": { "type": "string", "description": "スキーマバージョン（例: 0.1）" },
+        "book": {
+          "type": "object",
+          "properties": {
+            "props":  { "type": "object", "description": "文書プロパティ（任意）" },
+            "sheets": {
+              "type": "object",
+              "description": "キーがシート名のオブジェクト",
+              "additionalProperties": { "$ref": "#/$defs/bookSheet" }
+            },
+            "charts": {
+              "type": "array",
+              "description": "グラフオブジェクトの配列",
+              "items": { "$ref": "#/$defs/chart" }
+            },
+            "styles": { "$ref": "#/$defs/styles" }
+          },
+          "required": ["sheets"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["book"],
+      "additionalProperties": false
+    },
+
+    "bookSheet": {
+      "type": "object",
+      "description": "book 内のシートオブジェクト（キーがシート名のため name フィールド不要）",
+      "properties": {
+        "cells":   { "$ref": "#/$defs/cells" },
+        "rows":    { "$ref": "#/$defs/rows" },
+        "cols":    { "$ref": "#/$defs/cols" },
+        "rowDims": { "$ref": "#/$defs/rowDims" },
+        "merges":  { "$ref": "#/$defs/merges" }
+      },
+      "required": ["cells"],
+      "additionalProperties": false
+    },
+
+    "chart": {
+      "type": "object",
+      "description": "グラフオブジェクト",
+      "properties": {
+        "id":     { "type": "string", "description": "一意な識別子（任意）" },
+        "t":      { "type": "string", "description": "オブジェクト種別（chart 推奨）" },
+        "mode":   { "type": "string", "enum": ["embedded", "chartSheet"], "default": "embedded", "description": "配置モード: embedded(通常シート埋め込み), chartSheet(グラフ専用シート)" },
+        "ct":     { "type": "string", "description": "グラフ種別 (col, line, pie ...)" },
+        "sheet":  { "type": "string", "description": "配置先シート名" },
+        "anchor": { "type": "string", "description": "左上セルアドレス (A1 形式)。chartSheet モードでは無視" },
+        "dim":    { "$ref": "#/$defs/chartDim" },
+        "title":  { "$ref": "#/$defs/chartTitle" },
+        "legend": { "$ref": "#/$defs/chartLegend" },
+        "plot":   { "$ref": "#/$defs/chartPlot" },
+        "xAxis":  { "$ref": "#/$defs/chartAxis" },
+        "yAxis":  { "$ref": "#/$defs/chartAxis" },
+        "ser":    {
+          "type": "array",
+          "items": { "$ref": "#/$defs/chartSeries" },
+          "minItems": 1
+        },
+        "style": { "type": "object" },
+        "meta":  { "type": "object" }
+      },
+      "required": ["ct", "sheet", "ser"],
+      "allOf": [
+        {
+          "if": {
+            "properties": { "mode": { "const": "chartSheet" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": { "anchor": { "description": "chartSheet モードでは anchor は無視される" } }
+          },
+          "else": {
+            "required": ["anchor"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+
+    "chartDim": {
+      "type": "object",
+      "description": "グラフ領域のサイズ・オフセット",
+      "properties": {
+        "w":    { "type": "number" },
+        "h":    { "type": "number" },
+        "offx": { "type": "number" },
+        "offy": { "type": "number" },
+        "sx":   { "type": "number" },
+        "sy":   { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartTitle": {
+      "type": "object",
+      "description": "グラフタイトル",
+      "properties": {
+        "tx":      { "type": "string" },
+        "overlay": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartLegend": {
+      "type": "object",
+      "description": "凡例設定",
+      "properties": {
+        "show": { "type": "boolean" },
+        "pos":  { "type": "string", "enum": ["right", "left", "top", "bottom", "topRight"] }
+      },
+      "additionalProperties": false
+    },
+
+    "chartPlot": {
+      "type": "object",
+      "description": "プロット領域オプション",
+      "properties": {
+        "varyColors":   { "type": "boolean" },
+        "showBlanksAs": { "type": "string", "enum": ["gap", "zero", "span"] }
+      },
+      "additionalProperties": false
+    },
+
+    "chartAxis": {
+      "type": "object",
+      "description": "軸設定",
+      "properties": {
+        "title":          { "type": "string" },
+        "minimum":        { "type": ["number", "null"] },
+        "maximum":        { "type": ["number", "null"] },
+        "majorUnit":      { "type": ["number", "null"] },
+        "minorUnit":      { "type": ["number", "null"] },
+        "reverseOrder":   { "type": "boolean" },
+        "majorGridLines": { "type": "boolean" },
+        "minorGridLines": { "type": "boolean" },
+        "numFmt":         { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartSeries": {
+      "type": "object",
+      "description": "データ系列",
+      "properties": {
+        "name":   { "type": "string" },
+        "cat":    { "type": "string" },
+        "val":    { "type": "string" },
+        "xVal":   { "type": ["string", "null"] },
+        "yVal":   { "type": ["string", "null"] },
+        "bubble": { "type": ["string", "null"] },
+        "line":   { "$ref": "#/$defs/chartLine" },
+        "fill":   { "$ref": "#/$defs/chartFill" },
+        "marker": { "$ref": "#/$defs/chartMarker" },
+        "dLbls":  { "$ref": "#/$defs/chartDLbls" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartLine": {
+      "type": "object",
+      "description": "系列の線スタイル",
+      "properties": {
+        "color": { "$ref": "#/$defs/colorValue" },
+        "width": { "type": "number" },
+        "dash":  { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartFill": {
+      "type": "object",
+      "description": "系列の塗りつぶし",
+      "properties": {
+        "color": { "$ref": "#/$defs/colorValue" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartMarker": {
+      "type": "object",
+      "description": "系列のマーカー設定",
+      "properties": {
+        "symbol": { "type": "string" },
+        "size":   { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "chartDLbls": {
+      "type": "object",
+      "description": "データラベル設定",
+      "properties": {
+        "showVal":       { "type": "boolean" },
+        "showCatName":   { "type": "boolean" },
+        "showSerName":   { "type": "boolean" },
+        "showPercent":   { "type": "boolean" },
+        "showLeaderLn":  { "type": "boolean" }
       },
       "additionalProperties": false
     }

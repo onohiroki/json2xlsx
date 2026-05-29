@@ -49,9 +49,23 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// シート一覧を組み立てる
-	sheets := wb.Sheets
-	if len(sheets) == 0 {
+	// シート一覧を組み立てる (book ラッパー → 配列形式 → 単一シート の優先順)
+	var sheets []Sheet
+	styles := wb.Styles
+
+	if wb.Book != nil {
+		// book ラッパー形式: map を配列に展開
+		for name, sh := range wb.Book.Sheets {
+			sh.Name = name
+			sheets = append(sheets, sh)
+		}
+		if len(wb.Book.Styles) > 0 {
+			styles = wb.Book.Styles
+		}
+		// book.Charts は後で処理
+	} else if len(wb.Sheets) > 0 {
+		sheets = wb.Sheets
+	} else {
 		// 単一シート形式
 		sheets = []Sheet{{
 			Name:    wb.Name,
@@ -64,7 +78,7 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 	}
 
 	// スタイル ID -> excelize スタイル ID マッピング
-	styleMap, err := buildStyles(f, wb.Styles)
+	styleMap, err := buildStyles(f, styles)
 	if err != nil {
 		return fmt.Errorf("build styles: %w", err)
 	}
@@ -98,8 +112,73 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 			}
 		}
 
-		if err := writeSheet(f, name, sh, styleMap, wb.Styles, &warnings); err != nil {
+		if err := writeSheet(f, name, sh, styleMap, styles, &warnings); err != nil {
 			return fmt.Errorf("write sheet %q: %w", name, err)
+		}
+	}
+
+	// チャート変換 (book ラッパー形式のみ)
+	if wb.Book != nil {
+		for _, ch := range wb.Book.Charts {
+			ct, err := chartTypeFromString(ch.Ct)
+			if err != nil {
+				return fmt.Errorf("chart %q: %w", ch.ID, err)
+			}
+			ec := excelize.Chart{
+				Type:   ct,
+				Series: toExcelizeSeriesList(ch.Ser),
+			}
+			if ch.Title != nil && ch.Title.Tx != "" {
+				ec.Title = []excelize.RichTextRun{{Text: ch.Title.Tx}}
+			}
+			if ch.Legend != nil {
+				ec.Legend = excelize.ChartLegend{
+					Position: ch.Legend.Pos,
+				}
+			}
+			if ch.XAxis != nil {
+				ec.XAxis = toExcelizeAxis(*ch.XAxis)
+			}
+			if ch.YAxis != nil {
+				ec.YAxis = toExcelizeAxis(*ch.YAxis)
+			}
+			if ch.Dim != nil {
+				ec.Dimension = excelize.ChartDimension{
+					Width:  uint(ch.Dim.W),
+					Height: uint(ch.Dim.H),
+				}
+			}
+			if ch.Plot != nil {
+				ec.VaryColors = &ch.Plot.VaryColors
+				ec.ShowBlanksAs = ch.Plot.ShowBlanksAs
+			}
+			// 各系列の dLbls（最初の系列）→ PlotArea
+			for _, s := range ch.Ser {
+				if s.DLbls != nil {
+					ec.PlotArea = excelize.ChartPlotArea{
+						ShowVal:      s.DLbls.ShowVal,
+						ShowCatName:  s.DLbls.ShowCatName,
+						ShowSerName:  s.DLbls.ShowSerName,
+						ShowPercent:  s.DLbls.ShowPercent,
+						ShowLeaderLines: s.DLbls.ShowLeaderLn,
+					}
+					break
+				}
+			}
+			switch ch.Mode {
+			case "", "embedded":
+				ec.Format = chartGraphicOptions(ch.Dim)
+				if err := f.AddChart(ch.Sheet, ch.Anchor, &ec); err != nil {
+					return fmt.Errorf("chart %q: add chart: %w", ch.ID, err)
+				}
+			case "chartSheet":
+				// AddChartSheet は anchor/offset を受け付けず、シート名のみ
+				if err := f.AddChartSheet(ch.Sheet, &ec); err != nil {
+					return fmt.Errorf("chart %q: add chart sheet: %w", ch.ID, err)
+				}
+			default:
+				return fmt.Errorf("chart %q: unknown mode %q", ch.ID, ch.Mode)
+			}
 		}
 	}
 
@@ -302,5 +381,95 @@ func parseLink(l interface{}) (target, tooltip string) {
 		}
 	}
 	return
+}
+
+// chartTypeFromString は chart-json-spec.md の ct 文字列を Excelize の ChartType に変換する。
+func chartTypeFromString(ct string) (excelize.ChartType, error) {
+	switch ct {
+	case "col":
+		return excelize.Col, nil
+	case "bar":
+		return excelize.Bar, nil
+	case "line":
+		return excelize.Line, nil
+	case "area":
+		return excelize.Area, nil
+	case "pie":
+		return excelize.Pie, nil
+	case "doughnut":
+		return excelize.Doughnut, nil
+	case "scatter":
+		return excelize.Scatter, nil
+	case "radar":
+		return excelize.Radar, nil
+	default:
+		return 0, fmt.Errorf("unsupported chart type %q", ct)
+	}
+}
+
+// chartGraphicOptions は ChartDim から GraphicOptions を生成する。
+func chartGraphicOptions(dim *ChartDim) excelize.GraphicOptions {
+	opts := excelize.GraphicOptions{ScaleX: 1.0, ScaleY: 1.0}
+	if dim != nil {
+		if dim.Sx > 0 {
+			opts.ScaleX = dim.Sx
+		}
+		if dim.Sy > 0 {
+			opts.ScaleY = dim.Sy
+		}
+		opts.OffsetX = int(dim.OffX)
+		opts.OffsetY = int(dim.OffY)
+	}
+	return opts
+}
+
+// toExcelizeSeriesList は ChartSeries のスライスを Excelize の ChartSeries スライスに変換する。
+func toExcelizeSeriesList(series []ChartSeries) []excelize.ChartSeries {
+	result := make([]excelize.ChartSeries, len(series))
+	for i, s := range series {
+		es := excelize.ChartSeries{
+			Name:       s.Name,
+			Categories: s.Cat,
+			Values:     s.Val,
+		}
+		if s.Line != nil {
+			es.Line = excelize.ChartLine{Width: s.Line.Width}
+		}
+		if s.Fill != nil && s.Fill.Color != "" {
+			es.Fill = excelize.Fill{Color: []string{s.Fill.Color}}
+		}
+		if s.Marker != nil {
+			es.Marker = excelize.ChartMarker{
+				Symbol: s.Marker.Symbol,
+				Size:   int(s.Marker.Size),
+			}
+		}
+		result[i] = es
+	}
+	return result
+}
+
+// toExcelizeAxis は ChartAxis を Excelize の ChartAxis に変換する。
+func toExcelizeAxis(axis ChartAxis) excelize.ChartAxis {
+	ea := excelize.ChartAxis{}
+	if axis.Title != "" {
+		ea.Title = []excelize.RichTextRun{{Text: axis.Title}}
+	}
+	ea.ReverseOrder = axis.ReverseOrder
+	ea.MajorGridLines = axis.MajorGridLines
+	ea.MinorGridLines = axis.MinorGridLines
+	if axis.NumFmt != "" {
+		ea.NumFmt = excelize.ChartNumFmt{CustomNumFmt: axis.NumFmt}
+	}
+	if axis.Minimum != nil {
+		ea.Minimum = axis.Minimum
+	}
+	if axis.Maximum != nil {
+		ea.Maximum = axis.Maximum
+	}
+	if axis.MajorUnit != nil {
+		ea.MajorUnit = *axis.MajorUnit
+	}
+	return ea
 }
 
