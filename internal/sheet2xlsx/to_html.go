@@ -14,7 +14,8 @@ import (
 
 // HTMLOptions は HTML レンダリング設定。
 type HTMLOptions struct {
-	Mode MarkdownMode
+	Mode      MarkdownMode
+	GridLines bool // セル間の隙間をなくし、枠線未指定セルにグレーの細枠線を表示する
 }
 
 // ToHTML は入力 (JSON Workbook または XLSX) を HTML <table> に変換して書き出す。
@@ -63,7 +64,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		normalizeDateCells(&wb)
 	}
 
-	out := renderHTML(wb, opts.Mode)
+	out := renderHTML(wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
@@ -71,7 +72,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 }
 
 // renderHTML は Workbook を HTML 文字列にレンダリングする。
-func renderHTML(wb Workbook, mode MarkdownMode) string {
+func renderHTML(wb Workbook, opts HTMLOptions) string {
 	var sheets []Sheet
 	styles := wb.Styles
 	if wb.Book != nil {
@@ -98,7 +99,7 @@ func renderHTML(wb Workbook, mode MarkdownMode) string {
 
 	var b strings.Builder
 	for _, sh := range sheets {
-		b.WriteString(renderSheetHTML(sh, stylesByID, mode))
+		b.WriteString(renderSheetHTML(sh, stylesByID, opts))
 	}
 	return b.String()
 }
@@ -247,7 +248,7 @@ func buildMergeMap(merges []Merge) (hidden map[string]bool, anchors map[string]m
 }
 
 // renderSheetHTML は単一シートを <table> としてレンダリングする。
-func renderSheetHTML(sh Sheet, stylesByID map[int]Style, mode MarkdownMode) string {
+func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) string {
 	if len(sh.Cells) == 0 {
 		return ""
 	}
@@ -279,9 +280,9 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, mode MarkdownMode) stri
 	const thStyle = `style="font-weight:bold;border:1px solid #000"`
 
 	var b strings.Builder
-	withHeader := mode != MarkdownModeValue
+	withHeader := opts.Mode != MarkdownModeValue
 
-	b.WriteString("<table>\n")
+	b.WriteString(`<table style="border-collapse:collapse">` + "\n")
 	if withHeader {
 		b.WriteString("<tr>")
 		b.WriteString("<th " + thStyle + ">")
@@ -322,19 +323,26 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, mode MarkdownMode) stri
 					b.WriteString(`"`)
 				}
 			}
+			var cellStyles []string
+			if opts.GridLines {
+				cellStyles = append(cellStyles, "border:1px solid #d0d0d0")
+			}
 			if ok && cell.S > 0 {
 				if st, found := stylesByID[cell.S]; found {
 					if css := styleToCSS(st); css != "" {
-						b.WriteString(` style="`)
-						b.WriteString(htmlEsc(css))
-						b.WriteString(`"`)
+						cellStyles = append(cellStyles, css)
 					}
 				}
+			}
+			if len(cellStyles) > 0 {
+				b.WriteString(` style="`)
+				b.WriteString(htmlEsc(strings.Join(cellStyles, ";")))
+				b.WriteString(`"`)
 			}
 			b.WriteString(">")
 			if ok {
 				if withHeader {
-					b.WriteString(formatCellHTMLMode(cell, mode))
+					b.WriteString(formatCellHTMLMode(cell, opts.Mode))
 				} else {
 					b.WriteString(formatCellHTML(cell))
 				}

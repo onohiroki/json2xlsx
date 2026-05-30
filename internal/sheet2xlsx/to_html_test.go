@@ -28,7 +28,7 @@ func TestToHTML_Basic(t *testing.T) {
 	  }
 	}`
 	got := runToHTML(t, in)
-	want := "<table>\n<tr><td>hello</td><td>42</td></tr>\n<tr><td></td><td>3.14</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>hello</td><td>42</td></tr>\n<tr><td></td><td>3.14</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -42,7 +42,7 @@ func TestToHTML_Formula(t *testing.T) {
 	  }
 	}`
 	got := runToHTML(t, in)
-	want := "<table>\n<tr><td>3</td><td>=X</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>3</td><td>=X</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -154,7 +154,7 @@ func TestToHTML_MultiSheet(t *testing.T) {
 	  ]
 	}`
 	got := runToHTML(t, in)
-	want := "<table>\n<tr><td>x</td></tr>\n</table>\n<table>\n<tr><td>1</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>x</td></tr>\n</table>\n<table style=\"border-collapse:collapse\">\n<tr><td>1</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
 	}
@@ -163,7 +163,7 @@ func TestToHTML_MultiSheet(t *testing.T) {
 func TestToHTML_EmptyCell(t *testing.T) {
 	in := `{"cells":{"A1":{"t":"s","v":"x"},"B2":{"t":"n","v":1}}}`
 	got := runToHTML(t, in)
-	want := "<table>\n<tr><td>x</td><td></td></tr>\n<tr><td></td><td>1</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>x</td><td></td></tr>\n<tr><td></td><td>1</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
 	}
