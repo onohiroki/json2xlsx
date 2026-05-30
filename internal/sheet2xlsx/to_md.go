@@ -80,9 +80,6 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 			return fmt.Errorf("unsupported input: expected JSON Workbook or XLSX: %w", err)
 		}
 		normalizeDateCells(&wb)
-		if schemaErr := ValidateJSON(data); schemaErr != nil {
-			return schemaErr
-		}
 	}
 
 	out := renderMarkdown(wb, opts)
@@ -110,6 +107,20 @@ func normalizeDateCells(wb *Workbook) {
 					wb.Sheets[i].Cells[axis] = cell
 				}
 			}
+		}
+	}
+	if wb.Book != nil {
+		for name := range wb.Book.Sheets {
+			sh := wb.Book.Sheets[name]
+			for axis, cell := range sh.Cells {
+				if cell.Z != "" && cell.T != "d" && cell.T != "f" {
+					if isDateFormat(cell.Z, 0) {
+						cell.T = "d"
+						sh.Cells[axis] = cell
+					}
+				}
+			}
+			wb.Book.Sheets[name] = sh
 		}
 	}
 }
@@ -168,9 +179,15 @@ func formatTimeOnly(serial float64, z string) string {
 
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
 func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
-	// 単一シート形式を Sheets に正規化。
-	sheets := wb.Sheets
-	if len(sheets) == 0 && (wb.Cells != nil || wb.Name != "" || wb.Merges != nil) {
+	var sheets []Sheet
+	if wb.Book != nil {
+		for name, sh := range wb.Book.Sheets {
+			sh.Name = name
+			sheets = append(sheets, sh)
+		}
+	} else if len(wb.Sheets) > 0 {
+		sheets = wb.Sheets
+	} else if wb.Cells != nil || wb.Name != "" || wb.Merges != nil {
 		sheets = []Sheet{{
 			Name:    wb.Name,
 			Cells:   wb.Cells,

@@ -61,9 +61,6 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 			return fmt.Errorf("unsupported input: expected JSON Workbook or XLSX: %w", err)
 		}
 		normalizeDateCells(&wb)
-		if schemaErr := ValidateJSON(data); schemaErr != nil {
-			return schemaErr
-		}
 	}
 
 	out := renderHTML(wb, opts.Mode)
@@ -75,8 +72,19 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 
 // renderHTML は Workbook を HTML 文字列にレンダリングする。
 func renderHTML(wb Workbook, mode MarkdownMode) string {
-	sheets := wb.Sheets
-	if len(sheets) == 0 && (wb.Cells != nil || wb.Name != "" || wb.Merges != nil) {
+	var sheets []Sheet
+	styles := wb.Styles
+	if wb.Book != nil {
+		for name, sh := range wb.Book.Sheets {
+			sh.Name = name
+			sheets = append(sheets, sh)
+		}
+		if len(wb.Book.Styles) > 0 {
+			styles = wb.Book.Styles
+		}
+	} else if len(wb.Sheets) > 0 {
+		sheets = wb.Sheets
+	} else if wb.Cells != nil || wb.Name != "" || wb.Merges != nil {
 		sheets = []Sheet{{
 			Name:    wb.Name,
 			Cells:   wb.Cells,
@@ -86,7 +94,7 @@ func renderHTML(wb Workbook, mode MarkdownMode) string {
 		}}
 	}
 
-	stylesByID := buildStyleMap(wb.Styles)
+	stylesByID := buildStyleMap(styles)
 
 	var b strings.Builder
 	for _, sh := range sheets {
