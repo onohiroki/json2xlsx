@@ -244,6 +244,57 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		colNames[c] = name
 	}
 
+	// 列配置推論（サンプリング: 最初の 5 行で多数決）
+	colAlign := make([]string, maxCol+1)
+	for c := 1; c <= maxCol; c++ {
+		colAlign[c] = "---" // default (unaligned)
+	}
+	startRow := 3
+	if opts.FirstRowHeader {
+		startRow = 2
+	}
+	sampleEnd := startRow + 4
+	if sampleEnd > maxRow {
+		sampleEnd = maxRow
+	}
+	typeCount := make([]map[string]int, maxCol+1)
+	for c := 1; c <= maxCol; c++ {
+		typeCount[c] = map[string]int{}
+	}
+	for r := startRow; r <= sampleEnd; r++ {
+		for c := 1; c <= maxCol; c++ {
+			axis := colNames[c] + strconv.Itoa(r)
+			if cell, ok := sh.Cells[axis]; ok {
+				t := cell.T
+				if t == "f" {
+					if _, isNum := cell.V.(float64); isNum {
+						t = "n"
+					} else {
+						t = "s"
+					}
+				}
+				typeCount[c][t]++
+			}
+		}
+	}
+	for c := 1; c <= maxCol; c++ {
+		total := 0
+		for _, v := range typeCount[c] {
+			total += v
+		}
+		if total == 0 {
+			continue
+		}
+		nCount := typeCount[c]["n"] + typeCount[c]["d"]
+		bCount := typeCount[c]["b"]
+		switch {
+		case nCount > total/2:
+			colAlign[c] = "---:"
+		case bCount > total/2:
+			colAlign[c] = ":---:"
+		}
+	}
+
 	var b strings.Builder
 
 	if opts.FirstRowHeader {
@@ -263,7 +314,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		// 区切り行
 		b.WriteString("|")
 		for c := 1; c <= maxCol; c++ {
-			b.WriteString(" --- |")
+			b.WriteString(" " + colAlign[c] + " |")
 		}
 		b.WriteString("\n")
 
@@ -300,7 +351,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 			b.WriteString(" --- |")
 		}
 		for c := 1; c <= maxCol; c++ {
-			b.WriteString(" --- |")
+			b.WriteString(" " + colAlign[c] + " |")
 		}
 		b.WriteString("\n")
 

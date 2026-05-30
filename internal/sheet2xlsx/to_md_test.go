@@ -182,7 +182,7 @@ func TestToMarkdown_NoHeader(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: true})
 		want := "| Name | Value |\n" +
-			"| --- | --- |\n" +
+			"| --- | ---: |\n" +
 			"| Alice | 100 |\n" +
 			"| Bob | 200 |\n"
 		if got != want {
@@ -192,7 +192,7 @@ func TestToMarkdown_NoHeader(t *testing.T) {
 	t.Run("row_index_ignored", func(t *testing.T) {
 		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true, FirstRowHeader: true})
 		want := "| Name | Value |\n" +
-			"| --- | --- |\n" +
+			"| --- | ---: |\n" +
 			"| Alice | 100 |\n" +
 			"| Bob | 200 |\n"
 		if got != want {

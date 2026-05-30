@@ -28,7 +28,7 @@ func TestToHTML_Basic(t *testing.T) {
 	  }
 	}`
 	got := runToHTML(t, in)
-	want := "<table style=\"border-collapse:collapse\">\n<tr><td>hello</td><td>42</td></tr>\n<tr><td></td><td>3.14</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>hello</td><td style=\"text-align:right\">42</td></tr>\n<tr><td></td><td style=\"text-align:right\">3.14</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -42,7 +42,7 @@ func TestToHTML_Formula(t *testing.T) {
 	  }
 	}`
 	got := runToHTML(t, in)
-	want := "<table style=\"border-collapse:collapse\">\n<tr><td>3</td><td>=X</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td style=\"text-align:right\">3</td><td>=X</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -146,6 +146,39 @@ func TestToHTML_Escaping(t *testing.T) {
 	}
 }
 
+func TestToHTML_DefaultAlignment(t *testing.T) {
+	in := `{
+	  "cells": {
+	    "A1": {"t":"s","v":"text"},
+	    "B1": {"t":"n","v":123},
+	    "C1": {"t":"d","v":"2024-01-15T00:00:00Z"},
+	    "D1": {"t":"b","v":true},
+	    "E1": {"t":"f","f":"1+2","v":3},
+	    "F1": {"t":"f","f":"hello"},
+	    "G1": {"t":"s","v":"labeled","s":1}
+	  },
+	  "styles": [
+	    {"id":1,"alignment":{"horizontal":"center"}}
+	  ]
+	}`
+	got := runToHTML(t, in)
+	if !strings.Contains(got, "<td>text</td>") {
+		t.Fatalf("string should be left-aligned (no style). got:\n%s", got)
+	}
+	if !strings.Contains(got, "text-align:right") {
+		t.Fatalf("number/date/formula-with-value should be right-aligned. got:\n%s", got)
+	}
+	if !strings.Contains(got, "text-align:center") {
+		t.Fatalf("boolean should be center-aligned. got:\n%s", got)
+	}
+	if strings.Count(got, "text-align:right") != 3 {
+		t.Fatalf("expected exactly 3 right-aligned cells (n, d, f with value). got:\n%s", got)
+	}
+	if !strings.Contains(got, `text-align:center">true`) {
+		t.Fatalf("boolean cell should have center. got:\n%s", got)
+	}
+}
+
 func TestToHTML_MultiSheet(t *testing.T) {
 	in := `{
 	  "sheets": [
@@ -154,7 +187,7 @@ func TestToHTML_MultiSheet(t *testing.T) {
 	  ]
 	}`
 	got := runToHTML(t, in)
-	want := "<table style=\"border-collapse:collapse\">\n<tr><td>x</td></tr>\n</table>\n<table style=\"border-collapse:collapse\">\n<tr><td>1</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>x</td></tr>\n</table>\n<table style=\"border-collapse:collapse\">\n<tr><td style=\"text-align:right\">1</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
 	}
@@ -163,7 +196,7 @@ func TestToHTML_MultiSheet(t *testing.T) {
 func TestToHTML_EmptyCell(t *testing.T) {
 	in := `{"cells":{"A1":{"t":"s","v":"x"},"B2":{"t":"n","v":1}}}`
 	got := runToHTML(t, in)
-	want := "<table style=\"border-collapse:collapse\">\n<tr><td>x</td><td></td></tr>\n<tr><td></td><td>1</td></tr>\n</table>\n"
+	want := "<table style=\"border-collapse:collapse\">\n<tr><td>x</td><td></td></tr>\n<tr><td></td><td style=\"text-align:right\">1</td></tr>\n</table>\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
 	}

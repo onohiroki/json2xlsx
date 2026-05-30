@@ -327,10 +327,26 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) strin
 			if opts.GridLines {
 				cellStyles = append(cellStyles, "border:1px solid #d0d0d0")
 			}
+			var hasExplicitAlign bool
 			if ok && cell.S > 0 {
 				if st, found := stylesByID[cell.S]; found {
+					if st.Alignment != nil && st.Alignment.Horizontal != "" {
+						hasExplicitAlign = true
+					}
 					if css := styleToCSS(st); css != "" {
 						cellStyles = append(cellStyles, css)
+					}
+				}
+			}
+			if ok && !hasExplicitAlign {
+				switch cell.T {
+				case "n", "d":
+					cellStyles = append(cellStyles, "text-align:right")
+				case "b":
+					cellStyles = append(cellStyles, "text-align:center")
+				case "f":
+					if _, isNum := cell.V.(float64); isNum {
+						cellStyles = append(cellStyles, "text-align:right")
 					}
 				}
 			}
