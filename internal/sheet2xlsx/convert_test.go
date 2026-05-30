@@ -775,3 +775,153 @@ func TestChartFullRoundtrip(t *testing.T) {
 		t.Errorf("step C: Data!A1 = %q, want sample", val)
 	}
 }
+
+func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
+	const srcJSON = `{
+		"version": "0.2",
+		"book": {
+			"sheets": {
+				"Data": {
+					"cells": {
+						"A1": {"t":"s","v":"cat"},
+						"B1": {"t":"s","v":"val"},
+						"A2": {"t":"s","v":"X"}, "B2": {"t":"n","v":1},
+						"A3": {"t":"s","v":"Y"}, "B3": {"t":"n","v":2}
+					}
+				}
+			},
+			"charts": [
+				{
+					"id": "ch1",
+					"mode": "embedded",
+					"ct": "col",
+					"sheet": "Data",
+					"anchor": "D2",
+					"dim": {"w": 10, "h": 15},
+					"title": {"tx":"Embedded Chart"},
+					"legend": {"show":true, "pos":"bottom"},
+					"xAxis": {"title":"X Axis", "majorGridLines":true},
+					"yAxis": {"title":"Y Axis", "majorGridLines":true},
+					"ser": [
+						{
+							"name": "S1",
+							"cat": "Data!$A$2:$A$3",
+							"val": "Data!$B$2:$B$3"
+						}
+					]
+				}
+			]
+		}
+	}`
+
+	// Step A: JSON → XLSX
+	var xlsx1 bytes.Buffer
+	if err := Convert(strings.NewReader(srcJSON), &xlsx1, ""); err != nil {
+		t.Fatalf("step A (json→xlsx): %v", err)
+	}
+
+	f1, err := excelize.OpenReader(bytes.NewReader(xlsx1.Bytes()))
+	if err != nil {
+		t.Fatalf("step A open: %v", err)
+	}
+	sheets1 := f1.GetSheetList()
+	f1.Close()
+
+	if len(sheets1) != 1 {
+		t.Fatalf("step A: expected 1 sheet, got %v", sheets1)
+	}
+
+	// Step B: XLSX → JSON (book wrapper)
+	var jsonOut bytes.Buffer
+	if err := ToJSONWithOptions(&xlsx1, &jsonOut, ToJSONOptions{DateMode: DateModeSerial, WrapWithBook: true}); err != nil {
+		t.Fatalf("step B (xlsx→json): %v", err)
+	}
+
+	var wb2 Workbook
+	if err := json.Unmarshal(jsonOut.Bytes(), &wb2); err != nil {
+		t.Fatalf("step B unmarshal: %v\nraw:\n%s", err, jsonOut.String())
+	}
+	if wb2.Version != "0.2" {
+		t.Errorf("step B: version = %q, want 0.2", wb2.Version)
+	}
+	if wb2.Book == nil {
+		t.Fatal("step B: book is nil")
+	}
+	if len(wb2.Book.Charts) != 1 {
+		t.Fatalf("step B: expected 1 chart, got %d", len(wb2.Book.Charts))
+	}
+
+	ch := wb2.Book.Charts[0]
+	if ch.Mode != "embedded" {
+		t.Errorf("step B chart.mode = %q, want embedded", ch.Mode)
+	}
+	if ch.Sheet != "Data" {
+		t.Errorf("step B chart.sheet = %q, want Data", ch.Sheet)
+	}
+	if ch.Anchor != "D2" {
+		t.Errorf("step B chart.anchor = %q, want D2", ch.Anchor)
+	}
+	if ch.Dim == nil {
+		t.Fatal("step B chart.dim is nil")
+	}
+	if ch.Dim.W != 10 {
+		t.Errorf("step B chart.dim.w = %v, want 10", ch.Dim.W)
+	}
+	if ch.Dim.H != 15 {
+		t.Errorf("step B chart.dim.h = %v, want 15", ch.Dim.H)
+	}
+	if ch.Dim.OffX != 0 {
+		t.Errorf("step B chart.dim.offx = %v, want 0", ch.Dim.OffX)
+	}
+	if ch.Dim.OffY != 0 {
+		t.Errorf("step B chart.dim.offy = %v, want 0", ch.Dim.OffY)
+	}
+	if ch.Title == nil || ch.Title.Tx != "Embedded Chart" {
+		t.Errorf("step B chart.title = %+v, want {Tx:Embedded Chart}", ch.Title)
+	}
+	if ch.Legend == nil || !ch.Legend.Show || ch.Legend.Pos != "bottom" {
+		t.Errorf("step B chart.legend = %+v, want {show:true pos:bottom}", ch.Legend)
+	}
+	if ch.XAxis == nil || ch.XAxis.Title != "X Axis" || !ch.XAxis.MajorGridLines {
+		t.Errorf("step B chart.xAxis = %+v, want title=X Axis majorGridLines=true", ch.XAxis)
+	}
+	if ch.YAxis == nil || ch.YAxis.Title != "Y Axis" || !ch.YAxis.MajorGridLines {
+		t.Errorf("step B chart.yAxis = %+v, want title=Y Axis majorGridLines=true", ch.YAxis)
+	}
+	if len(ch.Ser) != 1 {
+		t.Fatalf("step B expected 1 ser, got %d", len(ch.Ser))
+	}
+	if ch.Ser[0].Cat != "Data!$A$2:$A$3" {
+		t.Errorf("step B ser[0].cat = %q, want Data!$A$2:$A$3", ch.Ser[0].Cat)
+	}
+	if ch.Ser[0].Val != "Data!$B$2:$B$3" {
+		t.Errorf("step B ser[0].val = %q, want Data!$B$2:$B$3", ch.Ser[0].Val)
+	}
+	if _, ok := wb2.Book.Sheets["Data"]; !ok {
+		t.Error("step B: Data sheet missing in book.sheets")
+	}
+
+	// Step C: JSON(book wrapper) → XLSX
+	jsonBytes, _ := json.Marshal(wb2)
+	var xlsx2 bytes.Buffer
+	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2, ""); err != nil {
+		t.Fatalf("step C (json→xlsx): %v", err)
+	}
+
+	f3, err := excelize.OpenReader(bytes.NewReader(xlsx2.Bytes()))
+	if err != nil {
+		t.Fatalf("step C open: %v", err)
+	}
+	defer f3.Close()
+
+	sheets3 := f3.GetSheetList()
+	if len(sheets3) != 1 {
+		t.Fatalf("step C: expected 1 sheet, got %v", sheets3)
+	}
+	if sheets3[0] != "Data" {
+		t.Errorf("step C: sheet name = %q, want Data", sheets3[0])
+	}
+	if val, _ := f3.GetCellValue("Data", "A1"); val != "cat" {
+		t.Errorf("step C: Data!A1 = %q, want cat", val)
+	}
+}
