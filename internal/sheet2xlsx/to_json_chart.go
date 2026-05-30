@@ -586,7 +586,11 @@ func extractFillXML(spPr *chartSpPrXML) *ChartFill {
 	if spPr.SolidFill == nil || spPr.SolidFill.SrgbClr == nil || spPr.SolidFill.SrgbClr.Val == nil {
 		return nil
 	}
-	return &ChartFill{Color: "#" + *spPr.SolidFill.SrgbClr.Val}
+	val := *spPr.SolidFill.SrgbClr.Val
+	if len(val) == 8 {
+		val = val[2:]
+	}
+	return &ChartFill{Color: "#" + val}
 }
 
 func extractDLblsXML(d *chartDLblsXML) *ChartDLbls {
@@ -659,6 +663,315 @@ func resolveRelPath(basePath, relTarget string) string {
 	baseDir := filepath.Dir(basePath)
 	cleaned := filepath.Clean(baseDir + "/" + relTarget)
 	return cleaned
+}
+
+// --- Drawing/Worksheet XML types for embedded chart extraction ---
+
+type wsDrXML struct {
+	XMLName         xml.Name           `xml:"wsDr"`
+	TwoCellAnchors  []xdrTwoCellAnchor `xml:"twoCellAnchor"`
+	OneCellAnchors  []xdrOneCellAnchor `xml:"oneCellAnchor"`
+	AbsoluteAnchors []xdrAbsAnchor     `xml:"absoluteAnchor"`
+}
+
+type xdrTwoCellAnchor struct {
+	From         xdrCellPoint     `xml:"from"`
+	To           xdrCellPoint     `xml:"to"`
+	GraphicFrame *xdrGraphicFrame `xml:"graphicFrame"`
+}
+
+type xdrOneCellAnchor struct {
+	From         xdrCellPoint     `xml:"from"`
+	Ext          xdrExt           `xml:"ext"`
+	GraphicFrame *xdrGraphicFrame `xml:"graphicFrame"`
+}
+
+type xdrAbsAnchor struct {
+	Pos          xdrPos           `xml:"pos"`
+	Ext          xdrExt           `xml:"ext"`
+	GraphicFrame *xdrGraphicFrame `xml:"graphicFrame"`
+}
+
+type xdrCellPoint struct {
+	Col    int   `xml:"col"`
+	Row    int   `xml:"row"`
+	ColOff int64 `xml:"colOff"`
+	RowOff int64 `xml:"rowOff"`
+}
+
+type xdrPos struct {
+	X int64 `xml:"x,attr"`
+	Y int64 `xml:"y,attr"`
+}
+
+type xdrExt struct {
+	Cx int64 `xml:"cx,attr"`
+	Cy int64 `xml:"cy,attr"`
+}
+
+type xdrGraphicFrame struct {
+	Graphic *xdrGraphic `xml:"http://schemas.openxmlformats.org/drawingml/2006/main graphic"`
+}
+
+type xdrGraphic struct {
+	GraphicData *xdrGraphicData `xml:"http://schemas.openxmlformats.org/drawingml/2006/main graphicData"`
+}
+
+type xdrGraphicData struct {
+	URI   string       `xml:"uri,attr"`
+	Chart *xdrChartRef `xml:"http://schemas.openxmlformats.org/drawingml/2006/chart chart"`
+}
+
+type xdrChartRef struct {
+	ID string `xml:"http://schemas.openxmlformats.org/officeDocument/2006/relationships id,attr"`
+}
+
+// extractEmbeddedCharts は全 worksheet から埋め込みグラフを抽出する。
+func extractEmbeddedCharts(f *excelize.File) ([]Chart, error) {
+	rels, err := loadChartRels(f, "xl/_rels/workbook.xml.rels")
+	if err != nil || rels == nil {
+		return nil, err
+	}
+
+	sheetEntries, err := loadSheetEntries(f)
+	if err != nil || len(sheetEntries) == 0 {
+		return nil, err
+	}
+
+	sheetRels := make(map[string]*chartRel)
+	for i := range rels.Relationships {
+		sheetRels[rels.Relationships[i].ID] = &rels.Relationships[i]
+	}
+
+	const worksheetRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+
+	var charts []Chart
+	for _, sh := range sheetEntries {
+		rel, ok := sheetRels[sh.ID]
+		if !ok || rel.Type != worksheetRelType {
+			continue
+		}
+
+		wsPath := resolveRelPath("xl/workbook.xml", rel.Target)
+		wsCharts, err := extractChartsFromWorksheet(f, wsPath, sh.Name)
+		if err != nil {
+			return nil, fmt.Errorf("extract worksheet %q: %w", sh.Name, err)
+		}
+		charts = append(charts, wsCharts...)
+	}
+
+	return charts, nil
+}
+
+// extractChartsFromWorksheet は 1 つの worksheet XML から drawing を辿りグラフを抽出する。
+func extractChartsFromWorksheet(f *excelize.File, wsPath, sheetName string) ([]Chart, error) {
+	rawWS, ok := f.Pkg.Load(wsPath)
+	if !ok {
+		return nil, nil
+	}
+
+	var ws struct {
+		Drawing *struct {
+			ID string `xml:"http://schemas.openxmlformats.org/officeDocument/2006/relationships id,attr"`
+		} `xml:"drawing"`
+	}
+	if err := xml.Unmarshal(rawWS.([]byte), &ws); err != nil {
+		return nil, fmt.Errorf("unmarshal worksheet: %w", err)
+	}
+	if ws.Drawing == nil || ws.Drawing.ID == "" {
+		return nil, nil
+	}
+
+	wsRelsPath := filepath.Dir(wsPath) + "/_rels/" + filepath.Base(wsPath) + ".rels"
+	wsRels, err := loadChartRels(f, wsRelsPath)
+	if err != nil {
+		return nil, fmt.Errorf("load worksheet rels: %w", err)
+	}
+	if wsRels == nil {
+		return nil, nil
+	}
+
+	const drawingRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"
+	var drawingTarget string
+	for _, r := range wsRels.Relationships {
+		if r.ID == ws.Drawing.ID && r.Type == drawingRelType {
+			drawingTarget = r.Target
+			break
+		}
+	}
+	if drawingTarget == "" {
+		return nil, nil
+	}
+
+	drawingPath := resolveRelPath(wsPath, drawingTarget)
+	return extractChartsFromDrawing(f, drawingPath, sheetName)
+}
+
+// extractChartsFromDrawing は drawing XML をパースし全ての埋め込みグラフを抽出する。
+func extractChartsFromDrawing(f *excelize.File, drawingPath, sheetName string) ([]Chart, error) {
+	drawDir := filepath.Dir(drawingPath)
+	drawRelsPath := drawDir + "/_rels/" + filepath.Base(drawingPath) + ".rels"
+	drawRels, err := loadChartRels(f, drawRelsPath)
+	if err != nil {
+		return nil, fmt.Errorf("load drawing rels: %w", err)
+	}
+	if drawRels == nil {
+		return nil, nil
+	}
+
+	const chartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+	chartRelMap := make(map[string]string)
+	for _, r := range drawRels.Relationships {
+		if r.Type == chartRelType {
+			chartRelMap[r.ID] = resolveRelPath(drawingPath, r.Target)
+		}
+	}
+	if len(chartRelMap) == 0 {
+		return nil, nil
+	}
+
+	rawDraw, ok := f.Pkg.Load(drawingPath)
+	if !ok {
+		return nil, nil
+	}
+
+	var dr wsDrXML
+	if err := xml.Unmarshal(rawDraw.([]byte), &dr); err != nil {
+		var dr2 struct {
+			XMLName         xml.Name           `xml:"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing wsDr"`
+			TwoCellAnchors  []xdrTwoCellAnchor `xml:"twoCellAnchor"`
+			OneCellAnchors  []xdrOneCellAnchor `xml:"oneCellAnchor"`
+			AbsoluteAnchors []xdrAbsAnchor     `xml:"absoluteAnchor"`
+		}
+		if err2 := xml.Unmarshal(rawDraw.([]byte), &dr2); err2 != nil {
+			return nil, fmt.Errorf("unmarshal drawing: %w", err2)
+		}
+		dr.TwoCellAnchors = dr2.TwoCellAnchors
+		dr.OneCellAnchors = dr2.OneCellAnchors
+		dr.AbsoluteAnchors = dr2.AbsoluteAnchors
+	}
+
+	type anchorChart struct {
+		anchorCell string
+		dim        ChartDim
+		chartRID   string
+	}
+
+	var items []anchorChart
+
+	for i := range dr.TwoCellAnchors {
+		a := &dr.TwoCellAnchors[i]
+		rid, ok := chartRefInGraphicFrame(a.GraphicFrame)
+		if !ok {
+			continue
+		}
+		cell, err := excelize.CoordinatesToCellName(a.From.Col+1, a.From.Row+1)
+		if err != nil {
+			cell = "A1"
+		}
+		// W/H を pixels で計算:
+		//   Excelize は twoCellAnchor の from と to を同一セルにし、
+		//   サイズを to.ColOff/to.RowOff(EMU) で表現する。
+		//   ChartDimension は pixels 単位で扱われる (1px = 9525 EMU at 96DPI)。
+		const pxPerEMU = 9525.0
+		colSpan := a.To.Col - a.From.Col
+		rowSpan := a.To.Row - a.From.Row
+		const pxPerCol = 64.0
+		const pxPerRow = 20.0
+		w := float64(a.To.ColOff)/pxPerEMU + float64(colSpan)*pxPerCol
+		h := float64(a.To.RowOff)/pxPerEMU + float64(rowSpan)*pxPerRow
+		items = append(items, anchorChart{
+			anchorCell: cell,
+			dim: ChartDim{
+				OffX: float64(a.From.ColOff),
+				OffY: float64(a.From.RowOff),
+				W:    w,
+				H:    h,
+			},
+			chartRID: rid,
+		})
+	}
+
+	for i := range dr.OneCellAnchors {
+		a := &dr.OneCellAnchors[i]
+		rid, ok := chartRefInGraphicFrame(a.GraphicFrame)
+		if !ok {
+			continue
+		}
+		cell, err := excelize.CoordinatesToCellName(a.From.Col+1, a.From.Row+1)
+		if err != nil {
+			cell = "A1"
+		}
+		const pxPerEMU = 9525.0
+		items = append(items, anchorChart{
+			anchorCell: cell,
+			dim: ChartDim{
+				OffX: float64(a.From.ColOff),
+				OffY: float64(a.From.RowOff),
+				W:    float64(a.Ext.Cx) / pxPerEMU,
+				H:    float64(a.Ext.Cy) / pxPerEMU,
+			},
+			chartRID: rid,
+		})
+	}
+
+	for i := range dr.AbsoluteAnchors {
+		a := &dr.AbsoluteAnchors[i]
+		rid, ok := chartRefInGraphicFrame(a.GraphicFrame)
+		if !ok {
+			continue
+		}
+		const defaultColEMU = 609600.0
+		const defaultRowEMU = 190500.0
+		col := int(float64(a.Pos.X) / defaultColEMU)
+		row := int(float64(a.Pos.Y) / defaultRowEMU)
+		cell, err := excelize.CoordinatesToCellName(col+1, row+1)
+		if err != nil {
+			cell = "A1"
+		}
+		const pxPerEMU = 9525.0
+		items = append(items, anchorChart{
+			anchorCell: cell,
+			dim: ChartDim{
+				OffX: float64(a.Pos.X) - float64(col)*defaultColEMU,
+				OffY: float64(a.Pos.Y) - float64(row)*defaultRowEMU,
+				W:    float64(a.Ext.Cx) / pxPerEMU,
+				H:    float64(a.Ext.Cy) / pxPerEMU,
+			},
+			chartRID: rid,
+		})
+	}
+
+	var charts []Chart
+	for _, it := range items {
+		chartPath, ok := chartRelMap[it.chartRID]
+		if !ok {
+			continue
+		}
+		ch, ok, err := parseChartXML(f, chartPath, sheetName)
+		if err != nil {
+			return nil, fmt.Errorf("parse chart at %q: %w", chartPath, err)
+		}
+		if ok {
+			ch.Mode = "embedded"
+			ch.Anchor = it.anchorCell
+			ch.Dim = &it.dim
+			charts = append(charts, *ch)
+		}
+	}
+
+	return charts, nil
+}
+
+func chartRefInGraphicFrame(gf *xdrGraphicFrame) (string, bool) {
+	if gf == nil || gf.Graphic == nil || gf.Graphic.GraphicData == nil {
+		return "", false
+	}
+	gd := gf.Graphic.GraphicData
+	if gd.URI != "http://schemas.openxmlformats.org/drawingml/2006/chart" || gd.Chart == nil {
+		return "", false
+	}
+	return gd.Chart.ID, true
 }
 
 // listChartsheetNames は chartsheet のシート名一覧を返す。

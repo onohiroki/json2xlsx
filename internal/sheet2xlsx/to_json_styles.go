@@ -115,6 +115,12 @@ func addHash(c string) string {
 	if strings.HasPrefix(c, "#") {
 		return c
 	}
+	// Strip AA prefix from 8-digit AARRGGBB to keep only 6-digit RRGGBB.
+	// Excelize の getPaletteColor は常に FF を先頭に付加するため、
+	// 8桁の色をそのまま渡すと FF004472C4 のように10桁化して黒になる。
+	if len(c) == 8 {
+		c = c[2:]
+	}
 	return "#" + c
 }
 

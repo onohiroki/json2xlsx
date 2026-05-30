@@ -102,6 +102,14 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 		if err != nil {
 			return Workbook{}, fmt.Errorf("extract chartsheets: %w", err)
 		}
+
+		// 埋め込みグラフを抽出
+		embeddedCharts, err := extractEmbeddedCharts(f)
+		if err != nil {
+			return Workbook{}, fmt.Errorf("extract embedded charts: %w", err)
+		}
+		charts = append(charts, embeddedCharts...)
+
 		if len(charts) > 0 {
 			book.Charts = charts
 		}
