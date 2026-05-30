@@ -16,6 +16,9 @@ import (
 type ToJSONOptions struct {
 	// DateMode は日時セル (t=d) の出力モード。未指定時は DateModeSerial。
 	DateMode DateMode
+	// WrapWithBook は book ラッパー形式 (version + book) で出力する。
+	// true の場合、chartsheet のグラフ情報も charts 配列に含める。
+	WrapWithBook bool
 }
 
 // ToJSON は XLSX を読み込み、sheet2xlsx 互換 JSON (セルマップ形式) を out に書き出す。
@@ -66,9 +69,15 @@ func extractWorkbook(f *excelize.File) (Workbook, error) {
 func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook, error) {
 	sc := newStyleCollector()
 
+	// chartsheet 名を事前検出
+	chartSheetNames, _ := listChartsheetNames(f)
+
 	sheetNames := f.GetSheetList()
 	sheets := make([]Sheet, 0, len(sheetNames))
 	for _, name := range sheetNames {
+		if chartSheetNames[name] {
+			continue // chartsheet はスキップ（セルデータなし）
+		}
 		sh, err := extractSheet(f, name, sc, opts)
 		if err != nil {
 			return Workbook{}, fmt.Errorf("extract sheet %q: %w", name, err)
@@ -77,6 +86,30 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 	}
 
 	var wb Workbook
+	wb.Styles = sc.styles
+
+	if opts.WrapWithBook {
+		// book ラッパー形式で出力
+		book := &Book{
+			Sheets: make(map[string]Sheet, len(sheets)),
+			Styles: sc.styles,
+		}
+		for _, sh := range sheets {
+			book.Sheets[sh.Name] = sh
+		}
+		// chartsheet からグラフを抽出
+		charts, err := extractChartsheets(f)
+		if err != nil {
+			return Workbook{}, fmt.Errorf("extract chartsheets: %w", err)
+		}
+		if len(charts) > 0 {
+			book.Charts = charts
+		}
+		wb.Version = "0.2"
+		wb.Book = book
+		return wb, nil
+	}
+
 	if len(sheets) == 1 {
 		sh := sheets[0]
 		wb.Name = sh.Name
@@ -87,7 +120,6 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 	} else {
 		wb.Sheets = sheets
 	}
-	wb.Styles = sc.styles
 	return wb, nil
 }
 
