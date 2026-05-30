@@ -72,13 +72,11 @@ func runToJSON(args []string) {
 	fs.Usage = usage
 	var input, output string
 	var dateDisplay, dateRFC3339, dateSerial bool
-	var wrapWithBook bool
 	fs.StringVar(&input, "i", "", "input XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output JSON file (default: stdout)")
 	fs.BoolVar(&dateDisplay, "date-display", false, "emit date cells as display strings")
 	fs.BoolVar(&dateRFC3339, "date-rfc3339", false, "reinterpret date/time serial values as RFC3339 (UTC)")
 	fs.BoolVar(&dateSerial, "date-serial", false, "emit date cells as Excel serial values")
-	fs.BoolVar(&wrapWithBook, "b", false, "wrap output in book format (includes charts)")
 	_ = fs.Parse(args)
 
 	dateMode, err := resolveDateMode(dateDisplay, dateRFC3339, dateSerial)
@@ -101,7 +99,7 @@ func runToJSON(args []string) {
 	}
 	defer closeW()
 
-	opts := sheet2xlsx.ToJSONOptions{DateMode: dateMode, WrapWithBook: wrapWithBook}
+	opts := sheet2xlsx.ToJSONOptions{DateMode: dateMode, WrapWithBook: true}
 	if err := sheet2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
 		os.Exit(1)
