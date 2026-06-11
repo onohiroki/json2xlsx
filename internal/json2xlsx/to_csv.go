@@ -1,4 +1,4 @@
-package sheet2xlsx
+package json2xlsx
 
 import (
 	"bytes"
@@ -164,7 +164,7 @@ func normalizeCSVInput(data []byte) ([]byte, error) {
 	case '[':
 		return trimmed, nil
 	case '{':
-		return nil, errors.New("unsupported input: expected csvtk/xlsx-cli JSON (array of objects), got sheet2xlsx Workbook JSON (object)")
+		return nil, errors.New("unsupported input: expected csvtk/xlsx-cli JSON (array of objects), got json2xlsx Workbook JSON (object)")
 	default:
 		lineEnd := bytes.IndexAny(trimmed, "\r\n")
 		if lineEnd < 0 {

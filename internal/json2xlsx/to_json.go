@@ -1,4 +1,4 @@
-package sheet2xlsx
+package json2xlsx
 
 import (
 	"bytes"
@@ -21,12 +21,12 @@ type ToJSONOptions struct {
 	WrapWithBook bool
 }
 
-// ToJSON は XLSX を読み込み、sheet2xlsx 互換 JSON (セルマップ形式) を out に書き出す。
+// ToJSON は XLSX を読み込み、json2xlsx 互換 JSON (セルマップ形式) を out に書き出す。
 func ToJSON(r io.Reader, out io.Writer) error {
 	return ToJSONWithOptions(r, out, ToJSONOptions{DateMode: DateModeSerial})
 }
 
-// ToJSONWithOptions はオプション付きで XLSX を sheet2xlsx 互換 JSON に変換する。
+// ToJSONWithOptions はオプション付きで XLSX を json2xlsx 互換 JSON に変換する。
 func ToJSONWithOptions(r io.Reader, out io.Writer, opts ToJSONOptions) error {
 	if opts.DateMode == "" {
 		opts.DateMode = DateModeSerial

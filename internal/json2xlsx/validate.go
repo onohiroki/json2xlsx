@@ -1,4 +1,4 @@
-package sheet2xlsx
+package json2xlsx
 
 import (
 	_ "embed"
@@ -16,7 +16,7 @@ import (
 var errPrinter = message.NewPrinter(language.English)
 
 //go:embed schema.json
-// NOTE: `schema.json` is a copy of `schemas/sheet2xlsx.schema.json`.
+// NOTE: `schema.json` is a copy of `schemas/json2xlsx.schema.json`.
 // Keep them in sync when updating the schema.
 var schemaData string
 

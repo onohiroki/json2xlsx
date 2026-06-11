@@ -6,19 +6,19 @@ import (
 	"io"
 	"os"
 
-	"sheet2xlsx/internal/sheet2xlsx"
+	"json2xlsx/internal/json2xlsx"
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `sheet2xlsx - XLSX <-> JSON 相互変換 CLI
+	fmt.Fprintln(os.Stderr, `json2xlsx - XLSX <-> JSON 相互変換 CLI
 
 Usage:
-  sheet2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  sheet2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
-  sheet2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
-  sheet2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]  # JSON / XLSX → HTML <table>
-  sheet2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
-  sheet2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
+  json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]  # JSON / XLSX → HTML <table>
+  json2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
+  json2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
 
 オプション:
   -i           入力ファイル (省略時 stdin)
@@ -100,27 +100,27 @@ func runToJSON(args []string) {
 	}
 	defer closeW()
 
-	opts := sheet2xlsx.ToJSONOptions{DateMode: dateMode, WrapWithBook: true}
-	if err := sheet2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
+	opts := json2xlsx.ToJSONOptions{DateMode: dateMode, WrapWithBook: true}
+	if err := json2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func resolveDateMode(dateDisplay, dateRFC3339, dateSerial bool) (sheet2xlsx.DateMode, error) {
+func resolveDateMode(dateDisplay, dateRFC3339, dateSerial bool) (json2xlsx.DateMode, error) {
 	count := 0
-	mode := sheet2xlsx.DateModeSerial
+	mode := json2xlsx.DateModeSerial
 	if dateDisplay {
 		count++
-		mode = sheet2xlsx.DateModeDisplay
+		mode = json2xlsx.DateModeDisplay
 	}
 	if dateRFC3339 {
 		count++
-		mode = sheet2xlsx.DateModeRFC3339
+		mode = json2xlsx.DateModeRFC3339
 	}
 	if dateSerial {
 		count++
-		mode = sheet2xlsx.DateModeSerial
+		mode = json2xlsx.DateModeSerial
 	}
 	if count > 1 {
 		return "", fmt.Errorf("choose only one of --date-display, --date-rfc3339, --date-serial")
@@ -151,7 +151,7 @@ func runToXLSX(args []string) {
 	}
 	defer closeW()
 
-	if err := sheet2xlsx.Convert(r, w, sheet); err != nil {
+	if err := json2xlsx.Convert(r, w, sheet); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}
@@ -168,8 +168,8 @@ func runToMD(args []string) {
 	fs.BoolVar(&firstRowHeader, "first-row-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
 	_ = fs.Parse(args)
 
-	switch sheet2xlsx.MarkdownMode(mode) {
-	case sheet2xlsx.MarkdownModeFormula, sheet2xlsx.MarkdownModeValue, sheet2xlsx.MarkdownModeBoth:
+	switch json2xlsx.MarkdownMode(mode) {
+	case json2xlsx.MarkdownModeFormula, json2xlsx.MarkdownModeValue, json2xlsx.MarkdownModeBoth:
 	default:
 		fmt.Fprintf(os.Stderr, "to-md: invalid -mode %q (expected f|v|both)\n", mode)
 		os.Exit(2)
@@ -189,12 +189,12 @@ func runToMD(args []string) {
 	}
 	defer closeW()
 
-	opts := sheet2xlsx.MarkdownOptions{
-		Mode:            sheet2xlsx.MarkdownMode(mode),
+	opts := json2xlsx.MarkdownOptions{
+		Mode:            json2xlsx.MarkdownMode(mode),
 		FirstRowHeader:  firstRowHeader,
 		RowIndex:        !firstRowHeader,
 	}
-	if err := sheet2xlsx.ToMarkdown(r, w, opts); err != nil {
+	if err := json2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
 		os.Exit(1)
 	}
@@ -211,8 +211,8 @@ func runToHTML(args []string) {
 	fs.BoolVar(&grid, "grid", false, "collapse cellspacing and show thin gray borders on all cells")
 	_ = fs.Parse(args)
 
-	switch sheet2xlsx.MarkdownMode(mode) {
-	case sheet2xlsx.MarkdownModeFormula, sheet2xlsx.MarkdownModeValue, sheet2xlsx.MarkdownModeBoth:
+	switch json2xlsx.MarkdownMode(mode) {
+	case json2xlsx.MarkdownModeFormula, json2xlsx.MarkdownModeValue, json2xlsx.MarkdownModeBoth:
 	default:
 		fmt.Fprintf(os.Stderr, "to-html: invalid --mode %q (expected f|v|both)\n", mode)
 		os.Exit(2)
@@ -232,8 +232,8 @@ func runToHTML(args []string) {
 	}
 	defer closeW()
 
-	opts := sheet2xlsx.HTMLOptions{Mode: sheet2xlsx.MarkdownMode(mode), GridLines: grid}
-	if err := sheet2xlsx.ToHTML(r, w, opts); err != nil {
+	opts := json2xlsx.HTMLOptions{Mode: json2xlsx.MarkdownMode(mode), GridLines: grid}
+	if err := json2xlsx.ToHTML(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
 		os.Exit(1)
 	}
@@ -261,7 +261,7 @@ func runToCSV(args []string) {
 	}
 	defer closeW()
 
-	if err := sheet2xlsx.ToCSV(r, w); err != nil {
+	if err := json2xlsx.ToCSV(r, w); err != nil {
 		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
 		os.Exit(1)
 	}

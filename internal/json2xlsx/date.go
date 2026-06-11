@@ -1,4 +1,4 @@
-package sheet2xlsx
+package json2xlsx
 
 // DateMode は to-json の日時出力モード。
 type DateMode string

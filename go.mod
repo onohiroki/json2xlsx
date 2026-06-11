@@ -1,4 +1,4 @@
-module sheet2xlsx
+module json2xlsx
 
 go 1.22
 

@@ -1,4 +1,4 @@
-/sheet2xlsx
+/json2xlsx
 dist/
 \~\$*
 *.xlsx
@@ -11,3 +11,4 @@ local-build.sh
 release.sh
 test_data/
 update.bash
+AGENTS.md

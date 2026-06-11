@@ -1,4 +1,4 @@
-package sheet2xlsx
+package json2xlsx
 
 // Cell は SheetJS 風のセルオブジェクトを表す。
 //

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/anomalyco/sheet2xlsx/schema",
-  "title": "Sheet2XLSX JSON Schema",
+  "$id": "https://github.com/anomalyco/json2xlsx/schema",
+  "title": "Json2XLSX JSON Schema",
   "description": "SheetJS 風 JSON から XLSX へ変換するためのスキーマ",
   "oneOf": [
     { "$ref": "#/$defs/singleSheet" },
