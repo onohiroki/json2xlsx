@@ -333,8 +333,6 @@ type Style struct {
 - ✅ `SKILL.md` (`sheetjs-json-writer` 用)
 - ✅ Go 実装本体
 - ✅ サンプル JSON (test_data/ 以下)
-- ✅ テストデータ
-- 📝 `draft/` — 設計ドキュメント (開発計画・仕様書)
 
 ## 参考
 
