@@ -172,7 +172,7 @@ func TestValidate_ValidStyleWithAllBorderTypes(t *testing.T) {
 
 func TestValidate_ExampleFiles(t *testing.T) {
 	for _, name := range []string{"sales.json", "styles.json", "merge.json", "time_diff.json", "time_test.json"} {
-		data, err := os.ReadFile("../../examples/" + name)
+		data, err := os.ReadFile("../../samples/" + name)
 		if err != nil {
 			t.Skipf("skip %s: %v", name, err)
 		}
