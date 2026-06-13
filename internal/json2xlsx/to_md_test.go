@@ -77,9 +77,9 @@ func TestToMarkdown_Default(t *testing.T) {
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: false, RowIndex: true})
 	want := "|     | A   | B   |\n" +
-		"| --- | --- | --- |\n" +
-		"| 1   | a   | b   |\n" +
-		"| 2   | 1   | 2   |\n"
+		"| --: | --- | --- |\n" +
+		"|   1 | a   | b   |\n" +
+		"|   2 | 1   | 2   |\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}

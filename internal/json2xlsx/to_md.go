@@ -429,7 +429,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		b.WriteString("|")
 		if opts.RowIndex {
 			b.WriteString(" ")
-			b.WriteString(padCell("", rowIndexWidth, "---"))
+			b.WriteString(padCell("", rowIndexWidth, "---:"))
 			b.WriteString(" |")
 		}
 		for c := 1; c <= maxCol; c++ {
@@ -442,7 +442,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		b.WriteString("|")
 		if opts.RowIndex {
 			b.WriteString(" ")
-			b.WriteString(formatSeparator("---", rowIndexWidth))
+			b.WriteString(formatSeparator("---:", rowIndexWidth))
 			b.WriteString(" |")
 		}
 		for c := 1; c <= maxCol; c++ {
@@ -456,7 +456,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 			b.WriteString("|")
 			if opts.RowIndex {
 				b.WriteString(" ")
-				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---"))
+				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---:"))
 				b.WriteString(" |")
 			}
 			for c := 1; c <= maxCol; c++ {
