@@ -25,9 +25,9 @@ func TestToMarkdown_JSON_ModeFormula(t *testing.T) {
 	  }
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
-	want := "| A | B | C |\n" +
-		"| --- | --- | --- |\n" +
-		"| 42 | 7 | =A1*B1 |\n"
+	want := "| A   | B   | C      |\n" +
+		"| --- | --- | ------ |\n" +
+		"| 42  | 7   | =A1*B1 |\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -42,9 +42,9 @@ func TestToMarkdown_JSON_ModeValue(t *testing.T) {
 	  }
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeValue})
-	want := "| A | B |\n" +
+	want := "| A   | B   |\n" +
 		"| --- | --- |\n" +
-		"| 3 | =X |\n"
+		"| 3   | =X  |\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -58,9 +58,9 @@ func TestToMarkdown_JSON_ModeBoth(t *testing.T) {
 	  }
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeBoth})
-	want := "| A | B |\n" +
-		"| --- | --- |\n" +
-		"| 84<br />=B1*2 | 42 |\n"
+	want := "| A             | B   |\n" +
+		"| ------------- | --- |\n" +
+		"| 84<br />=B1*2 | 42  |\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -76,10 +76,10 @@ func TestToMarkdown_Default(t *testing.T) {
 	  }
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: false, RowIndex: true})
-	want := "|   | A | B |\n" +
+	want := "|     | A   | B   |\n" +
 		"| --- | --- | --- |\n" +
-		"| 1 | a | b |\n" +
-		"| 2 | 1 | 2 |\n"
+		"| 1   | a   | b   |\n" +
+		"| 2   | 1   | 2   |\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 	}
@@ -94,9 +94,9 @@ func TestToMarkdown_MultiSheet(t *testing.T) {
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
 	want := "## First\n\n" +
-		"| A |\n| --- |\n| x |\n" +
+		"| A   |\n| --- |\n| x   |\n" +
 		"\n## Second\n\n" +
-		"| A |\n| --- |\n| 1 |\n"
+		"| A   |\n| --- |\n| 1   |\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
 	}
@@ -111,8 +111,8 @@ func TestToMarkdown_Escaping(t *testing.T) {
 	  }
 	}`
 	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula})
-	want := "| A | B | C |\n" +
-		"| --- | --- | --- |\n" +
+	want := "| A    | B                | C           |\n" +
+		"| ---- | ---------------- | ----------- |\n" +
 		`| a\|b | line1<br />line2 | back\\slash |` + "\n"
 	if got != want {
 		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
@@ -179,30 +179,30 @@ func TestToMarkdown_NoHeader(t *testing.T) {
 	    "B3": {"t":"n","v":200}
 	  }
 	}`
-	t.Run("basic", func(t *testing.T) {
-		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: true})
-		want := "| Name | Value |\n" +
-			"| --- | ---: |\n" +
-			"| Alice | 100 |\n" +
-			"| Bob | 200 |\n"
+		t.Run("basic", func(t *testing.T) {
+			got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: true})
+			want := "| Name  | Value |\n" +
+				"| ----- | ----: |\n" +
+				"| Alice |   100 |\n" +
+				"| Bob   |   200 |\n"
 		if got != want {
 			t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 		}
 	})
 	t.Run("row_index_ignored", func(t *testing.T) {
-		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true, FirstRowHeader: true})
-		want := "| Name | Value |\n" +
-			"| --- | ---: |\n" +
-			"| Alice | 100 |\n" +
-			"| Bob | 200 |\n"
+			got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true, FirstRowHeader: true})
+			want := "| Name  | Value |\n" +
+				"| ----- | ----: |\n" +
+				"| Alice |   100 |\n" +
+				"| Bob   |   200 |\n"
 		if got != want {
 			t.Fatalf("RowIndex should be ignored with FirstRowHeader.\n got:\n%s\nwant:\n%s", got, want)
 		}
 	})
 	t.Run("single_row", func(t *testing.T) {
-		in := `{"cells":{"A1":{"t":"s","v":"only"}}}`
-		got := runToMD(t, in, MarkdownOptions{FirstRowHeader: true})
-		want := "| only |\n| --- |\n"
+			in := `{"cells":{"A1":{"t":"s","v":"only"}}}`
+			got := runToMD(t, in, MarkdownOptions{FirstRowHeader: true})
+			want := "| only |\n| ---- |\n"
 		if got != want {
 			t.Fatalf("mismatch for single row.\n got:\n%s\nwant:\n%s", got, want)
 		}
@@ -229,7 +229,7 @@ func TestToMarkdown_XLSXPath(t *testing.T) {
 	}
 	got := mdFromXLSX.String()
 	// XLSX 経路では Sheet 名は Convert 既定 (Sheet1) になるはず。ヘッダ A B と値が出ること。
-	if !strings.Contains(got, "| A | B |") {
+	if !strings.Contains(got, "| A     | B   |") {
 		t.Fatalf("missing header. got:\n%s", got)
 	}
 	if !strings.Contains(got, "hello") || !strings.Contains(got, "3") {

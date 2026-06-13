@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -177,6 +178,49 @@ func formatTimeOnly(serial float64, z string) string {
 	return fmt.Sprintf("%02d:%02d", totalMin, sec)
 }
 
+// displayWidth は文字列の表示幅を返す（全角2、半角1）。
+func displayWidth(s string) int {
+	return runewidth.StringWidth(s)
+}
+
+// padCell は文字列 s を表示幅 width になるまでスペースでパディングする。
+// align は "---"（左寄せ）, "---:"（右寄せ）, ":---:"（中央寄せ）のいずれか。
+func padCell(s string, width int, align string) string {
+	w := displayWidth(s)
+	if w >= width {
+		return s
+	}
+	switch align {
+	case "---:":
+		return strings.Repeat(" ", width-w) + s
+	case ":---:":
+		left := (width - w) / 2
+		right := width - w - left
+		return strings.Repeat(" ", left) + s + strings.Repeat(" ", right)
+	default: // "---"
+		return s + strings.Repeat(" ", width-w)
+	}
+}
+
+// formatSeparator は区切り行のセパレータ文字列を生成する。
+// align は "---"（左寄せ）, "---:"（右寄せ）, ":---:"（中央寄せ）のいずれか。
+func formatSeparator(align string, width int) string {
+	switch align {
+	case "---:":
+		if width < 2 {
+			return strings.Repeat("-", width)
+		}
+		return strings.Repeat("-", width-1) + ":"
+	case ":---:":
+		if width < 3 {
+			return strings.Repeat("-", width)
+		}
+		return ":" + strings.Repeat("-", width-2) + ":"
+	default:
+		return strings.Repeat("-", width)
+	}
+}
+
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
 func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
 	var sheets []Sheet
@@ -237,17 +281,15 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		return ""
 	}
 
-	// ヘッダ列名のキャッシュ。
 	colNames := make([]string, maxCol+1)
 	for c := 1; c <= maxCol; c++ {
 		name, _ := excelize.ColumnNumberToName(c)
 		colNames[c] = name
 	}
 
-	// 列配置推論（サンプリング: 最初の 5 行で多数決）
 	colAlign := make([]string, maxCol+1)
 	for c := 1; c <= maxCol; c++ {
-		colAlign[c] = "---" // default (unaligned)
+		colAlign[c] = "---"
 	}
 	startRow := 3
 	if opts.FirstRowHeader {
@@ -295,81 +337,137 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		}
 	}
 
+	// 第1パス: 列ごとの最大表示幅を計算
+	colWidths := make([]int, maxCol+1)
+	for c := 1; c <= maxCol; c++ {
+		colWidths[c] = displayWidth(colNames[c])
+	}
+
+	rowIndexWidth := 0
+	if opts.RowIndex && !opts.FirstRowHeader {
+		rowIndexWidth = len(strconv.Itoa(maxRow))
+	}
+
+	if opts.FirstRowHeader {
+		for c := 1; c <= maxCol; c++ {
+			axis := colNames[c] + "1"
+			if cell, ok := sh.Cells[axis]; ok {
+				if w := displayWidth(formatCell(cell, opts.Mode)); w > colWidths[c] {
+					colWidths[c] = w
+				}
+			}
+		}
+	}
+
+	dataStart := 1
+	if opts.FirstRowHeader {
+		dataStart = 2
+	}
+	for r := dataStart; r <= maxRow; r++ {
+		for c := 1; c <= maxCol; c++ {
+			axis := colNames[c] + strconv.Itoa(r)
+			if cell, ok := sh.Cells[axis]; ok {
+				if w := displayWidth(formatCell(cell, opts.Mode)); w > colWidths[c] {
+					colWidths[c] = w
+				}
+			}
+		}
+	}
+
+	const minSepWidth = 3
+	for c := 1; c <= maxCol; c++ {
+		if colWidths[c] < minSepWidth {
+			colWidths[c] = minSepWidth
+		}
+	}
+	if rowIndexWidth < minSepWidth {
+		rowIndexWidth = minSepWidth
+	}
+
+	// 第2パス: 描画
 	var b strings.Builder
 
 	if opts.FirstRowHeader {
-		// 1行目をヘッダとして出力
 		b.WriteString("|")
 		for c := 1; c <= maxCol; c++ {
 			axis := colNames[c] + "1"
 			cell, ok := sh.Cells[axis]
-			b.WriteString(" ")
+			val := ""
 			if ok {
-				b.WriteString(formatCell(cell, opts.Mode))
+				val = formatCell(cell, opts.Mode)
 			}
+			b.WriteString(" ")
+			b.WriteString(padCell(val, colWidths[c], "---"))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
 
-		// 区切り行
 		b.WriteString("|")
 		for c := 1; c <= maxCol; c++ {
-			b.WriteString(" " + colAlign[c] + " |")
+			b.WriteString(" ")
+			b.WriteString(formatSeparator(colAlign[c], colWidths[c]))
+			b.WriteString(" |")
 		}
 		b.WriteString("\n")
 
-		// 本文 (r=2..maxRow)
 		for r := 2; r <= maxRow; r++ {
 			b.WriteString("|")
 			for c := 1; c <= maxCol; c++ {
 				axis := colNames[c] + strconv.Itoa(r)
 				cell, ok := sh.Cells[axis]
-				b.WriteString(" ")
+				val := ""
 				if ok {
-					b.WriteString(formatCell(cell, opts.Mode))
+					val = formatCell(cell, opts.Mode)
 				}
+				b.WriteString(" ")
+				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
 				b.WriteString(" |")
 			}
 			b.WriteString("\n")
 		}
 	} else {
-		// ヘッダ行 (ABC)
 		b.WriteString("|")
 		if opts.RowIndex {
-			b.WriteString("   |")
+			b.WriteString(" ")
+			b.WriteString(padCell("", rowIndexWidth, "---"))
+			b.WriteString(" |")
 		}
 		for c := 1; c <= maxCol; c++ {
 			b.WriteString(" ")
-			b.WriteString(colNames[c])
+			b.WriteString(padCell(colNames[c], colWidths[c], "---"))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
 
-		// 区切り行
 		b.WriteString("|")
 		if opts.RowIndex {
-			b.WriteString(" --- |")
+			b.WriteString(" ")
+			b.WriteString(formatSeparator("---", rowIndexWidth))
+			b.WriteString(" |")
 		}
 		for c := 1; c <= maxCol; c++ {
-			b.WriteString(" " + colAlign[c] + " |")
+			b.WriteString(" ")
+			b.WriteString(formatSeparator(colAlign[c], colWidths[c]))
+			b.WriteString(" |")
 		}
 		b.WriteString("\n")
 
-		// 本文 (r=1..maxRow)
 		for r := 1; r <= maxRow; r++ {
 			b.WriteString("|")
 			if opts.RowIndex {
 				b.WriteString(" ")
-				b.WriteString(strconv.Itoa(r))
+				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---"))
 				b.WriteString(" |")
 			}
 			for c := 1; c <= maxCol; c++ {
 				axis := colNames[c] + strconv.Itoa(r)
 				cell, ok := sh.Cells[axis]
-				b.WriteString(" ")
+				val := ""
 				if ok {
-					b.WriteString(formatCell(cell, opts.Mode))
+					val = formatCell(cell, opts.Mode)
 				}
+				b.WriteString(" ")
+				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
 				b.WriteString(" |")
 			}
 			b.WriteString("\n")
