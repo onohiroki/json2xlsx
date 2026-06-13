@@ -1,5 +1,7 @@
 # json2xlsx
 
+[ English | [日本語](README.ja.md) ]
+
 `json2xlsx` is a Go-based CLI tool that generates Excel `.xlsx` files from SheetJS-style JSON. The Go side is responsible only for the JSON → XLSX conversion and does not include any AI calls.[1][2]
 
 It is intended to be used together with the `sheetjs-json-writer` skill to make AI reliably output SheetJS-style JSON.[3][4]
@@ -43,7 +45,7 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 In the initial phase, the tool is intended to be built and used locally.
 
 ```bash
-git clone <your-repo-url>
+git clone git@github.com:onohiroki/json2xlsx.git
 cd json2xlsx
 go build -o json2xlsx ./cmd/json2xlsx
 ```
