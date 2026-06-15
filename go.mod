@@ -3,6 +3,7 @@ module json2xlsx
 go 1.22
 
 require (
+	github.com/mattn/go-runewidth v0.0.24
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/xuri/excelize/v2 v2.8.1
 	golang.org/x/text v0.14.0
@@ -10,7 +11,6 @@ require (
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
