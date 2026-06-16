@@ -78,6 +78,9 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 		if chartSheetNames[name] {
 			continue // chartsheet はスキップ（セルデータなし）
 		}
+		if strings.HasPrefix(name, "_xlsx") {
+			continue // 内部的な補助シートはスキップ
+		}
 		sh, err := extractSheet(f, name, sc, opts)
 		if err != nil {
 			return Workbook{}, fmt.Errorf("extract sheet %q: %w", name, err)

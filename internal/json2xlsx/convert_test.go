@@ -3,6 +3,7 @@ package json2xlsx
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -693,8 +694,8 @@ func TestChartFullRoundtrip(t *testing.T) {
 	sheets1 := f1.GetSheetList()
 	f1.Close()
 
-	if len(sheets1) != 3 {
-		t.Fatalf("step A: expected 3 sheets, got %v", sheets1)
+	if len(sheets1) != 4 {
+		t.Fatalf("step A: expected 4 sheets (including helper), got %v", sheets1)
 	}
 
 	// Step B: XLSX → JSON (book wrapper)
@@ -724,6 +725,10 @@ func TestChartFullRoundtrip(t *testing.T) {
 		if len(ch.Ser) != 1 {
 			t.Errorf("step B chart[%d]: expected 1 ser, got %d", i, len(ch.Ser))
 			continue
+		}
+		wantName := fmt.Sprintf("Series%d", i+1)
+		if ch.Ser[0].Name != wantName {
+			t.Errorf("step B chart[%d].ser[0].name = %q, want %q", i, ch.Ser[0].Name, wantName)
 		}
 		if ch.Ser[0].Cat != "Data!$B$2:$B$4" {
 			t.Errorf("step B chart[%d].ser[0].cat = %q, want Data!$B$2:$B$4", i, ch.Ser[0].Cat)
@@ -755,8 +760,8 @@ func TestChartFullRoundtrip(t *testing.T) {
 	defer f3.Close()
 
 	sheets3 := f3.GetSheetList()
-	if len(sheets3) != 3 {
-		t.Fatalf("step C: expected 3 sheets, got %v", sheets3)
+	if len(sheets3) != 4 {
+		t.Fatalf("step C: expected 4 sheets (including helper), got %v", sheets3)
 	}
 	// chartsheet が存在することを確認
 	hasChartsheet := false
@@ -827,8 +832,8 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 	sheets1 := f1.GetSheetList()
 	f1.Close()
 
-	if len(sheets1) != 1 {
-		t.Fatalf("step A: expected 1 sheet, got %v", sheets1)
+	if len(sheets1) != 2 {
+		t.Fatalf("step A: expected 2 sheets (including helper), got %v", sheets1)
 	}
 
 	// Step B: XLSX → JSON (book wrapper)
@@ -915,8 +920,8 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 	defer f3.Close()
 
 	sheets3 := f3.GetSheetList()
-	if len(sheets3) != 1 {
-		t.Fatalf("step C: expected 1 sheet, got %v", sheets3)
+	if len(sheets3) != 2 {
+		t.Fatalf("step C: expected 2 sheets (including helper), got %v", sheets3)
 	}
 	if sheets3[0] != "Data" {
 		t.Errorf("step C: sheet name = %q, want Data", sheets3[0])

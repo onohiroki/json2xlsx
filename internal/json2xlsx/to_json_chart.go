@@ -400,7 +400,7 @@ func parseChartXML(f *excelize.File, chartPath, sheetName string) (*Chart, bool,
 		ch.Legend = extractLegendXML(cs.Chart.Legend)
 	}
 
-	ch.Ser = extractSeriesXML(cs.Chart.PlotArea)
+	ch.Ser = extractSeriesXML(cs.Chart.PlotArea, f)
 
 	if cs.Chart.PlotArea.CatAx != nil {
 		for _, ax := range cs.Chart.PlotArea.CatAx {
@@ -496,14 +496,14 @@ func legendPosReverse(s string) string {
 	}
 }
 
-func extractSeriesXML(pa *chartPlotAreaXML) []ChartSeries {
+func extractSeriesXML(pa *chartPlotAreaXML, f *excelize.File) []ChartSeries {
 	allSer := collectAllSeriesXML(pa)
 	if len(allSer) == 0 {
 		return nil
 	}
 	result := make([]ChartSeries, 0, len(allSer))
 	for _, s := range allSer {
-		result = append(result, extractSingleSeriesXML(s))
+		result = append(result, extractSingleSeriesXML(s, f))
 	}
 	return result
 }
@@ -523,10 +523,39 @@ func collectAllSeriesXML(pa *chartPlotAreaXML) []chartSerXML {
 	return nil
 }
 
-func extractSingleSeriesXML(s chartSerXML) ChartSeries {
+// resolveHelperSheetRef は補助シートを参照しているセル参照を解決し、実際の値を返す。
+func resolveHelperSheetRef(f *excelize.File, ref string) string {
+	// ref は '_xlsx...'!A1 形式
+	if !strings.HasPrefix(ref, "'_xlsx") {
+		return ref
+	}
+	// シート名とセルを分離
+	closeQuote := strings.IndexByte(ref[1:], '\'')
+	if closeQuote < 0 {
+		return ref
+	}
+	sheetName := ref[1 : closeQuote+1]
+	cell := ref[closeQuote+3:] // skip '!'
+	val, err := f.GetCellValue(sheetName, cell)
+	if err != nil || val == "" {
+		return ref
+	}
+	return val
+}
+
+func extractSingleSeriesXML(s chartSerXML, f *excelize.File) ChartSeries {
 	cs := ChartSeries{}
-	if s.Tx != nil && s.Tx.StrRef != nil && s.Tx.StrRef.F != "" {
-		cs.Name = s.Tx.StrRef.F
+	if s.Tx != nil {
+		if s.Tx.StrRef != nil && s.Tx.StrRef.F != "" {
+			cs.Name = resolveHelperSheetRef(f, s.Tx.StrRef.F)
+		} else if s.Tx.Rich != nil {
+			for _, p := range s.Tx.Rich.P {
+				if p.R != nil && p.R.Text != "" {
+					cs.Name = p.R.Text
+					break
+				}
+			}
+		}
 	}
 	if s.Cat != nil && s.Cat.StrRef != nil {
 		cs.Cat = s.Cat.StrRef.F
@@ -1000,3 +1029,5 @@ func listChartsheetNames(f *excelize.File) (map[string]bool, error) {
 	}
 	return names, nil
 }
+
+

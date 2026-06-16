@@ -119,6 +119,33 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 
 	// チャート変換 (book ラッパー形式のみ)
 	if wb.Book != nil {
+		// すべての系列名のうち、リテラル文字列（!を含まない）を補助シートのセルに書き込み、
+		// セル参照に置き換える。これにより excelize が有効な strRef を出力する。
+		helperSheet := "_xlsxchart_helper"
+		helperRow := 1
+		helperCreated := false
+		for _, ch := range wb.Book.Charts {
+			for i := range ch.Ser {
+				name := ch.Ser[i].Name
+				if name != "" && !strings.Contains(name, "!") {
+					if !helperCreated {
+						if _, err := f.NewSheet(helperSheet); err != nil {
+							return fmt.Errorf("create helper sheet: %w", err)
+						}
+						if err := f.SetSheetVisible(helperSheet, false); err != nil {
+							return fmt.Errorf("hide helper sheet: %w", err)
+						}
+						helperCreated = true
+					}
+					cell, _ := excelize.CoordinatesToCellName(1, helperRow)
+					if err := f.SetCellValue(helperSheet, cell, name); err != nil {
+						return fmt.Errorf("write series name to helper sheet: %w", err)
+					}
+					ch.Ser[i].Name = fmt.Sprintf("'%s'!%s", helperSheet, cell)
+					helperRow++
+				}
+			}
+		}
 		for _, ch := range wb.Book.Charts {
 			ct, err := chartTypeFromString(ch.Ct)
 			if err != nil {
