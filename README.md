@@ -39,6 +39,8 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 - Accepts JSON that is aware of SheetJS-style Cell Objects.[4][3]
 - Can progressively support basic tables, formulas, newlines, borders, colors, number formats, links, etc.[6][9][10]
 - Because the AI generation part is separated, it can be combined with any LLM.[11][12]
+- **Chart generation** — bar, column, line, area, pie, doughnut, scatter, radar charts with customizable titles, legends, axes, and data labels.
+- **Japanese-friendly** — series names containing Japanese characters (e.g., `予算`, `実績`) are automatically preserved in Excel legends.
 
 ## Installation
 
@@ -217,6 +219,81 @@ The expected input representations are three kinds:
 }
 ```
 
+## Charts
+
+Charts are supported in the `book` wrapper format via the `charts` array. Each chart object can be embedded in a sheet or placed on its own chart sheet.
+
+### Chart object fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Chart identifier |
+| `t` | string | Always `"chart"` |
+| `mode` | string | `"embedded"` (default, anchored in a sheet) or `"chartSheet"` (standalone chart sheet) |
+| `ct` | string | Chart type: `"col"`, `"bar"`, `"line"`, `"area"`, `"pie"`, `"doughnut"`, `"scatter"`, `"radar"` |
+| `sheet` | string | Sheet name for embedded charts |
+| `anchor` | string | Anchor cell (e.g. `"E2"`) for embedded charts |
+| `dim` | object | `{w, h, offx, offy, sx, sy}` — width/height in pixels, offsets in EMU, scale factors |
+| `title` | object | `{tx, overlay}` — chart title text and overlay flag |
+| `legend` | object | `{show, pos}` — `pos`: `"top"`, `"bottom"`, `"left"`, `"right"`, `"topRight"` |
+| `xAxis` | object | `{title, minimum, maximum, majorUnit, reverseOrder, majorGridLines, minorGridLines, numFmt}` |
+| `yAxis` | object | Same as `xAxis` |
+| `plot` | object | `{varyColors, showBlanksAs}` — plot area options |
+| `ser` | array | Array of series objects (see below) |
+
+### Series object fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Series name (literal string like `"予算"` or cell reference like `"Sheet1!$A$1"`) |
+| `cat` | string | Categories range (e.g. `"部門予算!$A$2:$A$7"`) |
+| `val` | string | Values range (e.g. `"部門予算!$B$2:$B$7"`) |
+| `xVal` | string | X-values range (scatter only) |
+| `yVal` | string | Y-values range (scatter only) |
+| `line` | object | `{width}` — line width in pt |
+| `fill` | object | `{color}` — fill color (e.g. `"#FF0000"`) |
+| `marker` | object | `{symbol, size}` — marker symbol and size |
+| `dLbls` | object | `{showVal, showCatName, showSerName, showPercent, showLeaderLn}` — data labels |
+
+### Example
+
+```json
+{
+  "version": "0.2",
+  "book": {
+    "sheets": {
+      "部門予算": {
+        "cells": {
+          "A1": { "t": "s", "v": "部門" },
+          "B1": { "t": "s", "v": "予算(百万円)" },
+          "A2": { "t": "s", "v": "営業" }, "B2": { "t": "n", "v": 120 },
+          "A3": { "t": "s", "v": "開発" }, "B3": { "t": "n", "v": 200 }
+        }
+      }
+    },
+    "charts": [
+      {
+        "id": "chart1",
+        "t": "chart",
+        "mode": "embedded",
+        "ct": "col",
+        "sheet": "部門予算",
+        "anchor": "E2",
+        "dim": { "w": 640, "h": 360 },
+        "title": { "tx": "部門別予算と実績" },
+        "legend": { "pos": "bottom" },
+        "ser": [
+          { "name": "予算", "cat": "部門予算!$A$2:$A$7", "val": "部門予算!$B$2:$B$7" },
+          { "name": "実績", "cat": "部門予算!$A$2:$A$7", "val": "部門予算!$C$2:$C$7" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+See `samples/chart_bar.json`, `samples/chart_scatter.json`, `samples/chart_timeseries.json` for more examples.
+
 ## Planned features
 
 | Feature | Initial support | Notes |
@@ -229,6 +306,7 @@ The expected input representations are three kinds:
 | Number formats | Yes | equivalent to `z` / `numFmt` [15] |
 | Hyperlinks | Yes | specified via `L` field |
 | Merged cells | Yes | specified with `merges` array |
+| Charts | Yes | bar, column, line, area, pie, doughnut, scatter, radar |
 | Rich text | No | out of initial scope [4] |
 
 ## Go dependencies
