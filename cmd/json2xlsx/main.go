@@ -5,11 +5,25 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"json2xlsx/internal/json2xlsx"
 )
 
 func usage() {
+	if isJapanese() {
+		usageJa()
+	} else {
+		usageEn()
+	}
+}
+
+func isJapanese() bool {
+	lang := os.Getenv("LANG")
+	return lang == "ja" || strings.HasPrefix(lang, "ja_") || strings.HasPrefix(lang, "ja.") || strings.HasPrefix(lang, "ja-")
+}
+
+func usageJa() {
 	fmt.Fprintln(os.Stderr, `json2xlsx - XLSX <-> JSON 相互変換 CLI
 
 Usage:
@@ -35,6 +49,33 @@ Usage:
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
 to-md / to-html は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
 to-csv は csvtk csv2json または xlsx-cli -j の JSON を CSV に戻す。`)
+}
+
+func usageEn() {
+	fmt.Fprintln(os.Stderr, `json2xlsx - XLSX <-> JSON CLI conversion tool
+
+Usage:
+  json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]
+  json2xlsx to-csv  [-i input.json] [-o output.csv]
+  json2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]
+
+Options:
+  -i           Input file (default: stdin)
+  -o           Output file (default: stdout)
+  --sheet      Default sheet name for to-xlsx
+  --date-serial    Emit date cells as Excel serial values (default)
+  --date-display   Emit date cells as display strings
+  --date-rfc3339   Reinterpret date/time serial as RFC3339 (UTC)
+  --mode             Cell display mode (f=formula, v=value, both=both). Default to-md=f, to-html=v
+  --first-row-header Treat first row as table header (suppress A/B/C and row numbers)
+  --grid             Show light gray gridlines for empty cells in to-html
+
+Long options use --name, short options use -i / -o.
+to-md / to-html auto-detects XLSX vs JSON using magic bytes (PK\x03\x04).
+to-csv converts JSON from csvtk csv2json or xlsx-cli -j back to CSV.`)
 }
 
 func main() {
