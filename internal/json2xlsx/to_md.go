@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 
@@ -83,9 +84,12 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		normalizeDateCells(&wb)
 	}
 
-	out := renderMarkdown(wb, opts)
+	out, hasWarning := renderMarkdown(wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
+	}
+	if hasWarning {
+		fmt.Fprintln(os.Stderr, "Warning: Some cells have no values, falling back to formulas.")
 	}
 	return nil
 }
@@ -222,7 +226,7 @@ func formatSeparator(align string, width int) string {
 }
 
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
-func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
+func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
 	var sheets []Sheet
 	if wb.Book != nil {
 		for name, sh := range wb.Book.Sheets {
@@ -242,6 +246,7 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
 	}
 
 	var b strings.Builder
+	var hasWarning bool
 	multi := len(sheets) > 1
 	for i, sh := range sheets {
 		if multi {
@@ -252,17 +257,21 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) string {
 			b.WriteString(sh.Name)
 			b.WriteString("\n\n")
 		}
-		b.WriteString(renderSheet(sh, opts))
+		out, w := renderSheet(sh, opts)
+		b.WriteString(out)
+		if w {
+			hasWarning = true
+		}
 	}
-	return b.String()
+	return b.String(), hasWarning
 }
 
 // renderSheet は単一シートをテーブルとしてレンダリングする。空シートは空文字を返す。
 // FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--first-row-header）。
 // それ以外は A/B/C 列名ヘッダ + 行番号を表示する（デフォルト）。
-func renderSheet(sh Sheet, opts MarkdownOptions) string {
+func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	if len(sh.Cells) == 0 {
-		return ""
+		return "", false
 	}
 	maxCol, maxRow := 0, 0
 	for axis := range sh.Cells {
@@ -278,7 +287,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		}
 	}
 	if maxCol == 0 || maxRow == 0 {
-		return ""
+		return "", false
 	}
 
 	colNames := make([]string, maxCol+1)
@@ -348,11 +357,12 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		rowIndexWidth = len(strconv.Itoa(maxRow))
 	}
 
+	var hasWarning bool
 	if opts.FirstRowHeader {
 		for c := 1; c <= maxCol; c++ {
 			axis := colNames[c] + "1"
 			if cell, ok := sh.Cells[axis]; ok {
-				if w := displayWidth(formatCell(cell, opts.Mode)); w > colWidths[c] {
+				if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
 					colWidths[c] = w
 				}
 			}
@@ -367,7 +377,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		for c := 1; c <= maxCol; c++ {
 			axis := colNames[c] + strconv.Itoa(r)
 			if cell, ok := sh.Cells[axis]; ok {
-				if w := displayWidth(formatCell(cell, opts.Mode)); w > colWidths[c] {
+				if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
 					colWidths[c] = w
 				}
 			}
@@ -394,7 +404,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 			cell, ok := sh.Cells[axis]
 			val := ""
 			if ok {
-				val = formatCell(cell, opts.Mode)
+				val = formatCell(cell, opts.Mode, &hasWarning)
 			}
 			b.WriteString(" ")
 			b.WriteString(padCell(val, colWidths[c], "---"))
@@ -417,7 +427,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 				cell, ok := sh.Cells[axis]
 				val := ""
 				if ok {
-					val = formatCell(cell, opts.Mode)
+					val = formatCell(cell, opts.Mode, &hasWarning)
 				}
 				b.WriteString(" ")
 				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
@@ -464,7 +474,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 				cell, ok := sh.Cells[axis]
 				val := ""
 				if ok {
-					val = formatCell(cell, opts.Mode)
+					val = formatCell(cell, opts.Mode, &hasWarning)
 				}
 				b.WriteString(" ")
 				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
@@ -474,11 +484,11 @@ func renderSheet(sh Sheet, opts MarkdownOptions) string {
 		}
 	}
 
-	return b.String()
+	return b.String(), hasWarning
 }
 
 // formatCell は 1 セルの Markdown 表現を返す。
-func formatCell(cell Cell, mode MarkdownMode) string {
+func formatCell(cell Cell, mode MarkdownMode, hasWarning *bool) string {
 	vStr := scalarToString(cell.V)
 	hasV := cell.V != nil && vStr != ""
 	hasF := cell.F != ""
@@ -492,6 +502,7 @@ func formatCell(cell Cell, mode MarkdownMode) string {
 				raw = vStr
 			} else if hasF {
 				raw = "=" + cell.F
+				*hasWarning = true
 			}
 		case MarkdownModeBoth:
 			if hasV && hasF {
