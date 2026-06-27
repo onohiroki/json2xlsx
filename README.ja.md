@@ -89,10 +89,11 @@ cat input.xlsx | json2xlsx to-json > output.json
 
 ### `to-xlsx` — JSON → XLSX (デフォルト)
 
-JSON を読み込み，`.xlsx` を出力します．入力は SheetJS 風の Workbook JSON または二次元配列形式の JSON（例: `[["A", 1], ["B", 2]]`）の両方に対応しています．二次元配列形式の場合は数式やスタイルは指定できません．`--sheet` でシート名未指定時のデフォルトを指定できます．
+JSON を読み込み，`.xlsx` を出力します．デフォルトでは SheetJS 形式の Workbook JSON を受け付けます．`--data-json` を指定すると，二次元配列（例: `[["A", 1], ["B", 2]]`），オブジェクト配列，Map-of-Arrays の各形式に対応します．データ JSON 形式では数式やスタイルは指定できません．
 
 ```bash
-json2xlsx to-xlsx -i input.json -o output.xlsx --sheet Sheet1
+json2xlsx to-xlsx -i input.json -o output.xlsx
+json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
 ```
 
 サブコマンド省略時も同じ動作になります．
@@ -123,6 +124,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--mode v`: `v` を優先表示．`v` が無ければ `=B1*2` にフォールバック．
 - `--mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記．
 - `--first-row-header`: 最初の行をテーブルヘッダとして扱う．A/B/C 列名 + 行番号を抑制する．
+- `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 
 ロングオプションは `--name` 形式で表記しています．短い `-i` / `-o` はそのまま `-` 1 文字で指定します．`-mode` のようにハイフン 1 つでも受け付けますが，ドキュメント上の表記は `--` に統一しています．
 
@@ -170,6 +172,7 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode v` (デフォルト): 数式セルは計算結果 (`v`) を表示．ヘッダ行なし．
 - `--mode f`: 数式 (`=B2*C2`) を表示．A/B/C 列名 + 行番号を `<th>` で表示．
 - `--mode both`: `v` と数式の両方を `v<br />=f` のように併記．
+- `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 
 #### スタイル反映
 
@@ -183,10 +186,11 @@ cat input.xlsx | json2xlsx to-html > output.html
 
 ### `to-csv` — JSON / XLSX -> CSV
 
-JSON または XLSX を CSV に変換します．json2xlsx 形式の JSON，二次元配列形式の JSON，`csvtk csv2json` の出力，`xlsx-cli -j` の出力などをサポートしています．
+JSON または XLSX を CSV に変換します．json2xlsx 形式の JSON，`csvtk csv2json` の出力，`xlsx-cli -j` の出力などをサポートしています．`--data-json` を指定すると，二次元配列・オブジェクト配列・Map-of-Arrays の各形式にも対応します．
 
 ```bash
 json2xlsx to-csv -i input.json -o output.csv
+json2xlsx to-csv -i data.json -o output.csv --data-json
 cat input.json | json2xlsx to-csv > output.csv
 ```
 
@@ -194,16 +198,16 @@ cat input.json | json2xlsx to-csv > output.csv
 
 `json2xlsx` は，SheetJS 互換を意識した JSON を受け取り，セル単位で `.xlsx` に変換します．[3][4]
 
-想定する入力表現は次の 5 系統です．
+入力表現は 2 つのモードがあります．
 
-- SheetJS 風の Workbook / Sheet JSON
+**デフォルト（`--data-json` なし）:** SheetJS 形式の Workbook / Sheet JSON（セル参照形式または Cell Object 形式）を受け付けます．
+
+**`--data-json` 指定時:** 以下のデータ指向形式を受け付けます．
 - 二次元配列形式の JSON（例: `[["ヘッダ1", "ヘッダ2"], ["値1", 123]]`）
-- 配列オブジェクト形式
-- マップ・オブ・アレイ形式
-- セル参照形式 (`A1`, `B2` など)
-- Cell Object 形式
+- オブジェクト配列形式（例: `[{"Name": "Alice", "Age": 30}, ...]`）
+- Map-of-Arrays 形式（例: `{"Name": ["Alice", "Bob"], "Age": [30, 25]}`）
 
-※ 二次元配列形式，配列オブジェクト形式，マップ・オブ・アレイ形式は純粋なデータ用であり，数式やスタイルはサポートされません．数式やスタイルを利用する場合は Cell Object 形式を使用してください．
+※ データ JSON 形式は純粋なデータ用であり，数式やスタイルはサポートされません．数式やスタイルを利用する場合は SheetJS 形式の Cell Object 形式を使用してください．
 
 ### 例: Cell Object 形式
 
@@ -232,7 +236,7 @@ cat input.json | json2xlsx to-csv > output.csv
 
 ### 例: マップ・オブ・アレイ形式
 
-キーがアルファベット順にソートされてヘッダ行になり，各配列が列データになります．配列の長さが異なる場合は `null` で埋められます．
+キーが JSON 宣言順に保持されてヘッダ行になり，各配列が列データになります．配列の長さが異なる場合は `null` で埋められます．
 
 ```json
 {

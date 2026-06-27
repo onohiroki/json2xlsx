@@ -85,10 +85,11 @@ Date/time cells (`t: "d"`) default to outputting Excel's internal serial value i
 
 ### `to-xlsx` — JSON → XLSX (default)
 
-Read JSON and output `.xlsx`. Input can be either SheetJS-style Workbook JSON or a 2D array JSON (e.g., `[["A", 1], ["B", 2]]`). Note that 2D array format does not support formulas or styles. Use `--sheet` to set the default sheet name when none is specified.
+Read JSON and output `.xlsx`. Input is expected in SheetJS-style Workbook JSON by default. With `--data-json`, accepts 2D array (e.g. `[["A", 1], ["B", 2]]`), array of objects, or map-of-arrays JSON. Note that data JSON formats do not support formulas or styles.
 
 ```bash
-json2xlsx to-xlsx -i input.json -o output.xlsx --sheet Sheet1
+json2xlsx to-xlsx -i input.json -o output.xlsx
+json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
 ```
 
 Omitting the subcommand has the same behavior.
@@ -119,6 +120,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--mode v`: prefer `v`. If `v` is missing, fall back to the formula `=B1*2`.
 - `--mode both`: when both `v` and a formula exist, display both like `84<br />=B1*2`.
 - `--first-row-header`: treat the first row as the table header. Suppress A/B/C column names and row numbers.
+- `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 
 Long options are shown in `--name` form. Short `-i` / `-o` remain single-dash. Single-dash variants (e.g. `-mode`) may also be accepted, but the docs use `--` for consistency.
 
@@ -166,6 +168,7 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode v` (default): formula cells display their computed value (`v`). No header row.
 - `--mode f`: show formulas (`=B2*C2`). Column names A/B/C and row numbers are shown in `<th>`.
 - `--mode both`: show both `v` and formula like `v<br />=f`.
+- `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 
 #### Style mapping
 
@@ -179,10 +182,11 @@ cat input.xlsx | json2xlsx to-html > output.html
 
 ### `to-csv` — JSON / XLSX -> CSV
 
-Convert JSON or XLSX to CSV. Supports json2xlsx Workbook JSON, 2D array JSON, `csvtk csv2json` output, and `xlsx-cli -j` output.
+Convert JSON or XLSX to CSV. Supports json2xlsx Workbook JSON, `csvtk csv2json` output, and `xlsx-cli -j` output. With `--data-json`, accepts 2D array, array of objects, or map-of-arrays JSON.
 
 ```bash
 json2xlsx to-csv -i input.json -o output.csv
+json2xlsx to-csv -i data.json -o output.csv --data-json
 cat input.json | json2xlsx to-csv > output.csv
 ```
 
@@ -190,16 +194,16 @@ cat input.json | json2xlsx to-csv > output.csv
 
 `json2xlsx` accepts JSON inspired by SheetJS compatibility and converts it to `.xlsx` on a per-cell basis.[3][4]
 
-The expected input representations are five kinds:
+The expected input representations come in two modes:
 
-- SheetJS-style Workbook / Sheet JSON
+**Default (no `--data-json`):** expects SheetJS-style Workbook / Sheet JSON (cell reference or Cell Object form).
+
+**With `--data-json`:** accepts the following data-oriented formats:
 - 2D array JSON (e.g. `[["Header1", "Header2"], ["val1", 123]]`)
-- Array-of-objects form
-- Map-of-arrays form
-- Cell reference form (`A1`, `B2`, etc.)
-- Cell Object form
+- Array-of-objects form (e.g. `[{"Name": "Alice", "Age": 30}, ...]`)
+- Map-of-arrays form (e.g. `{"Name": ["Alice", "Bob"], "Age": [30, 25]}`)
 
-Note: 2D array, array-of-objects, and map-of-arrays formats are for pure data and do not support formulas or styles. For formulas and styles, use the Cell Object form.
+Note: data JSON formats are for pure data and do not support formulas or styles. For formulas and styles, use the SheetJS-style Cell Object form.
 
 ### Example: Cell Object form
 
@@ -228,7 +232,7 @@ Note: 2D array, array-of-objects, and map-of-arrays formats are for pure data an
 
 ### Example: Map-of-arrays form
 
-Keys are sorted alphabetically to become the header row; each array becomes a column. Arrays of different lengths are padded with `null`.
+Keys preserve their JSON declaration order to become the header row; each array becomes a column. Arrays of different lengths are padded with `null`.
 
 ```json
 {

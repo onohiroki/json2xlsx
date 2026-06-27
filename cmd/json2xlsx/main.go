@@ -10,6 +10,9 @@ import (
 	"json2xlsx/internal/json2xlsx"
 )
 
+// Note: Japanese text in this file uses "，" and "．" as punctuation
+// (not "、" and "。"). Keep this consistent when editing help messages.
+
 func usage() {
 	if isJapanese() {
 		usageJa()
@@ -28,14 +31,14 @@ func usageJa() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]   # SheetJS / 二次元配列 / オブジェクト配列 / Map-of-Arrays → XLSX
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]  # JSON / XLSX → HTML <table>
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]   # JSON または XLSX を CSV に変換
-  json2xlsx         [-i input.json] [-o output.xlsx]   # to-xlsx として動作
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
+  json2xlsx         [-i input.json] [-o output.xlsx]
 
 オプション:
-  -i                   入力ファイル (省略時 stdin)。JSON (SheetJS 形式 / データ JSON) または XLSX
+  -i                   入力ファイル (省略時 stdin)．JSON (SheetJS 形式 / データ JSON) または XLSX
   -o                   出力ファイル (省略時 stdout)
   --data-json          入力をデータ JSON (二次元配列 / オブジェクト配列 / Map-of-Arrays) として扱う
   --sheet              to-csv で入力 XLSX または JSON から抽出するシート名
@@ -43,15 +46,16 @@ Usage:
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
   --date-display       to-json で日時セルを表示文字列で出力する
   --date-rfc3339       to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
-  --mode               セル表示モード (f=数式優先, v=値優先, both=併記). to-md デフォルト f, to-html デフォルト v
+  --mode               セル表示モード (f=数式優先, v=値優先, both=併記)．to-md デフォルト f, to-html デフォルト v
   --first-row-header   to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
   --grid               to-html で枠線未指定セルにグレーの細枠線を表示する
 
-ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
-(-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
-to-md / to-html / to-xlsx は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
-JSON の場合は SheetJS Cell Object 形式を基本とするが、--data-json を指定すると二次元配列・オブジェクト配列・Map-of-Arrays の 3 形式を受け付ける。
-to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す。`)
+ロングオプションは --name 形式，短いオプションは -i / -o 形式で指定します
+(-name / --i のような表記も受け付けますが，ドキュメントでは上記表記に統一しています)．
+to-md / to-html / to-xlsx は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する．
+JSON の場合は SheetJS Cell Object 形式を基本とするが，--data-json を指定すると二次元配列・オブジェクト配列・Map-of-Arrays の 3 形式を受け付ける．
+to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す．
+サブコマンドを省略した場合は to-xlsx として動作する．`)
 }
 
 func usageEn() {
@@ -59,11 +63,11 @@ func usageEn() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]   # SheetJS / 2D array / array of objects / map-of-arrays -> XLSX
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
-  json2xlsx         [-i input.json] [-o output.xlsx]           # same as to-xlsx
+  json2xlsx         [-i input.json] [-o output.xlsx]
 
 Options:
   -i                   Input file (default: stdin). JSON (SheetJS / data JSON) or XLSX
@@ -79,6 +83,7 @@ Options:
   --grid               Show light gray gridlines for empty cells in to-html
 
 Long options use --name, short options use -i / -o.
+When subcommand is omitted, defaults to to-xlsx.
 to-md / to-html / to-xlsx auto-detects XLSX vs JSON using magic bytes (PK\x03\x04).
 Without --data-json, JSON input must be SheetJS Cell Object format.
 With --data-json, accepts 2D array / array of objects / map-of-arrays.
