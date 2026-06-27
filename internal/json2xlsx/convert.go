@@ -43,17 +43,25 @@ func Convert(r io.Reader, out io.Writer) error {
 }
 
 // UnmarshalWorkbook は JSON データを Workbook 構造体にパースする。
-// 通常の SheetJS 形式に加え、二次元配列形式 ([]) にも対応する。
+// 通常の SheetJS 形式に加え、二次元配列形式 ([]) およびオブジェクト配列形式にも対応する。
 func UnmarshalWorkbook(data []byte) (*Workbook, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && trimmed[0] == '[' {
+		// 1) 二次元配列形式 [[...], ...]
 		var rows [][]any
-		if err := json.Unmarshal(trimmed, &rows); err != nil {
-			return nil, fmt.Errorf("parse JSON array: %w", err)
+		if err := json.Unmarshal(trimmed, &rows); err == nil {
+			return &Workbook{Rows: rows}, nil
 		}
-		return &Workbook{
-			Rows: rows,
-		}, nil
+
+		// 2) オブジェクト配列形式 [{...}, ...]
+		var objects []map[string]any
+		if err := json.Unmarshal(trimmed, &objects); err == nil && len(objects) > 0 {
+			return objectArrayToWorkbook(objects)
+		}
+
+		return nil, fmt.Errorf(
+			"input is a JSON array but does not appear to be a valid 2D data array: " +
+				"expected [[...], ...] (array of arrays) or [{...}, ...] (array of objects)")
 	}
 
 	var wb Workbook
@@ -64,6 +72,38 @@ func UnmarshalWorkbook(data []byte) (*Workbook, error) {
 		return nil, fmt.Errorf("parse json: %w", err)
 	}
 	return &wb, nil
+}
+
+// objectArrayToWorkbook はオブジェクト配列 [{key: val}, ...] を
+// 1行目がキーヘッダ、2行目以降が値の行データに変換する。
+func objectArrayToWorkbook(objects []map[string]any) (*Workbook, error) {
+	keySet := make(map[string]bool)
+	var allKeys []string
+	for _, obj := range objects {
+		for k := range obj {
+			if !keySet[k] {
+				keySet[k] = true
+				allKeys = append(allKeys, k)
+			}
+		}
+	}
+
+	rows := make([][]any, 0, len(objects)+1)
+	header := make([]any, len(allKeys))
+	for i, k := range allKeys {
+		header[i] = k
+	}
+	rows = append(rows, header)
+
+	for _, obj := range objects {
+		row := make([]any, len(allKeys))
+		for i, k := range allKeys {
+			row[i] = obj[k]
+		}
+		rows = append(rows, row)
+	}
+
+	return &Workbook{Rows: rows}, nil
 }
 
 func convertWorkbook(wb *Workbook, out io.Writer) error {
@@ -96,6 +136,28 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 			RowDims: wb.RowDims,
 			Merges:  wb.Merges,
 		}}
+	}
+
+	// シートがなくてもチャートがあれば許容
+	if len(sheets) == 0 {
+		hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
+		if !hasCharts {
+			return fmt.Errorf("no sheets found in JSON input: expected a \"sheets\" array, \"cells\" object, or a \"book\" wrapper with \"sheets\"")
+		}
+	} else {
+		hasData := false
+		for _, sh := range sheets {
+			if len(sh.Cells) > 0 || len(sh.Rows) > 0 {
+				hasData = true
+				break
+			}
+		}
+		if !hasData {
+			hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
+			if !hasCharts {
+				return fmt.Errorf("no valid cell data found in JSON input: each sheet must contain a \"cells\" object (e.g. \"A1\": {...}) or a \"rows\" array")
+			}
+		}
 	}
 
 	// スタイル ID -> excelize スタイル ID マッピング
