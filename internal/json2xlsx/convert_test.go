@@ -11,6 +11,112 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+func TestArrayOfMap_PreservesKeyOrder(t *testing.T) {
+	js := `[
+		{"name": "Alice", "age": 30, "city": "Tokyo",   "score": 88, "active": true},
+		{"name": "Bob",   "age": 25, "city": "Osaka",   "score": 72, "active": false},
+		{"name": "Carol", "age": 41, "city": "Nagoya",  "score": 95, "active": true},
+		{"name": "Dave",  "age": 36, "city": "Fukuoka", "score": 60, "active": false},
+		{"name": "Eve",   "age": 28, "city": "Sapporo", "score": 81, "active": true}
+	]`
+	f := convertAndOpen(t, js)
+	defer f.Close()
+
+	expected := []struct {
+		cell string
+		want string
+	}{
+		{"A1", "name"},
+		{"B1", "age"},
+		{"C1", "city"},
+		{"D1", "score"},
+		{"E1", "active"},
+	}
+	for _, e := range expected {
+		got, _ := f.GetCellValue("Sheet1", e.cell)
+		if got != e.want {
+			t.Errorf("%s = %q, want %q", e.cell, got, e.want)
+		}
+	}
+}
+
+func TestArrayOfMap_PreservesKeyOrder_Repeated(t *testing.T) {
+	js := `[
+		{"name": "Alice", "age": 30, "city": "Tokyo",   "score": 88, "active": true},
+		{"name": "Bob",   "age": 25, "city": "Osaka",   "score": 72, "active": false}
+	]`
+	want := []string{"name", "age", "city", "score", "active"}
+	cells := []string{"A1", "B1", "C1", "D1", "E1"}
+	for i := 0; i < 10; i++ {
+		f := convertAndOpen(t, js)
+		for j, c := range cells {
+			got, _ := f.GetCellValue("Sheet1", c)
+			if got != want[j] {
+				t.Errorf("iter %d, %s = %q, want %q", i, c, got, want[j])
+			}
+		}
+		f.Close()
+	}
+}
+
+func TestMapOfArrays_ConflictingFieldName(t *testing.T) {
+	// トップレベルキーが Workbook 構造体のフィールドと衝突する場合でも、
+	// Map-of-Arrays フォールバックで正しく解釈されることを確認する。
+	js := `{
+		"name":   ["Alice", "Bob",   "Carol"],
+		"age":    [30,      25,      41],
+		"city":   ["Tokyo", "Osaka", "Nagoya"],
+		"score":  [88,      72,      95],
+		"active": [true,    false,   true]
+	}`
+	f := convertAndOpen(t, js)
+	defer f.Close()
+
+	expected := []struct {
+		cell string
+		want string
+	}{
+		{"A1", "name"},
+		{"B1", "age"},
+		{"C1", "city"},
+		{"D1", "score"},
+		{"E1", "active"},
+		{"A2", "Alice"},
+		{"B2", "30"},
+		{"C2", "Tokyo"},
+	}
+	for _, e := range expected {
+		got, _ := f.GetCellValue("Sheet1", e.cell)
+		if got != e.want {
+			t.Errorf("%s = %q, want %q", e.cell, got, e.want)
+		}
+	}
+}
+
+func TestArrayOfMap_MissingKeys(t *testing.T) {
+	js := `[
+		{"a": 1, "b": 2},
+		{"b": 3, "c": 4}
+	]`
+	f := convertAndOpen(t, js)
+	defer f.Close()
+
+	expected := []struct {
+		cell string
+		want string
+	}{
+		{"A1", "a"},
+		{"B1", "b"},
+		{"C1", "c"},
+	}
+	for _, e := range expected {
+		got, _ := f.GetCellValue("Sheet1", e.cell)
+		if got != e.want {
+			t.Errorf("%s = %q, want %q", e.cell, got, e.want)
+		}
+	}
+}
+
 func convertAndOpen(t *testing.T, jsonStr string) *excelize.File {
 	t.Helper()
 	var buf bytes.Buffer

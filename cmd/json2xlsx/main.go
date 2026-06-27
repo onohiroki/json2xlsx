@@ -195,7 +195,7 @@ func runToXLSX(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.Convert(r, w); err != nil {
+	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{}); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}

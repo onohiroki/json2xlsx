@@ -36,6 +36,7 @@ type MarkdownOptions struct {
 	RowIndex       bool
 	FirstRowHeader bool
 	ExplicitMode   bool
+	DataJSON       bool
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -78,7 +79,7 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		if err != nil {
 			return fmt.Errorf("read input: %w", err)
 		}
-		wb, err = UnmarshalWorkbook(data)
+		wb, err = UnmarshalWorkbook(data, opts.DataJSON)
 		if err != nil {
 			return err
 		}

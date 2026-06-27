@@ -1,0 +1,7 @@
+{
+  "name": ["Alice", "Bob",   "Carol",  "Dave",    "Eve"],
+  "age":    [30,      25,      41,       36,        28],
+  "city":   ["Tokyo", "Osaka", "Nagoya", "Fukuoka", "Sapporo"],
+  "score":  [88,      72,      95,       60,        81],
+  "active": [true,    false,   true,     false,     true]
+}

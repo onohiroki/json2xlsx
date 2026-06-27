@@ -17,6 +17,7 @@ type HTMLOptions struct {
 	Mode         MarkdownMode
 	GridLines    bool // セル間の隙間をなくし、枠線未指定セルにグレーの細枠線を表示する
 	ExplicitMode bool
+	DataJSON     bool
 }
 
 // ToHTML は入力 (JSON Workbook または XLSX) を HTML <table> に変換して書き出す。
@@ -58,7 +59,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		if err != nil {
 			return fmt.Errorf("read input: %w", err)
 		}
-		wb, err = UnmarshalWorkbook(data)
+		wb, err = UnmarshalWorkbook(data, opts.DataJSON)
 		if err != nil {
 			return err
 		}

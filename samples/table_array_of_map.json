@@ -1,0 +1,7 @@
+[
+  {"name": "Alice", "age": 30, "city": "Tokyo",   "score": 88, "active": true},
+  {"name": "Bob",   "age": 25, "city": "Osaka",   "score": 72, "active": false},
+  {"name": "Carol", "age": 41, "city": "Nagoya",  "score": 95, "active": true},
+  {"name": "Dave",  "age": 36, "city": "Fukuoka", "score": 60, "active": false},
+  {"name": "Eve",   "age": 28, "city": "Sapporo", "score": 81, "active": true}
+]

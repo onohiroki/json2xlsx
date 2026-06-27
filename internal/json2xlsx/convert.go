@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -22,21 +21,36 @@ type WarningError struct {
 func (w *WarningError) Error() string { return w.Err.Error() }
 func (w *WarningError) Unwrap() error { return w.Err }
 
+// ConvertOptions は Convert の動作オプション。
+type ConvertOptions struct {
+	// DataJSON が true の場合、入力を「データ JSON」として扱い、
+	// 二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する。
+	// false (デフォルト) の場合は SheetJS 形式のみを受け付け、失敗したらエラーを返す。
+	DataJSON bool
+}
+
 // Convert は JSON を読み込み、XLSX を out に書き出す。
-func Convert(r io.Reader, out io.Writer) error {
+func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	wb, err := UnmarshalWorkbook(data)
+	var wb *Workbook
+	if opts.DataJSON {
+		wb, err = unmarshalDataJSON(data)
+	} else {
+		wb, err = unmarshalSheetJS(data)
+	}
 	if err != nil {
 		return err
 	}
 
 	if err := convertWorkbook(wb, out); err != nil {
-		if schemaErr := ValidateJSON(data); schemaErr != nil {
-			return fmt.Errorf("%v\n\n%v", err, schemaErr)
+		if !opts.DataJSON {
+			if schemaErr := ValidateJSON(data); schemaErr != nil {
+				return fmt.Errorf("%v\n\n%v", err, schemaErr)
+			}
 		}
 		return err
 	}
@@ -44,8 +58,29 @@ func Convert(r io.Reader, out io.Writer) error {
 }
 
 // UnmarshalWorkbook は JSON データを Workbook 構造体にパースする。
-// 通常の SheetJS 形式に加え、二次元配列形式 ([]) およびオブジェクト配列形式にも対応する。
-func UnmarshalWorkbook(data []byte) (*Workbook, error) {
+// DataJSON=false の場合は SheetJS 形式のみ、DataJSON=true の場合は
+// 二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する。
+func UnmarshalWorkbook(data []byte, dataJSON bool) (*Workbook, error) {
+	if dataJSON {
+		return unmarshalDataJSON(data)
+	}
+	return unmarshalSheetJS(data)
+}
+
+// unmarshalSheetJS は SheetJS 形式のみを受け付ける。フォールバックなし。
+func unmarshalSheetJS(data []byte) (*Workbook, error) {
+	var wb Workbook
+	if err := json.Unmarshal(data, &wb); err != nil {
+		if schemaErr := ValidateJSON(data); schemaErr != nil {
+			return nil, fmt.Errorf("%v\n\n%v", err, schemaErr)
+		}
+		return nil, fmt.Errorf("parse json: %w", err)
+	}
+	return &wb, nil
+}
+
+// unmarshalDataJSON は二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する。
+func unmarshalDataJSON(data []byte) (*Workbook, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && trimmed[0] == '[' {
 		// 1) 二次元配列形式 [[...], ...]
@@ -55,41 +90,49 @@ func UnmarshalWorkbook(data []byte) (*Workbook, error) {
 		}
 
 		// 2) オブジェクト配列形式 [{...}, ...]
-		var objects []map[string]any
-		if err := json.Unmarshal(trimmed, &objects); err == nil && len(objects) > 0 {
-			return objectArrayToWorkbook(objects)
+		var raws []json.RawMessage
+		if err := json.Unmarshal(trimmed, &raws); err == nil && len(raws) > 0 {
+			if wb, err := objectArrayToWorkbook(trimmed); err == nil {
+				return wb, nil
+			}
 		}
 
 		return nil, fmt.Errorf(
-			"input is a JSON array but does not appear to be a valid 2D data array: " +
+			"--data-json: input is a JSON array but does not appear to be a valid 2D data array: " +
 				"expected [[...], ...] (array of arrays) or [{...}, ...] (array of objects)")
 	}
 
-	var wb Workbook
-	if err := json.Unmarshal(data, &wb); err != nil {
-		if schemaErr := ValidateJSON(data); schemaErr != nil {
-			return nil, fmt.Errorf("%v\n\n%v", err, schemaErr)
-		}
-		return nil, fmt.Errorf("parse json: %w", err)
+	// 3) Map-of-Arrays 形式 {key: [...], ...}
+	if wb, ok := tryMapOfArrays(data); ok {
+		return wb, nil
 	}
 
-	// Workbook にデータがない場合、Map-of-Arrays 形式を試す
-	if wb.Book == nil && len(wb.Sheets) == 0 && wb.Cells == nil && len(wb.Rows) == 0 {
-		if wb2, ok := tryMapOfArrays(data); ok {
-			return wb2, nil
-		}
-	}
-
-	return &wb, nil
+	return nil, fmt.Errorf("--data-json: expected array or map-of-arrays JSON")
 }
 
 // objectArrayToWorkbook はオブジェクト配列 [{key: val}, ...] を
 // 1行目がキーヘッダ、2行目以降が値の行データに変換する。
-func objectArrayToWorkbook(objects []map[string]any) (*Workbook, error) {
+// 入力は生の JSON バイト列であり、各オブジェクトのキー順は JSON 宣言順を維持する。
+func objectArrayToWorkbook(data []byte) (*Workbook, error) {
+	var raws []json.RawMessage
+	if err := json.Unmarshal(data, &raws); err != nil {
+		return nil, err
+	}
+
+	type orderedObj struct {
+		keys   []string
+		values map[string]any
+	}
+	objects := make([]orderedObj, 0, len(raws))
 	keySet := make(map[string]bool)
 	var allKeys []string
-	for _, obj := range objects {
-		for k := range obj {
+	for _, r := range raws {
+		ks, vs, err := decodeOrderedObject(r)
+		if err != nil {
+			return nil, err
+		}
+		objects = append(objects, orderedObj{keys: ks, values: vs})
+		for _, k := range ks {
 			if !keySet[k] {
 				keySet[k] = true
 				allKeys = append(allKeys, k)
@@ -107,7 +150,7 @@ func objectArrayToWorkbook(objects []map[string]any) (*Workbook, error) {
 	for _, obj := range objects {
 		row := make([]any, len(allKeys))
 		for i, k := range allKeys {
-			row[i] = obj[k]
+			row[i] = obj.values[k]
 		}
 		rows = append(rows, row)
 	}
@@ -124,11 +167,15 @@ func tryMapOfArrays(data []byte) (*Workbook, bool) {
 		return nil, false
 	}
 
-	keys := make([]string, 0, len(raw))
-	for k := range raw {
-		keys = append(keys, k)
+	// JSON での出現順を維持するため、Decoder で順次キーを取り出す。
+	keys, err := orderedJSONObjectKeys(data)
+	if err != nil || len(keys) != len(raw) {
+		// フォールバック: 順序が取れない場合は map のイテレーション順を使う。
+		keys = keys[:0]
+		for k := range raw {
+			keys = append(keys, k)
+		}
 	}
-	sort.Strings(keys)
 
 	arrays := make([][]any, len(keys))
 	maxLen := 0
@@ -165,6 +212,69 @@ func tryMapOfArrays(data []byte) (*Workbook, bool) {
 	}
 
 	return &Workbook{Rows: rows}, true
+}
+
+// decodeOrderedObject は 1 つの JSON オブジェクトをパースし、宣言順のキー配列と
+// 対応する値のマップを返す。値の型は json.Unmarshal と同等
+// (float64 / string / bool / nil / []any / map[string]any)。
+func decodeOrderedObject(data []byte) ([]string, map[string]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, nil, err
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return nil, nil, fmt.Errorf("not a JSON object")
+	}
+	keys := []string{}
+	values := map[string]any{}
+	for dec.More() {
+		kt, err := dec.Token()
+		if err != nil {
+			return nil, nil, err
+		}
+		k, ok := kt.(string)
+		if !ok {
+			return nil, nil, fmt.Errorf("unexpected key token")
+		}
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			return nil, nil, err
+		}
+		keys = append(keys, k)
+		values[k] = v
+	}
+	return keys, values, nil
+}
+
+// orderedJSONObjectKeys は JSON オブジェクトの最上位キーを出現順で返す。
+func orderedJSONObjectKeys(data []byte) ([]string, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return nil, fmt.Errorf("not a JSON object")
+	}
+	var keys []string
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		k, ok := tok.(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected key token")
+		}
+		keys = append(keys, k)
+		// 対応する値をスキップ
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			return nil, err
+		}
+	}
+	return keys, nil
 }
 
 func convertWorkbook(wb *Workbook, out io.Writer) error {
