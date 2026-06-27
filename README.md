@@ -190,15 +190,16 @@ cat input.json | json2xlsx to-csv > output.csv
 
 `json2xlsx` accepts JSON inspired by SheetJS compatibility and converts it to `.xlsx` on a per-cell basis.[3][4]
 
-The expected input representations are four kinds:
+The expected input representations are five kinds:
 
 - SheetJS-style Workbook / Sheet JSON
 - 2D array JSON (e.g. `[["Header1", "Header2"], ["val1", 123]]`)
 - Array-of-objects form
+- Map-of-arrays form
 - Cell reference form (`A1`, `B2`, etc.)
 - Cell Object form
 
-Note: 2D array and array-of-objects formats are for pure data and do not support formulas or styles. For formulas and styles, use the Cell Object form.
+Note: 2D array, array-of-objects, and map-of-arrays formats are for pure data and do not support formulas or styles. For formulas and styles, use the Cell Object form.
 
 ### Example: Cell Object form
 
@@ -224,6 +225,28 @@ Note: 2D array and array-of-objects formats are for pure data and do not support
   ]
 }
 ```
+
+### Example: Map-of-arrays form
+
+Keys are sorted alphabetically to become the header row; each array becomes a column. Arrays of different lengths are padded with `null`.
+
+```json
+{
+  "name": ["Alice", "Bob", "Carol"],
+  "age":  [30,      25,    41],
+  "city": ["Tokyo", "Osaka", "Nagoya"]
+}
+```
+
+This produces:
+
+| name | age | city |
+|------|-----|------|
+| Alice | 30 | Tokyo |
+| Bob | 25 | Osaka |
+| Carol | 41 | Nagoya |
+
+See `samples/table_map_of_array.json` for a full example.
 
 ## Charts
 

@@ -194,15 +194,16 @@ cat input.json | json2xlsx to-csv > output.csv
 
 `json2xlsx` は，SheetJS 互換を意識した JSON を受け取り，セル単位で `.xlsx` に変換します．[3][4]
 
-想定する入力表現は次の 4 系統です．
+想定する入力表現は次の 5 系統です．
 
 - SheetJS 風の Workbook / Sheet JSON
 - 二次元配列形式の JSON（例: `[["ヘッダ1", "ヘッダ2"], ["値1", 123]]`）
 - 配列オブジェクト形式
+- マップ・オブ・アレイ形式
 - セル参照形式 (`A1`, `B2` など)
 - Cell Object 形式
 
-※ 二次元配列形式および配列オブジェクト形式は純粋なデータ用であり，数式やスタイルはサポートされません．数式やスタイルを利用する場合は Cell Object 形式を使用してください．
+※ 二次元配列形式，配列オブジェクト形式，マップ・オブ・アレイ形式は純粋なデータ用であり，数式やスタイルはサポートされません．数式やスタイルを利用する場合は Cell Object 形式を使用してください．
 
 ### 例: Cell Object 形式
 
@@ -228,6 +229,28 @@ cat input.json | json2xlsx to-csv > output.csv
   ]
 }
 ```
+
+### 例: マップ・オブ・アレイ形式
+
+キーがアルファベット順にソートされてヘッダ行になり，各配列が列データになります．配列の長さが異なる場合は `null` で埋められます．
+
+```json
+{
+  "name": ["Alice", "Bob", "Carol"],
+  "age":  [30,      25,    41],
+  "city": ["Tokyo", "Osaka", "Nagoya"]
+}
+```
+
+この入力は次のテーブルに変換されます．
+
+| name | age | city |
+|------|-----|------|
+| Alice | 30 | Tokyo |
+| Bob | 25 | Osaka |
+| Carol | 41 | Nagoya |
+
+詳しい例は `samples/table_map_of_array.json` を参照してください．
 
 ## グラフ
 
