@@ -6,12 +6,14 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/xuri/excelize/v2"
 )
 
 func runToCSV(t *testing.T, input string) (string, error) {
 	t.Helper()
 	var out bytes.Buffer
-	err := ToCSV(strings.NewReader(input), &out)
+	err := ToCSV(strings.NewReader(input), &out, "", 0)
 	return out.String(), err
 }
 
@@ -163,7 +165,7 @@ func TestToCSV_SheetJSStyle(t *testing.T) {
 			r, w_err, _ := os.Pipe()
 			os.Stderr = w_err
 
-			err := ToCSV(strings.NewReader(tt.input), &w)
+			err := ToCSV(strings.NewReader(tt.input), &w, "", 0)
 
 			// Restore stderr
 			w_err.Close()
@@ -300,27 +302,65 @@ func TestToCSV_BOM(t *testing.T) {
 	}
 }
 
-func TestToCSV_XLSXCLIAndCSVTKEquivalent(t *testing.T) {
-	xlsxCLI := "売上\n" + `[
-  {"製品":"商品A\n特価","数量":100,"単価":5000,"合計":""},
-  {"製品":"商品B","数量":50,"単価":8000,"合計":""},
-  {"製品":"合計","合計":""}
-]`
-	csvtk := `[
-  {"製品":"商品A\n特価","数量":"100","単価":"5000","合計":null},
-  {"製品":"商品B","数量":"50","単価":"8000","合計":null},
-  {"製品":"合計","数量":null,"単価":null,"合計":null}
-]`
+func TestToCSV_XLSXInput(t *testing.T) {
+	// Create a temporary XLSX file
+	f := excelize.NewFile()
+	sheetName := "TestSheet"
+	f.NewSheet(sheetName)
+	f.SetCellValue(sheetName, "A1", "Header1")
+	f.SetCellValue(sheetName, "B1", "Header2")
+	f.SetCellValue(sheetName, "A2", "Value1")
+	f.SetCellValue(sheetName, "B2", 123)
 
-	xlsxOut, err := runToCSV(t, xlsxCLI)
-	if err != nil {
-		t.Fatalf("ToCSV(xlsx-cli): %v", err)
+	var buf bytes.Buffer
+	if err := f.Write(&buf); err != nil {
+		t.Fatalf("failed to write xlsx: %v", err)
 	}
-	csvtkOut, err := runToCSV(t, csvtk)
-	if err != nil {
-		t.Fatalf("ToCSV(csvtk): %v", err)
-	}
-	if xlsxOut != csvtkOut {
-		t.Fatalf("xlsx-cli and csvtk outputs differ.\nxlsx-cli:\n%q\ncsvtk:\n%q", xlsxOut, csvtkOut)
-	}
+
+	t.Run("Default sheet (first sheet)", func(t *testing.T) {
+		// excelize.NewFile() creates "Sheet1" as the first sheet.
+		// We'll put some data in Sheet1 to test default behavior.
+		f1 := excelize.NewFile()
+		f1.SetCellValue("Sheet1", "A1", "S1V1")
+		var buf1 bytes.Buffer
+		f1.Write(&buf1)
+
+		var out bytes.Buffer
+		err := ToCSV(bytes.NewReader(buf1.Bytes()), &out, "", 0)
+		if err != nil {
+			t.Fatalf("ToCSV: %v", err)
+		}
+		got := out.String()
+		want := "S1V1\n"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("Specific sheet", func(t *testing.T) {
+		var out bytes.Buffer
+		err := ToCSV(bytes.NewReader(buf.Bytes()), &out, sheetName, 0)
+		if err != nil {
+			t.Fatalf("ToCSV: %v", err)
+		}
+		got := out.String()
+		want := "Header1,Header2\nValue1,123\n"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("Specific sheet by index", func(t *testing.T) {
+		var out bytes.Buffer
+		// Sheet1 is index 1, TestSheet is index 2
+		err := ToCSV(bytes.NewReader(buf.Bytes()), &out, "", 2)
+		if err != nil {
+			t.Fatalf("ToCSV: %v", err)
+		}
+		got := out.String()
+		want := "Header1,Header2\nValue1,123\n"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
 }

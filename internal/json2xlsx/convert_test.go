@@ -14,7 +14,7 @@ import (
 func convertAndOpen(t *testing.T, jsonStr string) *excelize.File {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := Convert(strings.NewReader(jsonStr), &buf, ""); err != nil {
+	if err := Convert(strings.NewReader(jsonStr), &buf); err != nil {
 		t.Fatalf("Convert error: %v", err)
 	}
 	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
@@ -140,7 +140,7 @@ func TestMergeAndDimensions(t *testing.T) {
 		"rowDims": [{"row":1,"height":40}]
 	}`
 	var buf bytes.Buffer
-	if err := Convert(strings.NewReader(js), &buf, ""); err != nil {
+	if err := Convert(strings.NewReader(js), &buf); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
@@ -181,9 +181,8 @@ func convertWithStderr(t *testing.T, jsonStr string) (xlsxData []byte, stderrOut
 	origStderr := os.Stderr
 	os.Stderr = stderrW
 
-	convertErr = Convert(r, &buf, "")
+	convertErr = Convert(r, &buf)
 
-	// stderr を戻して読み込み
 	stderrW.Close()
 	os.Stderr = origStderr
 	var stderrBuf bytes.Buffer
@@ -378,7 +377,7 @@ func TestChartUnknownMode(t *testing.T) {
 		}
 	}`
 	var buf bytes.Buffer
-	err := Convert(strings.NewReader(js), &buf, "")
+	err := Convert(strings.NewReader(js), &buf)
 	if err == nil {
 		t.Fatal("expected error for unknown mode, got nil")
 	}
@@ -409,7 +408,7 @@ func TestChartInvalidType(t *testing.T) {
 		}
 	}`
 	var buf bytes.Buffer
-	err := Convert(strings.NewReader(js), &buf, "")
+	err := Convert(strings.NewReader(js), &buf)
 	if err == nil {
 		t.Fatal("expected error for unknown chart type, got nil")
 	}
@@ -683,7 +682,7 @@ func TestChartFullRoundtrip(t *testing.T) {
 
 	// Step A: JSON → XLSX
 	var xlsx1 bytes.Buffer
-	if err := Convert(strings.NewReader(srcJSON), &xlsx1, ""); err != nil {
+	if err := Convert(strings.NewReader(srcJSON), &xlsx1); err != nil {
 		t.Fatalf("step A (json→xlsx): %v", err)
 	}
 
@@ -749,7 +748,7 @@ func TestChartFullRoundtrip(t *testing.T) {
 	// Step C: JSON(book wrapper) → XLSX
 	jsonBytes, _ := json.Marshal(wb2)
 	var xlsx2 bytes.Buffer
-	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2, ""); err != nil {
+	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2); err != nil {
 		t.Fatalf("step C (json→xlsx): %v", err)
 	}
 
@@ -821,7 +820,7 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 
 	// Step A: JSON → XLSX
 	var xlsx1 bytes.Buffer
-	if err := Convert(strings.NewReader(srcJSON), &xlsx1, ""); err != nil {
+	if err := Convert(strings.NewReader(srcJSON), &xlsx1); err != nil {
 		t.Fatalf("step A (json→xlsx): %v", err)
 	}
 
@@ -909,7 +908,7 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 	// Step C: JSON(book wrapper) → XLSX
 	jsonBytes, _ := json.Marshal(wb2)
 	var xlsx2 bytes.Buffer
-	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2, ""); err != nil {
+	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2); err != nil {
 		t.Fatalf("step C (json→xlsx): %v", err)
 	}
 

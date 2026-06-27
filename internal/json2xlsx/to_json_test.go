@@ -17,7 +17,7 @@ func roundTrip(t *testing.T, jsonStr string) Workbook {
 func roundTripWithOptions(t *testing.T, jsonStr string, opts ToJSONOptions) Workbook {
 	t.Helper()
 	var xlsx bytes.Buffer
-	if err := Convert(strings.NewReader(jsonStr), &xlsx, ""); err != nil {
+	if err := Convert(strings.NewReader(jsonStr), &xlsx); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	var out bytes.Buffer
@@ -235,4 +235,3 @@ func TestToJSON_DateCells_RFC3339Option(t *testing.T) {
 		t.Fatalf("B1=%q, want RFC3339", got)
 	}
 }
-

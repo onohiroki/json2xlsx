@@ -209,30 +209,30 @@ func TestToMarkdown_NoHeader(t *testing.T) {
 	    "B3": {"t":"n","v":200}
 	  }
 	}`
-		t.Run("basic", func(t *testing.T) {
-			got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: true})
-			want := "| Name  | Value |\n" +
-				"| ----- | ----: |\n" +
-				"| Alice |   100 |\n" +
-				"| Bob   |   200 |\n"
+	t.Run("basic", func(t *testing.T) {
+		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: true})
+		want := "| Name  | Value |\n" +
+			"| ----- | ----: |\n" +
+			"| Alice |   100 |\n" +
+			"| Bob   |   200 |\n"
 		if got != want {
 			t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
 		}
 	})
 	t.Run("row_index_ignored", func(t *testing.T) {
-			got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true, FirstRowHeader: true})
-			want := "| Name  | Value |\n" +
-				"| ----- | ----: |\n" +
-				"| Alice |   100 |\n" +
-				"| Bob   |   200 |\n"
+		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true, FirstRowHeader: true})
+		want := "| Name  | Value |\n" +
+			"| ----- | ----: |\n" +
+			"| Alice |   100 |\n" +
+			"| Bob   |   200 |\n"
 		if got != want {
 			t.Fatalf("RowIndex should be ignored with FirstRowHeader.\n got:\n%s\nwant:\n%s", got, want)
 		}
 	})
 	t.Run("single_row", func(t *testing.T) {
-			in := `{"cells":{"A1":{"t":"s","v":"only"}}}`
-			got := runToMD(t, in, MarkdownOptions{FirstRowHeader: true})
-			want := "| only |\n| ---- |\n"
+		in := `{"cells":{"A1":{"t":"s","v":"only"}}}`
+		got := runToMD(t, in, MarkdownOptions{FirstRowHeader: true})
+		want := "| only |\n| ---- |\n"
 		if got != want {
 			t.Fatalf("mismatch for single row.\n got:\n%s\nwant:\n%s", got, want)
 		}
@@ -249,7 +249,7 @@ func TestToMarkdown_XLSXPath(t *testing.T) {
 	  }
 	}`
 	var xlsxBuf bytes.Buffer
-	if err := Convert(strings.NewReader(jsonIn), &xlsxBuf, ""); err != nil {
+	if err := Convert(strings.NewReader(jsonIn), &xlsxBuf); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 

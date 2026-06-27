@@ -1,6 +1,7 @@
 package json2xlsx
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
@@ -17,8 +18,31 @@ type csvKeyValue struct {
 	Value *string
 }
 
-func ToCSV(r io.Reader, w io.Writer) error {
-	data, err := io.ReadAll(r)
+func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int) error {
+	br := bufio.NewReader(r)
+	head, err := br.Peek(4)
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("read input: %w", err)
+	}
+
+	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
+		data, err := io.ReadAll(br)
+		if err != nil {
+			return fmt.Errorf("read input: %w", err)
+		}
+		f, err := excelize.OpenReader(bytes.NewReader(data))
+		if err != nil {
+			return fmt.Errorf("open xlsx: %w", err)
+		}
+		defer f.Close()
+		wb, err := extractWorkbookWithOptions(f, ToJSONOptions{DateMode: DateModeDisplay})
+		if err != nil {
+			return err
+		}
+		return convertWorkbookObjectToCSV(wb, w, nil, sheetName, sheetIndex)
+	}
+
+	data, err := io.ReadAll(br)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
@@ -29,7 +53,7 @@ func ToCSV(r io.Reader, w io.Writer) error {
 	}
 
 	if isWorkbook {
-		return convertWorkbookToCSV(trimmed, w)
+		return convertWorkbookToCSV(trimmed, w, sheetName, sheetIndex)
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(trimmed))
@@ -191,27 +215,77 @@ func normalizeCSVInput(data []byte) (isWorkbook bool, trimmed []byte, err error)
 	}
 }
 
-func convertWorkbookToCSV(data []byte, w io.Writer) error {
+func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int) error {
 	var m map[string]interface{}
 	if err := json.Unmarshal(data, &m); err != nil {
 		return fmt.Errorf("parse json: %w", err)
 	}
-
 	var wb Workbook
 	json.Unmarshal(data, &wb)
 
+	return convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex)
+}
+
+func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName string, sheetIndex int) error {
 	var cells map[string]Cell
-	if wb.Cells != nil {
+	if sheetName != "" {
+		if wb.Book != nil && wb.Book.Sheets[sheetName].Cells != nil {
+			cells = wb.Book.Sheets[sheetName].Cells
+		} else {
+			for _, s := range wb.Sheets {
+				if s.Name == sheetName {
+					cells = s.Cells
+					break
+				}
+			}
+		}
+		if cells == nil {
+			return fmt.Errorf("sheet %q not found", sheetName)
+		}
+	} else if sheetIndex > 0 {
+		idx := sheetIndex - 1
+		if wb.Book != nil {
+			// map is random, so we need some stable order or just use wb.Sheets if available
+			// For Workbook JSON with Book.Sheets, index is less meaningful than Sheet list
+			// But if we have it, let's try to find it.
+			// Actually, excelize.Workbook usually has a list of sheets in order.
+			// In our internal Workbook struct:
+			// type Workbook struct {
+			//    Sheets []Sheet
+			//    Book *struct { Sheets map[string]Sheet ... }
+			// }
+			if idx < len(wb.Sheets) {
+				cells = wb.Sheets[idx].Cells
+			} else if wb.Book != nil {
+				// Fallback for Book.Sheets map: not ideal for indexing but we'll try something
+				// Better would be to have a sorted list of names or use the order in the XLSX
+				return fmt.Errorf("sheet index %d out of range (use --sheet for map-based sheets)", sheetIndex)
+			}
+		} else if idx < len(wb.Sheets) {
+			cells = wb.Sheets[idx].Cells
+		}
+
+		if cells == nil {
+			return fmt.Errorf("sheet index %d not found", sheetIndex)
+		}
+	} else if wb.Cells != nil {
 		cells = wb.Cells
 	} else if len(wb.Sheets) > 0 {
 		cells = wb.Sheets[0].Cells
 	} else if wb.Book != nil && len(wb.Book.Sheets) > 0 {
+		// Sort keys to get a deterministic first sheet if possible, but map is random.
+		// For now, take the first one found.
 		for _, s := range wb.Book.Sheets {
 			cells = s.Cells
 			break
 		}
-	} else {
+	}
+
+	if len(cells) == 0 && data != nil {
 		// Try to find any sheet-like object if it's a simple map of sheet names to cells
+		var m map[string]interface{}
+		json.Unmarshal(data, &m) // We need m for this fallback
+
 		for _, v := range m {
 			if sheet, ok := v.(map[string]interface{}); ok {
 				// Check if it looks like a cells map (keys are cell addresses)

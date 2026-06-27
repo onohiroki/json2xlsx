@@ -21,8 +21,7 @@ func (w *WarningError) Error() string { return w.Err.Error() }
 func (w *WarningError) Unwrap() error { return w.Err }
 
 // Convert は JSON を読み込み、XLSX を out に書き出す。
-// defaultSheetName が空でない場合、シート名未指定時のデフォルトとして使う。
-func Convert(r io.Reader, out io.Writer, defaultSheetName string) error {
+func Convert(r io.Reader, out io.Writer) error {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
@@ -36,7 +35,7 @@ func Convert(r io.Reader, out io.Writer, defaultSheetName string) error {
 		return fmt.Errorf("parse json: %w", err)
 	}
 
-	if err := convertWorkbook(&wb, out, defaultSheetName); err != nil {
+	if err := convertWorkbook(&wb, out); err != nil {
 		if schemaErr := ValidateJSON(data); schemaErr != nil {
 			return fmt.Errorf("%v\n\n%v", err, schemaErr)
 		}
@@ -45,7 +44,7 @@ func Convert(r io.Reader, out io.Writer, defaultSheetName string) error {
 	return nil
 }
 
-func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error {
+func convertWorkbook(wb *Workbook, out io.Writer) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
@@ -92,11 +91,7 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 	for i, sh := range sheets {
 		name := sh.Name
 		if name == "" {
-			if i == 0 && defaultSheetName != "" {
-				name = defaultSheetName
-			} else {
-				name = fmt.Sprintf("Sheet%d", i+1)
-			}
+			name = fmt.Sprintf("Sheet%d", i+1)
 		}
 
 		if !firstAssigned {
@@ -183,10 +178,10 @@ func convertWorkbook(wb *Workbook, out io.Writer, defaultSheetName string) error
 			for _, s := range ch.Ser {
 				if s.DLbls != nil {
 					ec.PlotArea = excelize.ChartPlotArea{
-						ShowVal:      s.DLbls.ShowVal,
-						ShowCatName:  s.DLbls.ShowCatName,
-						ShowSerName:  s.DLbls.ShowSerName,
-						ShowPercent:  s.DLbls.ShowPercent,
+						ShowVal:         s.DLbls.ShowVal,
+						ShowCatName:     s.DLbls.ShowCatName,
+						ShowSerName:     s.DLbls.ShowSerName,
+						ShowPercent:     s.DLbls.ShowPercent,
 						ShowLeaderLines: s.DLbls.ShowLeaderLn,
 					}
 					break
@@ -499,4 +494,3 @@ func toExcelizeAxis(axis ChartAxis) excelize.ChartAxis {
 	}
 	return ea
 }
-

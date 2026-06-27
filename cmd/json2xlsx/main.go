@@ -28,22 +28,23 @@ func usageJa() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]  # JSON / XLSX → HTML <table>
-  json2xlsx to-csv  [-i input.json] [-o output.csv]   # csvtk / xlsx-cli の JSON を CSV に変換
-  json2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]   # to-xlsx として動作
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n]   # csvtk / xlsx-cli の JSON または XLSX を CSV に変換
+  json2xlsx         [-i input.json] [-o output.xlsx]   # to-xlsx として動作
 
 オプション:
-  -i           入力ファイル (省略時 stdin)
-  -o           出力ファイル (省略時 stdout)
-  --sheet      to-xlsx でシート名未指定時のデフォルト
-  --date-serial    to-json で日時セルを Excel シリアル値で出力する (既定)
-  --date-display   to-json で日時セルを表示文字列で出力する
-  --date-rfc3339   to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
-  --mode             セル表示モード (f=数式優先, v=値優先, both=併記). to-md デフォルト f, to-html デフォルト v
-  --first-row-header to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
-  --grid             to-html で枠線未指定セルにグレーの細枠線を表示する
+  -i                   入力ファイル (省略時 stdin)
+  -o                   出力ファイル (省略時 stdout)
+  --sheet              to-csv で入力 XLSX または Workbook JSON から抽出するシート名
+  --sheet-index        to-csv で入力 XLSX または Workbook JSON から抽出するシート番号 (1から開始)
+  --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
+  --date-display       to-json で日時セルを表示文字列で出力する
+  --date-rfc3339       to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
+  --mode               セル表示モード (f=数式優先, v=値優先, both=併記). to-md デフォルト f, to-html デフォルト v
+  --first-row-header   to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
+  --grid               to-html で枠線未指定セルにグレーの細枠線を表示する
 
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
@@ -56,22 +57,23 @@ func usageEn() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--sheet name]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]
-  json2xlsx to-csv  [-i input.json] [-o output.csv]
-  json2xlsx        [-i input.json] [-o output.xlsx] [--sheet name]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n]
+  json2xlsx         [-i input.json] [-o output.xlsx]
 
 Options:
-  -i           Input file (default: stdin)
-  -o           Output file (default: stdout)
-  --sheet      Default sheet name for to-xlsx
-  --date-serial    Emit date cells as Excel serial values (default)
-  --date-display   Emit date cells as display strings
-  --date-rfc3339   Reinterpret date/time serial as RFC3339 (UTC)
-  --mode             Cell display mode (f=formula, v=value, both=both). Default to-md=f, to-html=v
-  --first-row-header Treat first row as table header (suppress A/B/C and row numbers)
-  --grid             Show light gray gridlines for empty cells in to-html
+  -i                   Input file (default: stdin)
+  -o                   Output file (default: stdout)
+  --sheet              Sheet name for to-csv
+  --sheet-index        Sheet index for to-csv (1-based)
+  --date-serial        Emit date cells as Excel serial values (default)
+  --date-display       Emit date cells as display strings
+  --date-rfc3339       Reinterpret date/time serial as RFC3339 (UTC)
+  --mode               Cell display mode (f=formula, v=value, both=both). Default to-md=f, to-html=v
+  --first-row-header   Treat first row as table header (suppress A/B/C and row numbers)
+  --grid               Show light gray gridlines for empty cells in to-html
 
 Long options use --name, short options use -i / -o.
 to-md / to-html auto-detects XLSX vs JSON using magic bytes (PK\x03\x04).
@@ -172,10 +174,9 @@ func resolveDateMode(dateDisplay, dateRFC3339, dateSerial bool) (json2xlsx.DateM
 func runToXLSX(args []string) {
 	fs := flag.NewFlagSet("to-xlsx", flag.ExitOnError)
 	fs.Usage = usage
-	var input, output, sheet string
+	var input, output string
 	fs.StringVar(&input, "i", "", "input JSON file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output XLSX file (default: stdout)")
-	fs.StringVar(&sheet, "sheet", "", "default sheet name")
 	_ = fs.Parse(args)
 
 	r, closeR, err := openInput(input)
@@ -192,7 +193,7 @@ func runToXLSX(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.Convert(r, w, sheet); err != nil {
+	if err := json2xlsx.Convert(r, w); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}
@@ -231,9 +232,9 @@ func runToMD(args []string) {
 	defer closeW()
 
 	opts := json2xlsx.MarkdownOptions{
-		Mode:            json2xlsx.MarkdownMode(mode),
-		FirstRowHeader:  firstRowHeader,
-		RowIndex:        !firstRowHeader,
+		Mode:           json2xlsx.MarkdownMode(mode),
+		FirstRowHeader: firstRowHeader,
+		RowIndex:       !firstRowHeader,
 	}
 	if err := json2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
@@ -283,9 +284,12 @@ func runToHTML(args []string) {
 func runToCSV(args []string) {
 	fs := flag.NewFlagSet("to-csv", flag.ExitOnError)
 	fs.Usage = usage
-	var input, output string
-	fs.StringVar(&input, "i", "", "input CSV JSON file (default: stdin)")
+	var input, output, sheet string
+	var sheetIndex int
+	fs.StringVar(&input, "i", "", "input CSV JSON or XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output CSV file (default: stdout)")
+	fs.StringVar(&sheet, "sheet", "", "sheet name for XLSX or Workbook JSON")
+	fs.IntVar(&sheetIndex, "sheet-index", 0, "sheet index (1-based) for XLSX or Workbook JSON")
 	_ = fs.Parse(args)
 
 	r, closeR, err := openInput(input)
@@ -302,7 +306,7 @@ func runToCSV(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.ToCSV(r, w); err != nil {
+	if err := json2xlsx.ToCSV(r, w, sheet, sheetIndex); err != nil {
 		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
 		os.Exit(1)
 	}
