@@ -2,6 +2,8 @@ package json2xlsx
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -109,9 +111,82 @@ func TestToCSV_EmptyArray(t *testing.T) {
 }
 
 func TestToCSV_WorkbookInput(t *testing.T) {
-	_, err := runToCSV(t, `{"name":"S","cells":{}}`)
-	if err == nil {
-		t.Fatal("expected error for Workbook JSON")
+	in := `{"name":"S","cells":{"A1":{"v":"val"}}}`
+	got, err := runToCSV(t, in)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	want := "val\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestToCSV_SheetJSStyle(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantCSV  string
+		wantWarn string
+	}{
+		{
+			name: "Basic SheetJS style",
+			input: `{
+				"Sheet1": {
+					"A1": {"v": "Header1"},
+					"B1": {"v": "Header2"},
+					"A2": {"v": "Val1"},
+					"B2": {"v": 100}
+				}
+			}`,
+			wantCSV: "Header1,Header2\nVal1,100\n",
+		},
+		{
+			name: "Formula without value",
+			input: `{
+				"Sheet1": {
+					"A1": {"v": "Header1"},
+					"A2": {"f": "SUM(B1:B10)"}
+				}
+			}`,
+			wantCSV:  "Header1\n\n",
+			wantWarn: "Warning: Some cells have formulas but no values; treating them as empty.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var w bytes.Buffer
+
+			// Capture stderr
+			oldStderr := os.Stderr
+			r, w_err, _ := os.Pipe()
+			os.Stderr = w_err
+
+			err := ToCSV(strings.NewReader(tt.input), &w)
+
+			// Restore stderr
+			w_err.Close()
+			os.Stderr = oldStderr
+			var stderrBuf bytes.Buffer
+			io.Copy(&stderrBuf, r)
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := w.String()
+			if got != tt.wantCSV {
+				t.Errorf("got CSV:\n%s\nwant CSV:\n%s", got, tt.wantCSV)
+			}
+
+			if tt.wantWarn != "" {
+				if !strings.Contains(stderrBuf.String(), tt.wantWarn) {
+					t.Errorf("expected warning %q, got %q", tt.wantWarn, stderrBuf.String())
+				}
+			} else if stderrBuf.Len() > 0 {
+				t.Errorf("unexpected warning: %q", stderrBuf.String())
+			}
+		})
 	}
 }
 
@@ -249,4 +324,3 @@ func TestToCSV_XLSXCLIAndCSVTKEquivalent(t *testing.T) {
 		t.Fatalf("xlsx-cli and csvtk outputs differ.\nxlsx-cli:\n%q\ncsvtk:\n%q", xlsxOut, csvtkOut)
 	}
 }
-

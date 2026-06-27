@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+
+	"github.com/xuri/excelize/v2"
 )
 
 type csvKeyValue struct {
@@ -20,9 +23,13 @@ func ToCSV(r io.Reader, w io.Writer) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	trimmed, err := normalizeCSVInput(data)
+	isWorkbook, trimmed, err := normalizeCSVInput(data)
 	if err != nil {
 		return err
+	}
+
+	if isWorkbook {
+		return convertWorkbookToCSV(trimmed, w)
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(trimmed))
@@ -147,41 +154,138 @@ func ToCSV(r io.Reader, w io.Writer) error {
 	return csvw.Error()
 }
 
-func normalizeCSVInput(data []byte) ([]byte, error) {
-	trimmed := bytes.TrimLeft(data, " \t\r\n")
+func normalizeCSVInput(data []byte) (isWorkbook bool, trimmed []byte, err error) {
+	trimmed = bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) == 0 {
-		return nil, errors.New("empty input")
+		return false, nil, errors.New("empty input")
 	}
 
 	if len(trimmed) >= 3 && trimmed[0] == 0xEF && trimmed[1] == 0xBB && trimmed[2] == 0xBF {
 		trimmed = bytes.TrimLeft(trimmed[3:], " \t\r\n")
 	}
 	if len(trimmed) == 0 {
-		return nil, errors.New("empty input")
+		return false, nil, errors.New("empty input")
 	}
 
 	switch trimmed[0] {
 	case '[':
-		return trimmed, nil
+		return false, trimmed, nil
 	case '{':
-		return nil, errors.New("unsupported input: expected csvtk/xlsx-cli JSON (array of objects), got json2xlsx Workbook JSON (object)")
+		return true, trimmed, nil
 	default:
 		lineEnd := bytes.IndexAny(trimmed, "\r\n")
 		if lineEnd < 0 {
-			return nil, errors.New("unsupported input: expected JSON array starting with '[' or xlsx-cli sheet name followed by JSON array")
+			return false, nil, errors.New("unsupported input: expected JSON array starting with '[' or xlsx-cli sheet name followed by JSON array")
 		}
 		rest := bytes.TrimLeft(trimmed[lineEnd+1:], " \t\r\n")
 		if len(rest) == 0 {
-			return nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name")
+			return false, nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name")
 		}
 		if rest[0] == '{' {
-			return nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name, got JSON object")
+			return true, rest, nil
 		}
 		if rest[0] != '[' {
-			return nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name")
+			return false, nil, errors.New("unsupported input: expected xlsx-cli JSON array after sheet name")
 		}
-		return rest, nil
+		return false, rest, nil
 	}
+}
+
+func convertWorkbookToCSV(data []byte, w io.Writer) error {
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return fmt.Errorf("parse json: %w", err)
+	}
+
+	var wb Workbook
+	json.Unmarshal(data, &wb)
+
+	var cells map[string]Cell
+	if wb.Cells != nil {
+		cells = wb.Cells
+	} else if len(wb.Sheets) > 0 {
+		cells = wb.Sheets[0].Cells
+	} else if wb.Book != nil && len(wb.Book.Sheets) > 0 {
+		for _, s := range wb.Book.Sheets {
+			cells = s.Cells
+			break
+		}
+	} else {
+		// Try to find any sheet-like object if it's a simple map of sheet names to cells
+		for _, v := range m {
+			if sheet, ok := v.(map[string]interface{}); ok {
+				// Check if it looks like a cells map (keys are cell addresses)
+				isCells := true
+				for k := range sheet {
+					if _, _, err := excelize.CellNameToCoordinates(k); err != nil {
+						isCells = false
+						break
+					}
+				}
+				if isCells && len(sheet) > 0 {
+					// Re-unmarshal this part as cells
+					cellData, _ := json.Marshal(sheet)
+					json.Unmarshal(cellData, &cells)
+					break
+				}
+			}
+		}
+	}
+
+	if len(cells) == 0 {
+		return errors.New("empty input: no cells found")
+	}
+
+	type cellInfo struct {
+		r, c int
+		val  string
+	}
+	var cellList []cellInfo
+	maxR, maxC := 0, 0
+	var hasWarning bool
+
+	for addr, cell := range cells {
+		col, row, err := excelize.CellNameToCoordinates(addr)
+		if err != nil {
+			continue
+		}
+		val := ""
+		if cell.V != nil {
+			val = fmt.Sprint(cell.V)
+		} else if cell.F != "" {
+			hasWarning = true
+		}
+
+		cellList = append(cellList, cellInfo{row, col, val})
+		maxR = max(maxR, row)
+		maxC = max(maxC, col)
+	}
+
+	if len(cellList) == 0 {
+		return errors.New("empty input: no valid cells found")
+	}
+
+	// 1-based to 0-based for matrix, but maxR/maxC are 1-based sizes
+	grid := make([][]string, maxR)
+	for i := range maxR {
+		grid[i] = make([]string, maxC)
+	}
+
+	for _, ci := range cellList {
+		grid[ci.r-1][ci.c-1] = ci.val
+	}
+
+	csvw := csv.NewWriter(w)
+	for _, row := range grid {
+		if err := csvw.Write(row); err != nil {
+			return fmt.Errorf("write csv row: %w", err)
+		}
+	}
+	csvw.Flush()
+	if hasWarning {
+		fmt.Fprintln(os.Stderr, "Warning: Some cells have formulas but no values; treating them as empty.")
+	}
+	return csvw.Error()
 }
 
 func normalizeCSVValue(key string, raw interface{}) (*string, error) {
@@ -198,4 +302,3 @@ func normalizeCSVValue(key string, raw interface{}) (*string, error) {
 		return nil, fmt.Errorf("unsupported value for key %q: expected string, number, or null, got %T", key, raw)
 	}
 }
-
