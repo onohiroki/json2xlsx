@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -64,15 +65,22 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		normalizeDateCells(&wb)
 	}
 
-	out := renderHTML(wb, opts)
+	out, hasWarning := renderHTML(wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
+	}
+	if hasWarning {
+		if opts.Mode == MarkdownModeBoth {
+			fmt.Fprintln(os.Stderr, "Warning: Missing values for some cells; showing only formulas.")
+		} else {
+			fmt.Fprintln(os.Stderr, "Warning: Missing values for some cells; showing formulas instead.")
+		}
 	}
 	return nil
 }
 
 // renderHTML は Workbook を HTML 文字列にレンダリングする。
-func renderHTML(wb Workbook, opts HTMLOptions) string {
+func renderHTML(wb Workbook, opts HTMLOptions) (string, bool) {
 	var sheets []Sheet
 	styles := wb.Styles
 	if wb.Book != nil {
@@ -98,10 +106,15 @@ func renderHTML(wb Workbook, opts HTMLOptions) string {
 	stylesByID := buildStyleMap(styles)
 
 	var b strings.Builder
+	var hasWarning bool
 	for _, sh := range sheets {
-		b.WriteString(renderSheetHTML(sh, stylesByID, opts))
+		s, warn := renderSheetHTML(sh, stylesByID, opts)
+		b.WriteString(s)
+		if warn {
+			hasWarning = true
+		}
 	}
-	return b.String()
+	return b.String(), hasWarning
 }
 
 // buildStyleMap は Styles 配列を id → Style のマップに変換する。
@@ -115,36 +128,36 @@ func buildStyleMap(styles []Style) map[int]Style {
 
 // borderCSSWidth は border style 名を CSS の太さ表現に変換する。
 var borderCSSWidth = map[string]string{
-	"thin":            "1px",
-	"medium":          "2px",
-	"thick":           "3px",
-	"hair":            "1px",
-	"dashed":          "",
-	"dotted":          "",
-	"double":          "",
-	"mediumDashed":    "2px",
-	"dashDot":         "",
-	"mediumDashDot":   "2px",
-	"dashDotDot":      "",
+	"thin":             "1px",
+	"medium":           "2px",
+	"thick":            "3px",
+	"hair":             "1px",
+	"dashed":           "",
+	"dotted":           "",
+	"double":           "",
+	"mediumDashed":     "2px",
+	"dashDot":          "",
+	"mediumDashDot":    "2px",
+	"dashDotDot":       "",
 	"mediumDashDotDot": "2px",
-	"slantDashDot":    "",
+	"slantDashDot":     "",
 }
 
 // borderCSSStyle は border style 名を CSS のスタイル表現に変換する。
 var borderCSSStyle = map[string]string{
-	"thin":            "solid",
-	"medium":          "solid",
-	"thick":           "solid",
-	"hair":            "solid",
-	"dashed":          "dashed",
-	"dotted":          "dotted",
-	"double":          "double",
-	"mediumDashed":    "dashed",
-	"dashDot":         "dashed",
-	"mediumDashDot":   "dashed",
-	"dashDotDot":      "dashed",
+	"thin":             "solid",
+	"medium":           "solid",
+	"thick":            "solid",
+	"hair":             "solid",
+	"dashed":           "dashed",
+	"dotted":           "dotted",
+	"double":           "double",
+	"mediumDashed":     "dashed",
+	"dashDot":          "dashed",
+	"mediumDashDot":    "dashed",
+	"dashDotDot":       "dashed",
 	"mediumDashDotDot": "dashed",
-	"slantDashDot":    "dashed",
+	"slantDashDot":     "dashed",
 }
 
 // borderSideCSS は border side 名を CSS プロパティ名に変換する。
@@ -248,9 +261,9 @@ func buildMergeMap(merges []Merge) (hidden map[string]bool, anchors map[string]m
 }
 
 // renderSheetHTML は単一シートを <table> としてレンダリングする。
-func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) string {
+func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) (string, bool) {
 	if len(sh.Cells) == 0 {
-		return ""
+		return "", false
 	}
 	maxCol, maxRow := 0, 0
 	for axis := range sh.Cells {
@@ -266,7 +279,7 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) strin
 		}
 	}
 	if maxCol == 0 || maxRow == 0 {
-		return ""
+		return "", false
 	}
 
 	colNames := make([]string, maxCol+1)
@@ -280,6 +293,7 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) strin
 	const thStyle = `style="font-weight:bold;border:1px solid #000"`
 
 	var b strings.Builder
+	var hasWarning bool
 	withHeader := opts.Mode != MarkdownModeValue
 
 	b.WriteString(`<table style="border-collapse:collapse">` + "\n")
@@ -358,9 +372,9 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) strin
 			b.WriteString(">")
 			if ok {
 				if withHeader {
-					b.WriteString(formatCellHTMLMode(cell, opts.Mode))
+					b.WriteString(formatCellHTMLMode(cell, opts.Mode, &hasWarning))
 				} else {
-					b.WriteString(formatCellHTML(cell))
+					b.WriteString(formatCellHTML(cell, &hasWarning))
 				}
 			}
 			b.WriteString("</td>")
@@ -368,7 +382,7 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) strin
 		b.WriteString("</tr>\n")
 	}
 	b.WriteString("</table>\n")
-	return b.String()
+	return b.String(), hasWarning
 }
 
 // htmlEsc は style 属性値として安全な文字列にエスケープする。
@@ -382,7 +396,7 @@ func htmlEsc(s string) string {
 
 // formatCellHTML は 1 セルの HTML 表現を返す。
 // 値優先 (v) でフォーマットし、HTML エスケープを行う。
-func formatCellHTML(cell Cell) string {
+func formatCellHTML(cell Cell, hasWarning *bool) string {
 	vStr := scalarToString(cell.V)
 	hasV := cell.V != nil && vStr != ""
 	hasF := cell.F != ""
@@ -394,6 +408,7 @@ func formatCellHTML(cell Cell) string {
 			raw = vStr
 		} else if hasF {
 			raw = "=" + cell.F
+			*hasWarning = true
 		}
 	case "d":
 		if hasV {
@@ -408,6 +423,7 @@ func formatCellHTML(cell Cell) string {
 			raw = vStr
 		} else if hasF {
 			raw = "=" + cell.F
+			*hasWarning = true
 		}
 	}
 
@@ -421,7 +437,7 @@ func formatCellHTML(cell Cell) string {
 }
 
 // formatCellHTMLMode は mode に応じてセル値を HTML 表現に変換する。
-func formatCellHTMLMode(cell Cell, mode MarkdownMode) string {
+func formatCellHTMLMode(cell Cell, mode MarkdownMode, hasWarning *bool) string {
 	vStr := scalarToString(cell.V)
 	hasV := cell.V != nil && vStr != ""
 	hasF := cell.F != ""
@@ -435,12 +451,14 @@ func formatCellHTMLMode(cell Cell, mode MarkdownMode) string {
 				raw = vStr
 			} else if hasF {
 				raw = "=" + cell.F
+				*hasWarning = true
 			}
 		case MarkdownModeBoth:
 			if hasV && hasF {
 				raw = vStr + "<br />=" + cell.F
 			} else if hasF {
 				raw = "=" + cell.F
+				*hasWarning = true
 			} else if hasV {
 				raw = vStr
 			}
@@ -463,7 +481,12 @@ func formatCellHTMLMode(cell Cell, mode MarkdownMode) string {
 		if hasV {
 			raw = vStr
 		} else if hasF {
-			raw = "=" + cell.F
+			if mode == MarkdownModeValue || mode == MarkdownModeBoth {
+				raw = "=" + cell.F
+				*hasWarning = true
+			} else {
+				raw = "=" + cell.F
+			}
 		}
 	}
 

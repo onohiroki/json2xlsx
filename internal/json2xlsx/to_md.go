@@ -32,9 +32,9 @@ const (
 // デフォルト (FirstRowHeader=false, RowIndex=true): A/B/C 列名ヘッダ + 行番号列を表示する。
 // --first-row-header 相当 (FirstRowHeader=true, RowIndex=false): 1行目をテーブルヘッダとして扱う。
 type MarkdownOptions struct {
-	Mode            MarkdownMode
-	RowIndex        bool
-	FirstRowHeader  bool
+	Mode           MarkdownMode
+	RowIndex       bool
+	FirstRowHeader bool
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -89,7 +89,11 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 	if hasWarning {
-		fmt.Fprintln(os.Stderr, "Warning: Some cells have no values, falling back to formulas.")
+		if opts.Mode == MarkdownModeBoth {
+			fmt.Fprintln(os.Stderr, "Warning: Missing values for some cells; showing only formulas.")
+		} else {
+			fmt.Fprintln(os.Stderr, "Warning: Missing values for some cells; showing formulas instead.")
+		}
 	}
 	return nil
 }
@@ -509,6 +513,7 @@ func formatCell(cell Cell, mode MarkdownMode, hasWarning *bool) string {
 				raw = vStr + "<br />=" + cell.F
 			} else if hasF {
 				raw = "=" + cell.F
+				*hasWarning = true
 			} else if hasV {
 				raw = vStr
 			}
@@ -533,8 +538,9 @@ func formatCell(cell Cell, mode MarkdownMode, hasWarning *bool) string {
 			raw = vStr
 		} else if hasF {
 			// 型未指定だが数式がある場合
-			if mode == MarkdownModeValue {
+			if mode == MarkdownModeValue || mode == MarkdownModeBoth {
 				raw = "=" + cell.F
+				*hasWarning = true
 			} else {
 				raw = "=" + cell.F
 			}
