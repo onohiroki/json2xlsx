@@ -1,6 +1,7 @@
 package json2xlsx
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,21 +28,42 @@ func Convert(r io.Reader, out io.Writer) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	var wb Workbook
-	if err := json.Unmarshal(data, &wb); err != nil {
-		if schemaErr := ValidateJSON(data); schemaErr != nil {
-			return fmt.Errorf("%v\n\n%v", err, schemaErr)
-		}
-		return fmt.Errorf("parse json: %w", err)
+	wb, err := UnmarshalWorkbook(data)
+	if err != nil {
+		return err
 	}
 
-	if err := convertWorkbook(&wb, out); err != nil {
+	if err := convertWorkbook(wb, out); err != nil {
 		if schemaErr := ValidateJSON(data); schemaErr != nil {
 			return fmt.Errorf("%v\n\n%v", err, schemaErr)
 		}
 		return err
 	}
 	return nil
+}
+
+// UnmarshalWorkbook は JSON データを Workbook 構造体にパースする。
+// 通常の SheetJS 形式に加え、二次元配列形式 ([]) にも対応する。
+func UnmarshalWorkbook(data []byte) (*Workbook, error) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var rows [][]any
+		if err := json.Unmarshal(trimmed, &rows); err != nil {
+			return nil, fmt.Errorf("parse JSON array: %w", err)
+		}
+		return &Workbook{
+			Rows: rows,
+		}, nil
+	}
+
+	var wb Workbook
+	if err := json.Unmarshal(data, &wb); err != nil {
+		if schemaErr := ValidateJSON(data); schemaErr != nil {
+			return nil, fmt.Errorf("%v\n\n%v", err, schemaErr)
+		}
+		return nil, fmt.Errorf("parse json: %w", err)
+	}
+	return &wb, nil
 }
 
 func convertWorkbook(wb *Workbook, out io.Writer) error {

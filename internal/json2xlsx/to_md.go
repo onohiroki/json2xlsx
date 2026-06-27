@@ -35,6 +35,7 @@ type MarkdownOptions struct {
 	Mode           MarkdownMode
 	RowIndex       bool
 	FirstRowHeader bool
+	ExplicitMode   bool
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -55,7 +56,8 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	var wb Workbook
+	var wb *Workbook
+	var pendingWarnings []string
 	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
 		data, err := io.ReadAll(br)
 		if err != nil {
@@ -66,27 +68,34 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 			return fmt.Errorf("open xlsx: %w", err)
 		}
 		defer f.Close()
-		wb, err = extractWorkbookWithOptions(f, ToJSONOptions{DateMode: DateModeDisplay})
+		tmp, err := extractWorkbookWithOptions(f, ToJSONOptions{DateMode: DateModeDisplay})
 		if err != nil {
 			return err
 		}
+		wb = &tmp
 	} else {
 		data, err := io.ReadAll(br)
 		if err != nil {
 			return fmt.Errorf("read input: %w", err)
 		}
-		if err := json.Unmarshal(data, &wb); err != nil {
-			if schemaErr := ValidateJSON(data); schemaErr != nil {
-				return fmt.Errorf("%v\n\n%v", err, schemaErr)
-			}
-			return fmt.Errorf("unsupported input: expected JSON Workbook or XLSX: %w", err)
+		wb, err = UnmarshalWorkbook(data)
+		if err != nil {
+			return err
 		}
-		normalizeDateCells(&wb)
+		if len(data) > 0 && bytes.TrimSpace(data)[0] == '[' {
+			if opts.ExplicitMode && (opts.Mode == MarkdownModeFormula || opts.Mode == MarkdownModeBoth) {
+				pendingWarnings = append(pendingWarnings, fmt.Sprintf("Warning: --mode=%s is ignored for JSON array input (formulas not supported in this format).", opts.Mode))
+			}
+		}
+		normalizeDateCells(wb)
 	}
 
-	out, hasWarning := renderMarkdown(wb, opts)
+	out, hasWarning := renderMarkdown(*wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
+	}
+	for _, msg := range pendingWarnings {
+		fmt.Fprintln(os.Stderr, msg)
 	}
 	if hasWarning {
 		if opts.Mode == MarkdownModeBoth {
@@ -239,10 +248,11 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
 		}
 	} else if len(wb.Sheets) > 0 {
 		sheets = wb.Sheets
-	} else if wb.Cells != nil || wb.Name != "" || wb.Merges != nil {
+	} else if wb.Cells != nil || wb.Rows != nil || wb.Name != "" || wb.Merges != nil {
 		sheets = []Sheet{{
 			Name:    wb.Name,
 			Cells:   wb.Cells,
+			Rows:    wb.Rows,
 			Cols:    wb.Cols,
 			RowDims: wb.RowDims,
 			Merges:  wb.Merges,
@@ -274,24 +284,53 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
 // FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--first-row-header）。
 // それ以外は A/B/C 列名ヘッダ + 行番号を表示する（デフォルト）。
 func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
-	if len(sh.Cells) == 0 {
+	if len(sh.Cells) == 0 && len(sh.Rows) == 0 {
 		return "", false
 	}
 	maxCol, maxRow := 0, 0
-	for axis := range sh.Cells {
-		c, r, err := excelize.CellNameToCoordinates(axis)
-		if err != nil {
-			continue
+	if len(sh.Cells) > 0 {
+		for axis := range sh.Cells {
+			c, r, err := excelize.CellNameToCoordinates(axis)
+			if err != nil {
+				continue
+			}
+			if c > maxCol {
+				maxCol = c
+			}
+			if r > maxRow {
+				maxRow = r
+			}
 		}
-		if c > maxCol {
-			maxCol = c
-		}
-		if r > maxRow {
-			maxRow = r
+	} else {
+		maxRow = len(sh.Rows)
+		for _, row := range sh.Rows {
+			if len(row) > maxCol {
+				maxCol = len(row)
+			}
 		}
 	}
 	if maxCol == 0 || maxRow == 0 {
 		return "", false
+	}
+
+	rows := make([][]Cell, maxRow+1)
+	for r := 1; r <= maxRow; r++ {
+		rows[r] = make([]Cell, maxCol+1)
+	}
+
+	if len(sh.Cells) > 0 {
+		for axis, cell := range sh.Cells {
+			c, r, err := excelize.CellNameToCoordinates(axis)
+			if err == nil && c <= maxCol && r <= maxRow {
+				rows[r][c] = cell
+			}
+		}
+	} else {
+		for r, row := range sh.Rows {
+			for c, val := range row {
+				rows[r+1][c+1] = Cell{V: val}
+			}
+		}
 	}
 
 	colNames := make([]string, maxCol+1)
@@ -318,17 +357,27 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	}
 	for r := startRow; r <= sampleEnd; r++ {
 		for c := 1; c <= maxCol; c++ {
-			axis := colNames[c] + strconv.Itoa(r)
-			if cell, ok := sh.Cells[axis]; ok {
-				t := cell.T
-				if t == "f" {
-					if _, isNum := cell.V.(float64); isNum {
-						t = "n"
-					} else {
-						t = "s"
-					}
+			cell := rows[r][c]
+			t := cell.T
+			if t == "f" {
+				if _, isNum := cell.V.(float64); isNum {
+					t = "n"
+				} else {
+					t = "s"
 				}
+			}
+			if t != "" {
 				typeCount[c][t]++
+			} else if cell.V != nil {
+				// 推論
+				switch cell.V.(type) {
+				case float64, int, int64:
+					typeCount[c]["n"]++
+				case bool:
+					typeCount[c]["b"]++
+				default:
+					typeCount[c]["s"]++
+				}
 			}
 		}
 	}
@@ -364,11 +413,9 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	var hasWarning bool
 	if opts.FirstRowHeader {
 		for c := 1; c <= maxCol; c++ {
-			axis := colNames[c] + "1"
-			if cell, ok := sh.Cells[axis]; ok {
-				if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
-					colWidths[c] = w
-				}
+			cell := rows[1][c]
+			if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
+				colWidths[c] = w
 			}
 		}
 	}
@@ -379,11 +426,9 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	}
 	for r := dataStart; r <= maxRow; r++ {
 		for c := 1; c <= maxCol; c++ {
-			axis := colNames[c] + strconv.Itoa(r)
-			if cell, ok := sh.Cells[axis]; ok {
-				if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
-					colWidths[c] = w
-				}
+			cell := rows[r][c]
+			if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
+				colWidths[c] = w
 			}
 		}
 	}
@@ -404,12 +449,8 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	if opts.FirstRowHeader {
 		b.WriteString("|")
 		for c := 1; c <= maxCol; c++ {
-			axis := colNames[c] + "1"
-			cell, ok := sh.Cells[axis]
-			val := ""
-			if ok {
-				val = formatCell(cell, opts.Mode, &hasWarning)
-			}
+			cell := rows[1][c]
+			val := formatCell(cell, opts.Mode, &hasWarning)
 			b.WriteString(" ")
 			b.WriteString(padCell(val, colWidths[c], "---"))
 			b.WriteString(" |")
@@ -427,12 +468,8 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		for r := 2; r <= maxRow; r++ {
 			b.WriteString("|")
 			for c := 1; c <= maxCol; c++ {
-				axis := colNames[c] + strconv.Itoa(r)
-				cell, ok := sh.Cells[axis]
-				val := ""
-				if ok {
-					val = formatCell(cell, opts.Mode, &hasWarning)
-				}
+				cell := rows[r][c]
+				val := formatCell(cell, opts.Mode, &hasWarning)
 				b.WriteString(" ")
 				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
 				b.WriteString(" |")
@@ -474,12 +511,8 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 				b.WriteString(" |")
 			}
 			for c := 1; c <= maxCol; c++ {
-				axis := colNames[c] + strconv.Itoa(r)
-				cell, ok := sh.Cells[axis]
-				val := ""
-				if ok {
-					val = formatCell(cell, opts.Mode, &hasWarning)
-				}
+				cell := rows[r][c]
+				val := formatCell(cell, opts.Mode, &hasWarning)
 				b.WriteString(" ")
 				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
 				b.WriteString(" |")

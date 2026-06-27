@@ -2,9 +2,9 @@
 
 [ English | [日本語](README.ja.md) ]
 
-`json2xlsx` is a Go-based CLI tool that generates Excel `.xlsx` files from SheetJS-style JSON. The Go side is responsible only for the JSON → XLSX conversion and does not include any AI calls.[1][2]
+`json2xlsx` is a Go-based CLI tool that generates Excel `.xlsx` files from SheetJS-style JSON or 2D array JSON. The Go side is responsible only for the JSON → XLSX conversion and does not include any AI calls.[1][2]
 
-It is intended to be used together with the `sheetjs-json-writer` skill to make AI reliably output SheetJS-style JSON.[3][4]
+It is intended to be used together with the `sheetjs-json-writer` skill (included in the `skills/` directory) to make AI reliably output SheetJS-style JSON.[3][4]
 
 ## Purpose
 
@@ -12,6 +12,8 @@ The goal of this project is to separate the following two stages:
 
 1. The AI emits tables and aggregate results as SheetJS-style JSON.
 2. `json2xlsx` reads that JSON and converts it to `.xlsx`.[5][6]
+
+While the AI primarily outputs SheetJS-style JSON, `json2xlsx` also accepts 2D array JSON input for convenience when interacting with other tools.
 
 This separation keeps the Go tool lightweight, easy to test, and suitable for OSS distribution.[7][8]
 
@@ -36,8 +38,8 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 
 - Lightweight CLI that runs on Go 1.22+.[2]
 - Main dependencies are `excelize` (XLSX read/write) and `jsonschema/v6` (JSON validation).[1]
-- Accepts JSON that is aware of SheetJS-style Cell Objects.[4][3]
-- Can progressively support basic tables, formulas, newlines, borders, colors, number formats, links, etc.[6][9][10]
+- Accepts JSON in both SheetJS-style Cell Objects and simple 2D array formats.[4][3]
+- Supports formulas, newlines, borders, colors, number formats, links, etc. (Note: 2D array format does not support formulas or styles).[6][9][10]
 - Because the AI generation part is separated, it can be combined with any LLM.[11][12]
 - **Chart generation** — bar, column, line, area, pie, doughnut, scatter, radar charts with customizable titles, legends, axes, and data labels.
 - **Japanese-friendly** — series names containing Japanese characters (e.g., `予算`, `実績`) are automatically preserved in Excel legends.
@@ -83,7 +85,7 @@ Date/time cells (`t: "d"`) default to outputting Excel's internal serial value i
 
 ### `to-xlsx` — JSON → XLSX (default)
 
-Read JSON and output `.xlsx`. Use `--sheet` to set the default sheet name when none is specified.
+Read JSON and output `.xlsx`. Input can be either SheetJS-style Workbook JSON or a 2D array JSON (e.g., `[["A", 1], ["B", 2]]`). Note that 2D array format does not support formulas or styles. Use `--sheet` to set the default sheet name when none is specified.
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx --sheet Sheet1
@@ -175,9 +177,9 @@ cat input.xlsx | json2xlsx to-html > output.html
 - Alignment → `text-align`, `vertical-align`, `white-space`
 - Border → `border`
 
-### `to-csv` — csvtk / xlsx-cli JSON -> CSV
+### `to-csv` — JSON / XLSX -> CSV
 
-Convert JSON output by `csvtk csv2json` (array of objects) and JSON output by `xlsx-cli -j` to CSV. The `xlsx-cli -j` format processes only the first sheet and ignores the sheet-name row; it errors if there is no array after the sheet-name row. It does not accept json2xlsx's Workbook format (the output of `to-json`) and will exit with an error.
+Convert JSON or XLSX to CSV. Supports json2xlsx Workbook JSON, 2D array JSON, `csvtk csv2json` output, and `xlsx-cli -j` output.
 
 ```bash
 json2xlsx to-csv -i input.json -o output.csv
@@ -188,11 +190,15 @@ cat input.json | json2xlsx to-csv > output.csv
 
 `json2xlsx` accepts JSON inspired by SheetJS compatibility and converts it to `.xlsx` on a per-cell basis.[3][4]
 
-The expected input representations are three kinds:
+The expected input representations are four kinds:
 
+- SheetJS-style Workbook / Sheet JSON
+- 2D array JSON (e.g. `[["Header1", "Header2"], ["val1", 123]]`)
 - Array-of-objects form
 - Cell reference form (`A1`, `B2`, etc.)
 - Cell Object form
+
+Note: 2D array and array-of-objects formats are for pure data and do not support formulas or styles. For formulas and styles, use the Cell Object form.
 
 ### Example: Cell Object form
 
@@ -317,10 +323,11 @@ Current dependencies are:
 require (
     github.com/xuri/excelize/v2 v2.8.1
     github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+    github.com/mattn/go-runewidth v0.0.24
 )
 ```
 
-`excelize` is a widely used OSS library for reading and writing Excel files in Go, and `jsonschema` is used for JSON Schema validation.[2][1]
+`excelize` is a widely used OSS library for reading and writing Excel files in Go, `jsonschema` is used for JSON Schema validation, and `go-runewidth` is used to calculate text width for Markdown output.[2][1]
 
 ## Proposed Go data structures
 
@@ -372,7 +379,7 @@ type Style struct {
 
 ## Relationship with `sheetjs-json-writer`
 
-The separate `sheetjs-json-writer` is a SKILL.md intended to impose the following constraints on AI:
+The `sheetjs-json-writer` skill included in the `skills/` directory is a SKILL.md intended to impose the following constraints on AI:
 
 - Output only JSON.
 - Do not add Markdown explanations.
@@ -381,32 +388,16 @@ The separate `sheetjs-json-writer` is a SKILL.md intended to impose the followin
 
 This allows `json2xlsx` to remain simple under the assumption that "correctly formatted JSON will be provided".
 
-## Licensing
-
-This arrangement is suitable for OSS publication. `excelize` is BSD 3-Clause and `jsonschema/v6` is Apache 2.0, but this tool itself does not include AI calls.
-
 A reimplementation referencing SheetJS-compatible specs can also be organized as a compatible implementation.[5][4]
 
-## Development status
+## Licensing
 
-Implementation progressed in the following order and all items are completed:
+This tool is licensed under the **MIT License**.
 
-1. ✅ JSON reading
-2. ✅ Basic table output
-3. ✅ Cell Object support
-4. ✅ Formula support
-5. ✅ Style support
-6. ✅ Newlines, column widths, row heights, links support
-7. ✅ Test coverage
-
-## Deliverables
-
-This repository contains the following:
-
-- ✅ `README.md`
-- ✅ `SKILL.md` (for `sheetjs-json-writer`)
-- ✅ Go implementation
-- ✅ Sample JSON (under `test_data/`)
+The licenses of major dependencies are as follows:
+- `excelize`: BSD 3-Clause
+- `jsonschema/v6`: MIT
+- `go-runewidth`: MIT
 
 ## References
 
