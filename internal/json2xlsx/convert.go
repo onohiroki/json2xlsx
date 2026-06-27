@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -71,6 +72,14 @@ func UnmarshalWorkbook(data []byte) (*Workbook, error) {
 		}
 		return nil, fmt.Errorf("parse json: %w", err)
 	}
+
+	// Workbook にデータがない場合、Map-of-Arrays 形式を試す
+	if wb.Book == nil && len(wb.Sheets) == 0 && wb.Cells == nil && len(wb.Rows) == 0 {
+		if wb2, ok := tryMapOfArrays(data); ok {
+			return wb2, nil
+		}
+	}
+
 	return &wb, nil
 }
 
@@ -104,6 +113,58 @@ func objectArrayToWorkbook(objects []map[string]any) (*Workbook, error) {
 	}
 
 	return &Workbook{Rows: rows}, nil
+}
+
+// tryMapOfArrays は Map-of-Arrays 形式 {key: [val, ...], ...} を
+// 1行目がキーヘッダ、2行目以降が値の行データに変換する。
+// 値がすべて配列でない場合は false を返す。
+func tryMapOfArrays(data []byte) (*Workbook, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, false
+	}
+
+	keys := make([]string, 0, len(raw))
+	for k := range raw {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	arrays := make([][]any, len(keys))
+	maxLen := 0
+	for i, k := range keys {
+		var arr []any
+		if err := json.Unmarshal(raw[k], &arr); err != nil {
+			return nil, false
+		}
+		if len(arr) > maxLen {
+			maxLen = len(arr)
+		}
+		arrays[i] = arr
+	}
+
+	if maxLen == 0 {
+		return nil, false
+	}
+
+	rows := make([][]any, 0, maxLen+1)
+	header := make([]any, len(keys))
+	for i, k := range keys {
+		header[i] = k
+	}
+	rows = append(rows, header)
+
+	for ri := 0; ri < maxLen; ri++ {
+		row := make([]any, len(keys))
+		for ci, arr := range arrays {
+			if ri < len(arr) {
+				row[ci] = arr[ri]
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	return &Workbook{Rows: rows}, true
 }
 
 func convertWorkbook(wb *Workbook, out io.Writer) error {
