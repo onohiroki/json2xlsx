@@ -19,7 +19,7 @@ func TestArrayOfMap_PreservesKeyOrder(t *testing.T) {
 		{"name": "Dave",  "age": 36, "city": "Fukuoka", "score": 60, "active": false},
 		{"name": "Eve",   "age": 28, "city": "Sapporo", "score": 81, "active": true}
 	]`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, true)
 	defer f.Close()
 
 	expected := []struct {
@@ -48,7 +48,7 @@ func TestArrayOfMap_PreservesKeyOrder_Repeated(t *testing.T) {
 	want := []string{"name", "age", "city", "score", "active"}
 	cells := []string{"A1", "B1", "C1", "D1", "E1"}
 	for i := 0; i < 10; i++ {
-		f := convertAndOpen(t, js)
+		f := convertAndOpen(t, js, true)
 		for j, c := range cells {
 			got, _ := f.GetCellValue("Sheet1", c)
 			if got != want[j] {
@@ -59,7 +59,7 @@ func TestArrayOfMap_PreservesKeyOrder_Repeated(t *testing.T) {
 	}
 }
 
-func TestMapOfArrays_ConflictingFieldName(t *testing.T) {
+func TestMapOfArrays_ConflictingFieldName_DataJSON(t *testing.T) {
 	// トップレベルキーが Workbook 構造体のフィールドと衝突する場合でも、
 	// Map-of-Arrays フォールバックで正しく解釈されることを確認する。
 	js := `{
@@ -69,7 +69,7 @@ func TestMapOfArrays_ConflictingFieldName(t *testing.T) {
 		"score":  [88,      72,      95],
 		"active": [true,    false,   true]
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, true)
 	defer f.Close()
 
 	expected := []struct {
@@ -93,12 +93,12 @@ func TestMapOfArrays_ConflictingFieldName(t *testing.T) {
 	}
 }
 
-func TestArrayOfMap_MissingKeys(t *testing.T) {
+func TestArrayOfMap_MissingKeys_DataJSON(t *testing.T) {
 	js := `[
 		{"a": 1, "b": 2},
 		{"b": 3, "c": 4}
 	]`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, true)
 	defer f.Close()
 
 	expected := []struct {
@@ -117,10 +117,10 @@ func TestArrayOfMap_MissingKeys(t *testing.T) {
 	}
 }
 
-func convertAndOpen(t *testing.T, jsonStr string) *excelize.File {
+func convertAndOpen(t *testing.T, jsonStr string, dataJSON bool) *excelize.File {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := Convert(strings.NewReader(jsonStr), &buf); err != nil {
+	if err := Convert(strings.NewReader(jsonStr), &buf, ConvertOptions{DataJSON: dataJSON}); err != nil {
 		t.Fatalf("Convert error: %v", err)
 	}
 	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
@@ -140,7 +140,7 @@ func TestBasicCellObject(t *testing.T) {
 			"D1": {"t": "f", "f": "B1*2"}
 		}
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 
 	if got, _ := f.GetCellValue("S1", "A1"); got != "hello" {
@@ -166,7 +166,7 @@ func TestRowsAoA(t *testing.T) {
 			["banana", 5]
 		]
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 
 	if got, _ := f.GetCellValue("Data", "A1"); got != "name" {
@@ -191,7 +191,7 @@ func TestStylesAndNumFmt(t *testing.T) {
 			}
 		]
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 
 	// 整形済み表示値を確認
@@ -213,7 +213,7 @@ func TestNewline(t *testing.T) {
 			{"id": 1, "alignment": {"wrapText": true}}
 		]
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 	got, _ := f.GetCellValue("Sheet1", "A1")
 	if !strings.Contains(got, "\n") {
@@ -228,7 +228,7 @@ func TestMultipleSheets(t *testing.T) {
 			{"name": "Second", "cells": {"A1": {"t":"s","v":"two"}}}
 		]
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 	if v, _ := f.GetCellValue("First", "A1"); v != "one" {
 		t.Errorf("First!A1=%q", v)
@@ -246,7 +246,7 @@ func TestMergeAndDimensions(t *testing.T) {
 		"rowDims": [{"row":1,"height":40}]
 	}`
 	var buf bytes.Buffer
-	if err := Convert(strings.NewReader(js), &buf); err != nil {
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
@@ -274,7 +274,7 @@ func TestMergeAndDimensions(t *testing.T) {
 }
 
 // convertWithStderr は Convert を実行し、stderr 出力をキャプチャする。
-func convertWithStderr(t *testing.T, jsonStr string) (xlsxData []byte, stderrOutput string, convertErr error) {
+func convertWithStderr(t *testing.T, jsonStr string, dataJSON bool) (xlsxData []byte, stderrOutput string, convertErr error) {
 	t.Helper()
 	r := strings.NewReader(jsonStr)
 	var buf bytes.Buffer
@@ -287,7 +287,7 @@ func convertWithStderr(t *testing.T, jsonStr string) (xlsxData []byte, stderrOut
 	origStderr := os.Stderr
 	os.Stderr = stderrW
 
-	convertErr = Convert(r, &buf)
+	convertErr = Convert(r, &buf, ConvertOptions{DataJSON: dataJSON})
 
 	stderrW.Close()
 	os.Stderr = origStderr
@@ -305,7 +305,7 @@ func TestUnknownStyleID_Warning(t *testing.T) {
 			"A1": {"t":"s","v":"hello", "s": 99}
 		}
 	}`
-	xlsxData, stderrOut, err := convertWithStderr(t, js)
+	xlsxData, stderrOut, err := convertWithStderr(t, js, false)
 	if err == nil {
 		t.Fatal("expected error for unknown style id, got nil")
 	}
@@ -340,7 +340,7 @@ func TestUnknownStyleID_ValidStyleStillWorks(t *testing.T) {
 			{"id": 1, "numFmt": "#,##0"}
 		]
 	}`
-	xlsxData, stderrOut, err := convertWithStderr(t, js)
+	xlsxData, stderrOut, err := convertWithStderr(t, js, false)
 	if err == nil {
 		t.Fatal("expected error for unknown style id, got nil")
 	}
@@ -395,7 +395,7 @@ func TestChartEmbedded(t *testing.T) {
 			]
 		}
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 
 	sheets := f.GetSheetList()
@@ -438,7 +438,7 @@ func TestChartSheet(t *testing.T) {
 			]
 		}
 	}`
-	f := convertAndOpen(t, js)
+	f := convertAndOpen(t, js, false)
 	defer f.Close()
 
 	sheets := f.GetSheetList()
@@ -483,7 +483,7 @@ func TestChartUnknownMode(t *testing.T) {
 		}
 	}`
 	var buf bytes.Buffer
-	err := Convert(strings.NewReader(js), &buf)
+	err := Convert(strings.NewReader(js), &buf, ConvertOptions{})
 	if err == nil {
 		t.Fatal("expected error for unknown mode, got nil")
 	}
@@ -514,7 +514,7 @@ func TestChartInvalidType(t *testing.T) {
 		}
 	}`
 	var buf bytes.Buffer
-	err := Convert(strings.NewReader(js), &buf)
+	err := Convert(strings.NewReader(js), &buf, ConvertOptions{})
 	if err == nil {
 		t.Fatal("expected error for unknown chart type, got nil")
 	}
@@ -527,7 +527,7 @@ func TestUnknownStyleID_StyleIDZeroIsValid(t *testing.T) {
 			"A1": {"t":"s","v":"ok", "s": 0}
 		}
 	}`
-	_, _, err := convertWithStderr(t, js)
+	_, _, err := convertWithStderr(t, js, false)
 	if err != nil {
 		t.Fatalf("unexpected error for s=0: %v", err)
 	}
@@ -788,7 +788,7 @@ func TestChartFullRoundtrip(t *testing.T) {
 
 	// Step A: JSON → XLSX
 	var xlsx1 bytes.Buffer
-	if err := Convert(strings.NewReader(srcJSON), &xlsx1); err != nil {
+	if err := Convert(strings.NewReader(srcJSON), &xlsx1, ConvertOptions{}); err != nil {
 		t.Fatalf("step A (json→xlsx): %v", err)
 	}
 
@@ -854,7 +854,7 @@ func TestChartFullRoundtrip(t *testing.T) {
 	// Step C: JSON(book wrapper) → XLSX
 	jsonBytes, _ := json.Marshal(wb2)
 	var xlsx2 bytes.Buffer
-	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2); err != nil {
+	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2, ConvertOptions{}); err != nil {
 		t.Fatalf("step C (json→xlsx): %v", err)
 	}
 
@@ -926,7 +926,7 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 
 	// Step A: JSON → XLSX
 	var xlsx1 bytes.Buffer
-	if err := Convert(strings.NewReader(srcJSON), &xlsx1); err != nil {
+	if err := Convert(strings.NewReader(srcJSON), &xlsx1, ConvertOptions{}); err != nil {
 		t.Fatalf("step A (json→xlsx): %v", err)
 	}
 
@@ -1014,7 +1014,7 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 	// Step C: JSON(book wrapper) → XLSX
 	jsonBytes, _ := json.Marshal(wb2)
 	var xlsx2 bytes.Buffer
-	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2); err != nil {
+	if err := Convert(bytes.NewReader(jsonBytes), &xlsx2, ConvertOptions{}); err != nil {
 		t.Fatalf("step C (json→xlsx): %v", err)
 	}
 

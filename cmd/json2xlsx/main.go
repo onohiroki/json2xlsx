@@ -28,15 +28,16 @@ func usageJa() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx]           # SheetJS 形式または二次元配列形式の JSON → XLSX
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]  # JSON / XLSX → HTML <table>
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n]   # JSON または XLSX を CSV に変換
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]   # SheetJS / 二次元配列 / オブジェクト配列 / Map-of-Arrays → XLSX
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]  # JSON / XLSX → HTML <table>
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]   # JSON または XLSX を CSV に変換
   json2xlsx         [-i input.json] [-o output.xlsx]   # to-xlsx として動作
 
 オプション:
-  -i                   入力ファイル (省略時 stdin)。JSON (SheetJS 形式 / 二次元配列) または XLSX
+  -i                   入力ファイル (省略時 stdin)。JSON (SheetJS 形式 / データ JSON) または XLSX
   -o                   出力ファイル (省略時 stdout)
+  --data-json          入力をデータ JSON (二次元配列 / オブジェクト配列 / Map-of-Arrays) として扱う
   --sheet              to-csv で入力 XLSX または JSON から抽出するシート名
   --sheet-index        to-csv で入力 XLSX または JSON から抽出するシート番号 (1から開始)
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
@@ -49,7 +50,7 @@ Usage:
 ロングオプションは --name 形式、短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが、ドキュメントでは上記表記に統一しています)。
 to-md / to-html / to-xlsx は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する。
-JSON の場合は SheetJS Cell Object 形式を基本とするが、二次元配列形式 (数式は非対応) も受け付ける。
+JSON の場合は SheetJS Cell Object 形式を基本とするが、--data-json を指定すると二次元配列・オブジェクト配列・Map-of-Arrays の 3 形式を受け付ける。
 to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す。`)
 }
 
@@ -58,15 +59,16 @@ func usageEn() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx]           # SheetJS-style or 2D array JSON -> XLSX
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid]
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]   # SheetJS / 2D array / array of objects / map-of-arrays -> XLSX
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
   json2xlsx         [-i input.json] [-o output.xlsx]           # same as to-xlsx
 
 Options:
-  -i                   Input file (default: stdin). JSON (SheetJS / 2D array) or XLSX
+  -i                   Input file (default: stdin). JSON (SheetJS / data JSON) or XLSX
   -o                   Output file (default: stdout)
+  --data-json          Treat input as data JSON (2D array / array of objects / map-of-arrays)
   --sheet              Sheet name for to-csv
   --sheet-index        Sheet index for to-csv (1-based)
   --date-serial        Emit date cells as Excel serial values (default)
@@ -78,7 +80,8 @@ Options:
 
 Long options use --name, short options use -i / -o.
 to-md / to-html / to-xlsx auto-detects XLSX vs JSON using magic bytes (PK\x03\x04).
-JSON input can be either SheetJS Cell Object format or 2D array format (formulas not supported in 2D array).
+Without --data-json, JSON input must be SheetJS Cell Object format.
+With --data-json, accepts 2D array / array of objects / map-of-arrays.
 to-csv converts JSON or XLSX back to CSV.`)
 }
 
@@ -177,8 +180,10 @@ func runToXLSX(args []string) {
 	fs := flag.NewFlagSet("to-xlsx", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output string
+	var dataJSON bool
 	fs.StringVar(&input, "i", "", "input JSON file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output XLSX file (default: stdout)")
+	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	_ = fs.Parse(args)
 
 	r, closeR, err := openInput(input)
@@ -195,7 +200,7 @@ func runToXLSX(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{}); err != nil {
+	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON}); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}
@@ -205,11 +210,12 @@ func runToMD(args []string) {
 	fs := flag.NewFlagSet("to-md", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output, mode string
-	var firstRowHeader bool
+	var firstRowHeader, dataJSON bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output Markdown file (default: stdout)")
 	fs.StringVar(&mode, "mode", "f", "cell display mode: f|v|both")
 	fs.BoolVar(&firstRowHeader, "first-row-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
+	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	_ = fs.Parse(args)
 
 	switch json2xlsx.MarkdownMode(mode) {
@@ -245,6 +251,7 @@ func runToMD(args []string) {
 		FirstRowHeader: firstRowHeader,
 		RowIndex:       !firstRowHeader,
 		ExplicitMode:   explicitMode,
+		DataJSON:       dataJSON,
 	}
 	if err := json2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
@@ -256,11 +263,12 @@ func runToHTML(args []string) {
 	fs := flag.NewFlagSet("to-html", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output, mode string
-	var grid bool
+	var grid, dataJSON bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output HTML file (default: stdout)")
 	fs.StringVar(&mode, "mode", "v", "cell display mode: f|v|both (default: v)")
 	fs.BoolVar(&grid, "grid", false, "collapse cellspacing and show thin gray borders on all cells")
+	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	_ = fs.Parse(args)
 
 	switch json2xlsx.MarkdownMode(mode) {
@@ -295,6 +303,7 @@ func runToHTML(args []string) {
 		Mode:         json2xlsx.MarkdownMode(mode),
 		GridLines:    grid,
 		ExplicitMode: explicitMode,
+		DataJSON:     dataJSON,
 	}
 	if err := json2xlsx.ToHTML(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
@@ -307,10 +316,12 @@ func runToCSV(args []string) {
 	fs.Usage = usage
 	var input, output, sheet string
 	var sheetIndex int
+	var dataJSON bool
 	fs.StringVar(&input, "i", "", "input CSV JSON or XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output CSV file (default: stdout)")
 	fs.StringVar(&sheet, "sheet", "", "sheet name for XLSX or Workbook JSON")
 	fs.IntVar(&sheetIndex, "sheet-index", 0, "sheet index (1-based) for XLSX or Workbook JSON")
+	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	_ = fs.Parse(args)
 
 	r, closeR, err := openInput(input)
@@ -327,7 +338,7 @@ func runToCSV(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.ToCSV(r, w, sheet, sheetIndex); err != nil {
+	if err := json2xlsx.ToCSV(r, w, sheet, sheetIndex, dataJSON); err != nil {
 		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
 		os.Exit(1)
 	}

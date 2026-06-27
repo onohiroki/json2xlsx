@@ -71,10 +71,11 @@ func UnmarshalWorkbook(data []byte, dataJSON bool) (*Workbook, error) {
 func unmarshalSheetJS(data []byte) (*Workbook, error) {
 	var wb Workbook
 	if err := json.Unmarshal(data, &wb); err != nil {
+		hint := "Hint: Use --data-json for 2D array, array of objects, or map-of-arrays format."
 		if schemaErr := ValidateJSON(data); schemaErr != nil {
-			return nil, fmt.Errorf("%v\n\n%v", err, schemaErr)
+			return nil, fmt.Errorf("ERROR: %v\n\n%s\n\n%v", err, hint, schemaErr)
 		}
-		return nil, fmt.Errorf("parse json: %w", err)
+		return nil, fmt.Errorf("ERROR: %v\n\n%s", err, hint)
 	}
 	return &wb, nil
 }

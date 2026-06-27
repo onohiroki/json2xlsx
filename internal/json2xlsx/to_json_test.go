@@ -17,7 +17,7 @@ func roundTrip(t *testing.T, jsonStr string) Workbook {
 func roundTripWithOptions(t *testing.T, jsonStr string, opts ToJSONOptions) Workbook {
 	t.Helper()
 	var xlsx bytes.Buffer
-	if err := Convert(strings.NewReader(jsonStr), &xlsx); err != nil {
+	if err := Convert(strings.NewReader(jsonStr), &xlsx, ConvertOptions{}); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	var out bytes.Buffer

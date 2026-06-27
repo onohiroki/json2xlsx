@@ -18,7 +18,7 @@ type csvKeyValue struct {
 	Value *string
 }
 
-func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int) error {
+func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON bool) error {
 	br := bufio.NewReader(r)
 	head, err := br.Peek(4)
 	if err != nil && err != io.EOF {
@@ -45,6 +45,10 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int) error {
 	data, err := io.ReadAll(br)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
+	}
+
+	if dataJSON {
+		return convertDataJSONToCSV(data, w)
 	}
 
 	isWorkbook, trimmed, err := normalizeCSVInput(data)
@@ -174,6 +178,26 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int) error {
 		}
 	}
 
+	csvw.Flush()
+	return csvw.Error()
+}
+
+func convertDataJSONToCSV(data []byte, w io.Writer) error {
+	wb, err := UnmarshalWorkbook(data, true)
+	if err != nil {
+		return err
+	}
+
+	csvw := csv.NewWriter(w)
+	for _, row := range wb.Rows {
+		record := make([]string, len(row))
+		for i, v := range row {
+			record[i] = fmt.Sprint(v)
+		}
+		if err := csvw.Write(record); err != nil {
+			return fmt.Errorf("write csv row: %w", err)
+		}
+	}
 	csvw.Flush()
 	return csvw.Error()
 }

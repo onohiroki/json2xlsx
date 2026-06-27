@@ -249,7 +249,7 @@ func TestToMarkdown_XLSXPath(t *testing.T) {
 	  }
 	}`
 	var xlsxBuf bytes.Buffer
-	if err := Convert(strings.NewReader(jsonIn), &xlsxBuf); err != nil {
+	if err := Convert(strings.NewReader(jsonIn), &xlsxBuf, ConvertOptions{}); err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 

@@ -13,7 +13,7 @@ import (
 func runToCSV(t *testing.T, input string) (string, error) {
 	t.Helper()
 	var out bytes.Buffer
-	err := ToCSV(strings.NewReader(input), &out, "", 0)
+	err := ToCSV(strings.NewReader(input), &out, "", 0, false)
 	return out.String(), err
 }
 
@@ -165,7 +165,7 @@ func TestToCSV_SheetJSStyle(t *testing.T) {
 			r, w_err, _ := os.Pipe()
 			os.Stderr = w_err
 
-			err := ToCSV(strings.NewReader(tt.input), &w, "", 0)
+			err := ToCSV(strings.NewReader(tt.input), &w, "", 0, false)
 
 			// Restore stderr
 			w_err.Close()
@@ -326,7 +326,7 @@ func TestToCSV_XLSXInput(t *testing.T) {
 		f1.Write(&buf1)
 
 		var out bytes.Buffer
-		err := ToCSV(bytes.NewReader(buf1.Bytes()), &out, "", 0)
+		err := ToCSV(bytes.NewReader(buf1.Bytes()), &out, "", 0, false)
 		if err != nil {
 			t.Fatalf("ToCSV: %v", err)
 		}
@@ -339,7 +339,7 @@ func TestToCSV_XLSXInput(t *testing.T) {
 
 	t.Run("Specific sheet", func(t *testing.T) {
 		var out bytes.Buffer
-		err := ToCSV(bytes.NewReader(buf.Bytes()), &out, sheetName, 0)
+		err := ToCSV(bytes.NewReader(buf.Bytes()), &out, sheetName, 0, false)
 		if err != nil {
 			t.Fatalf("ToCSV: %v", err)
 		}
@@ -353,7 +353,7 @@ func TestToCSV_XLSXInput(t *testing.T) {
 	t.Run("Specific sheet by index", func(t *testing.T) {
 		var out bytes.Buffer
 		// Sheet1 is index 1, TestSheet is index 2
-		err := ToCSV(bytes.NewReader(buf.Bytes()), &out, "", 2)
+		err := ToCSV(bytes.NewReader(buf.Bytes()), &out, "", 2, false)
 		if err != nil {
 			t.Fatalf("ToCSV: %v", err)
 		}
