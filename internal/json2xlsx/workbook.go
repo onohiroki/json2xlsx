@@ -1,23 +1,20 @@
 package json2xlsx
 
-// forEachCell は Workbook の 3 形式（単一シート / 複数シート / book ラッパー）を透過的に
-// イテレーションし，全セルに対して fn を適用する．fn は axis と cell を受け取り，
-// 変更後の cell を返す（変更がない場合はそのまま返す）．
+// normalizeWorkbook は Workbook を内部正規化形式に変換し，wb.Sheets と wb.Styles を常に正しい状態にする．
+// Book ラッパー形式，単一シート形式，複数シート形式のいずれからでも統一的な Sheets + Styles 表現を得る．
+// Book フィールドは Charts 参照のために保持される．
+func normalizeWorkbook(wb *Workbook) {
+	sheets, styles := flattenWorkbook(wb)
+	wb.Sheets = sheets
+	wb.Styles = styles
+}
+
+// forEachCell は Workbook の全シートの全セルに対して fn を適用する．
+// normalizeWorkbook 後に呼び出されることを前提とする．
 func forEachCell(wb *Workbook, fn func(axis string, cell Cell) Cell) {
-	for axis, cell := range wb.Cells {
-		wb.Cells[axis] = fn(axis, cell)
-	}
 	for i := range wb.Sheets {
 		for axis, cell := range wb.Sheets[i].Cells {
 			wb.Sheets[i].Cells[axis] = fn(axis, cell)
-		}
-	}
-	if wb.Book != nil {
-		for name, sh := range wb.Book.Sheets {
-			for axis, cell := range sh.Cells {
-				sh.Cells[axis] = fn(axis, cell)
-			}
-			wb.Book.Sheets[name] = sh
 		}
 	}
 }

@@ -147,10 +147,12 @@ func TestToMarkdown_JSON_DateSerial(t *testing.T) {
 func TestToMarkdown_ModeValue_FallbackWarning(t *testing.T) {
 	// mode=v でセルに f はあるが v がない場合、hasWarning=true が返り、式が表示される。
 	wb := Workbook{
-		Cells: map[string]Cell{
-			"A1": {T: "s", V: "製品"},
-			"B1": {T: "f", F: "B2*C2"}, // v なし
-		},
+		Sheets: []Sheet{{
+			Cells: map[string]Cell{
+				"A1": {T: "s", V: "製品"},
+				"B1": {T: "f", F: "B2*C2"}, // v なし
+			},
+		}},
 	}
 	out, hasWarning := renderMarkdown(wb, MarkdownOptions{Mode: MarkdownModeValue})
 	if !hasWarning {
@@ -164,9 +166,11 @@ func TestToMarkdown_ModeValue_FallbackWarning(t *testing.T) {
 func TestToMarkdown_ModeValue_NoWarningWhenValuePresent(t *testing.T) {
 	// mode=v でセルに v がある場合、hasWarning=false が返る。
 	wb := Workbook{
-		Cells: map[string]Cell{
-			"A1": {T: "f", F: "1+2", V: float64(3)},
-		},
+		Sheets: []Sheet{{
+			Cells: map[string]Cell{
+				"A1": {T: "f", F: "1+2", V: float64(3)},
+			},
+		}},
 	}
 	_, hasWarning := renderMarkdown(wb, MarkdownOptions{Mode: MarkdownModeValue})
 	if hasWarning {

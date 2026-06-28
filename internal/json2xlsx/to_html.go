@@ -54,7 +54,8 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 
 // renderHTML は Workbook を HTML 文字列にレンダリングする。
 func renderHTML(wb Workbook, opts HTMLOptions) (string, bool) {
-	sheets, styles := flattenWorkbook(&wb)
+	sheets := wb.Sheets
+	styles := wb.Styles
 
 	stylesByID := buildStyleMap(styles)
 

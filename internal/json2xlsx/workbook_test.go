@@ -4,10 +4,12 @@ import "testing"
 
 func TestForEachCell_SingleSheet(t *testing.T) {
 	wb := &Workbook{
-		Cells: map[string]Cell{
-			"A1": {T: "n", V: float64(1)},
-			"B1": {T: "s", V: "x"},
-		},
+		Sheets: []Sheet{{
+			Cells: map[string]Cell{
+				"A1": {T: "n", V: float64(1)},
+				"B1": {T: "s", V: "x"},
+			},
+		}},
 	}
 	var visited []string
 	forEachCell(wb, func(axis string, cell Cell) Cell {
@@ -38,11 +40,9 @@ func TestForEachCell_MultiSheet(t *testing.T) {
 
 func TestForEachCell_BookWrapper(t *testing.T) {
 	wb := &Workbook{
-		Book: &Book{
-			Sheets: map[string]Sheet{
-				"S1": {Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}}},
-				"S2": {Cells: map[string]Cell{"B1": {T: "s", V: "y"}}},
-			},
+		Sheets: []Sheet{
+			{Name: "S1", Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}}},
+			{Name: "S2", Cells: map[string]Cell{"B1": {T: "s", V: "y"}}},
 		},
 	}
 	var visited []string
@@ -57,14 +57,10 @@ func TestForEachCell_BookWrapper(t *testing.T) {
 
 func TestForEachCell_Mutation(t *testing.T) {
 	wb := &Workbook{
-		Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}},
 		Sheets: []Sheet{
+			{Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}}},
 			{Cells: map[string]Cell{"B1": {T: "s", V: "x"}}},
-		},
-		Book: &Book{
-			Sheets: map[string]Sheet{
-				"S1": {Cells: map[string]Cell{"C1": {T: "b", V: false}}},
-			},
+			{Name: "S1", Cells: map[string]Cell{"C1": {T: "b", V: false}}},
 		},
 	}
 	forEachCell(wb, func(axis string, cell Cell) Cell {
@@ -72,14 +68,14 @@ func TestForEachCell_Mutation(t *testing.T) {
 		cell.V = "mutated"
 		return cell
 	})
-	if wb.Cells["A1"].V != "mutated" {
-		t.Errorf("single: A1.V = %v, want mutated", wb.Cells["A1"].V)
+	if wb.Sheets[0].Cells["A1"].V != "mutated" {
+		t.Errorf("sheet0 A1.V = %v, want mutated", wb.Sheets[0].Cells["A1"].V)
 	}
-	if wb.Sheets[0].Cells["B1"].V != "mutated" {
-		t.Errorf("multi: B1.V = %v, want mutated", wb.Sheets[0].Cells["B1"].V)
+	if wb.Sheets[1].Cells["B1"].V != "mutated" {
+		t.Errorf("sheet1 B1.V = %v, want mutated", wb.Sheets[1].Cells["B1"].V)
 	}
-	if wb.Book.Sheets["S1"].Cells["C1"].V != "mutated" {
-		t.Errorf("book: C1.V = %v, want mutated", wb.Book.Sheets["S1"].Cells["C1"].V)
+	if wb.Sheets[2].Cells["C1"].V != "mutated" {
+		t.Errorf("sheet2 C1.V = %v, want mutated", wb.Sheets[2].Cells["C1"].V)
 	}
 }
 
@@ -97,12 +93,11 @@ func TestForEachCell_NilMaps(t *testing.T) {
 }
 
 func TestForEachCell_MixedFormats(t *testing.T) {
-	// 3形式すべてにセルがある場合に正しく処理されることを確認
 	wb := &Workbook{
-		Cells:  map[string]Cell{"A1": {T: "n", V: float64(1)}},
-		Sheets: []Sheet{{Cells: map[string]Cell{"B1": {T: "s", V: "x"}}}},
-		Book: &Book{
-			Sheets: map[string]Sheet{"S1": {Cells: map[string]Cell{"C1": {T: "b", V: false}}}},
+		Sheets: []Sheet{
+			{Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}}},
+			{Cells: map[string]Cell{"B1": {T: "s", V: "x"}}},
+			{Name: "S1", Cells: map[string]Cell{"C1": {T: "b", V: false}}},
 		},
 	}
 	var visited []string
@@ -269,5 +264,118 @@ func TestFlattenWorkbook_Priority_BookOverSheets(t *testing.T) {
 	sheets, _ := flattenWorkbook(wb)
 	if len(sheets) != 1 || sheets[0].Name != "BS" {
 		t.Errorf("expected Book wrapper to take priority, got %+v", sheets)
+	}
+}
+
+func TestNormalizeWorkbook_BookWrapper(t *testing.T) {
+	wb := &Workbook{
+		Book: &Book{
+			Sheets: map[string]Sheet{
+				"S1": {Cells: map[string]Cell{"A1": {T: "s", V: "x"}}},
+				"S2": {Cells: map[string]Cell{"A1": {T: "n", V: 1}}},
+			},
+			Styles: []Style{{ID: 1, Font: &Font{Bold: true}}},
+		},
+	}
+	normalizeWorkbook(wb)
+	if len(wb.Sheets) != 2 {
+		t.Fatalf("expected 2 sheets, got %d", len(wb.Sheets))
+	}
+	names := map[string]bool{}
+	for _, sh := range wb.Sheets {
+		names[sh.Name] = true
+	}
+	if !names["S1"] || !names["S2"] {
+		t.Errorf("expected sheets S1 and S2, got %v", wb.Sheets)
+	}
+	if len(wb.Styles) != 1 || wb.Styles[0].ID != 1 {
+		t.Errorf("expected Book.Styles, got %+v", wb.Styles)
+	}
+	// Book フィールドは Charts 参照のために保持される
+	if wb.Book == nil {
+		t.Error("Book field should be preserved after normalizeWorkbook")
+	}
+}
+
+func TestNormalizeWorkbook_SingleSheet(t *testing.T) {
+	wb := &Workbook{
+		Name:    "MySheet",
+		Cells:   map[string]Cell{"B2": {T: "n", V: 42}},
+		Cols:    []ColInfo{{Col: "A", Width: 10}},
+		Merges:  []Merge{{Range: "A1:B2"}},
+		Styles:  []Style{{ID: 2}},
+	}
+	normalizeWorkbook(wb)
+	if len(wb.Sheets) != 1 {
+		t.Fatalf("expected 1 sheet, got %d", len(wb.Sheets))
+	}
+	if wb.Sheets[0].Name != "MySheet" {
+		t.Errorf("expected Name=MySheet, got %q", wb.Sheets[0].Name)
+	}
+	if wb.Sheets[0].Cells["B2"].V != 42 {
+		t.Errorf("unexpected cell value: %+v", wb.Sheets[0].Cells["B2"])
+	}
+	if len(wb.Sheets[0].Cols) != 1 {
+		t.Errorf("cols not carried over: %+v", wb.Sheets[0].Cols)
+	}
+	if len(wb.Styles) != 1 || wb.Styles[0].ID != 2 {
+		t.Errorf("expected wb.Styles, got %+v", wb.Styles)
+	}
+}
+
+func TestNormalizeWorkbook_RowsOnly(t *testing.T) {
+	wb := &Workbook{
+		Rows: [][]interface{}{{"a", 1}, {"b", 2}},
+	}
+	normalizeWorkbook(wb)
+	if len(wb.Sheets) != 1 {
+		t.Fatalf("expected 1 sheet, got %d", len(wb.Sheets))
+	}
+	if len(wb.Sheets[0].Rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(wb.Sheets[0].Rows))
+	}
+}
+
+func TestNormalizeWorkbook_AlreadyNormalized(t *testing.T) {
+	wb := &Workbook{
+		Sheets: []Sheet{
+			{Name: "A", Cells: map[string]Cell{"A1": {T: "s", V: "a"}}},
+			{Name: "B", Cells: map[string]Cell{"A1": {T: "n", V: 2}}},
+		},
+		Styles: []Style{{ID: 10}},
+	}
+	normalizeWorkbook(wb)
+	if len(wb.Sheets) != 2 {
+		t.Fatalf("expected 2 sheets, got %d", len(wb.Sheets))
+	}
+	if wb.Sheets[0].Name != "A" || wb.Sheets[1].Name != "B" {
+		t.Errorf("unexpected sheet order: %q, %q", wb.Sheets[0].Name, wb.Sheets[1].Name)
+	}
+}
+
+func TestNormalizeWorkbook_Empty(t *testing.T) {
+	wb := &Workbook{}
+	normalizeWorkbook(wb)
+	if len(wb.Sheets) != 1 {
+		t.Fatalf("expected 1 sheet (empty default), got %d", len(wb.Sheets))
+	}
+	if wb.Sheets[0].Cells != nil || wb.Sheets[0].Rows != nil {
+		t.Errorf("expected empty sheet, got %+v", wb.Sheets[0])
+	}
+	if wb.Styles != nil {
+		t.Errorf("expected nil styles, got %+v", wb.Styles)
+	}
+}
+
+func TestNormalizeWorkbook_BookWrapper_StylesPrecedence(t *testing.T) {
+	wb := &Workbook{
+		Styles: []Style{{ID: 99, Font: &Font{Italic: true}}},
+		Book: &Book{
+			Sheets: map[string]Sheet{"X": {Cells: map[string]Cell{"A1": {T: "s", V: "a"}}}},
+		},
+	}
+	normalizeWorkbook(wb)
+	if len(wb.Styles) != 1 || wb.Styles[0].ID != 99 {
+		t.Errorf("expected top-level Styles as fallback, got %+v", wb.Styles)
 	}
 }

@@ -237,6 +237,7 @@ func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex
 	if err := json.Unmarshal(data, &wb); err != nil {
 		return fmt.Errorf("parse workbook json: %w", err)
 	}
+	normalizeWorkbook(&wb)
 	return convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex)
 }
 
@@ -280,11 +281,6 @@ func writeCSVRecords(w io.Writer, records [][]string) error {
 func resolveSheetCells(wb Workbook, sheetName string, sheetIndex int) (map[string]Cell, error) {
 	switch {
 	case sheetName != "":
-		if wb.Book != nil {
-			if c := wb.Book.Sheets[sheetName].Cells; c != nil {
-				return c, nil
-			}
-		}
 		for _, s := range wb.Sheets {
 			if s.Name == sheetName {
 				return s.Cells, nil
@@ -297,22 +293,10 @@ func resolveSheetCells(wb Workbook, sheetName string, sheetIndex int) (map[strin
 		if idx < len(wb.Sheets) {
 			return wb.Sheets[idx].Cells, nil
 		}
-		if wb.Book != nil {
-			return nil, fmt.Errorf("sheet index %d out of range (use --sheet for map-based sheets)", sheetIndex)
-		}
 		return nil, fmt.Errorf("sheet index %d not found", sheetIndex)
-
-	case wb.Cells != nil:
-		return wb.Cells, nil
 
 	case len(wb.Sheets) > 0:
 		return wb.Sheets[0].Cells, nil
-
-	case wb.Book != nil && len(wb.Book.Sheets) > 0:
-		for _, s := range wb.Book.Sheets {
-			return s.Cells, nil
-		}
-		return nil, nil
 
 	default:
 		return nil, nil

@@ -43,6 +43,7 @@ func ReadWorkbook(r io.Reader, dataJSON bool) (*ReadWorkbookResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		normalizeWorkbook(&tmp)
 		return &ReadWorkbookResult{Workbook: &tmp, IsXLSX: true}, nil
 	}
 

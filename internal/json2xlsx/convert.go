@@ -36,12 +36,7 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	var wb *Workbook
-	if opts.DataJSON {
-		wb, err = unmarshalDataJSON(data)
-	} else {
-		wb, err = unmarshalSheetJS(data)
-	}
+	wb, err := UnmarshalWorkbook(data, opts.DataJSON)
 	if err != nil {
 		return err
 	}
@@ -60,11 +55,20 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 // UnmarshalWorkbook は JSON データを Workbook 構造体にパースする。
 // DataJSON=false の場合は SheetJS 形式のみ、DataJSON=true の場合は
 // 二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する。
+// 戻り値の Workbook は常に正規化済み（wb.Sheets / wb.Styles が populated）である．
 func UnmarshalWorkbook(data []byte, dataJSON bool) (*Workbook, error) {
+	var wb *Workbook
+	var err error
 	if dataJSON {
-		return unmarshalDataJSON(data)
+		wb, err = unmarshalDataJSON(data)
+	} else {
+		wb, err = unmarshalSheetJS(data)
 	}
-	return unmarshalSheetJS(data)
+	if err != nil {
+		return nil, err
+	}
+	normalizeWorkbook(wb)
+	return wb, nil
 }
 
 // unmarshalSheetJS は SheetJS 形式のみを受け付ける。フォールバックなし。
@@ -282,19 +286,17 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	sheets, styles := flattenWorkbook(wb)
-
-	if err := validateWorkbook(sheets, wb); err != nil {
+	if err := validateWorkbook(wb.Sheets, wb); err != nil {
 		return err
 	}
 
-	styleMap, err := buildStyles(f, styles)
+	styleMap, err := buildStyles(f, wb.Styles)
 	if err != nil {
 		return fmt.Errorf("build styles: %w", err)
 	}
 
 	var warnings int
-	if err := createSheets(f, sheets, styleMap, styles, &warnings); err != nil {
+	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, &warnings); err != nil {
 		return err
 	}
 

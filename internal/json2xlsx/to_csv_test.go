@@ -304,7 +304,7 @@ func TestToCSV_BOM(t *testing.T) {
 
 func TestResolveSheetCells(t *testing.T) {
 	t.Run("single sheet with Cells", func(t *testing.T) {
-		wb := Workbook{Cells: map[string]Cell{"A1": {V: "x"}}}
+		wb := Workbook{Sheets: []Sheet{{Cells: map[string]Cell{"A1": {V: "x"}}}}}
 		cells, err := resolveSheetCells(wb, "", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -341,11 +341,11 @@ func TestResolveSheetCells(t *testing.T) {
 		}
 	})
 
-	t.Run("sheet name from Book.Sheets", func(t *testing.T) {
+	t.Run("sheet name from Sheets array", func(t *testing.T) {
 		wb := Workbook{
-			Book: &Book{Sheets: map[string]Sheet{
-				"Report": {Cells: map[string]Cell{"C3": {V: "book_val"}}},
-			}},
+			Sheets: []Sheet{
+				{Name: "Report", Cells: map[string]Cell{"C3": {V: "book_val"}}},
+			},
 		}
 		cells, err := resolveSheetCells(wb, "Report", 0)
 		if err != nil {
@@ -386,22 +386,19 @@ func TestResolveSheetCells(t *testing.T) {
 		}
 	})
 
-	t.Run("sheet index with Book (error)", func(t *testing.T) {
-		wb := Workbook{
-			Sheets: []Sheet{},
-			Book:   &Book{Sheets: map[string]Sheet{"S1": {}}},
-		}
+	t.Run("sheet index out of range (empty sheets)", func(t *testing.T) {
+		wb := Workbook{}
 		_, err := resolveSheetCells(wb, "", 1)
 		if err == nil {
-			t.Fatal("expected error about map-based sheets")
+			t.Fatal("expected error")
 		}
 	})
 
-	t.Run("Book.Sheets fallback (no name, no index)", func(t *testing.T) {
+	t.Run("first sheet fallback (no name, no index)", func(t *testing.T) {
 		wb := Workbook{
-			Book: &Book{Sheets: map[string]Sheet{
-				"X": {Cells: map[string]Cell{"Z99": {V: "fallback"}}},
-			}},
+			Sheets: []Sheet{
+				{Name: "X", Cells: map[string]Cell{"Z99": {V: "fallback"}}},
+			},
 		}
 		cells, err := resolveSheetCells(wb, "", 0)
 		if err != nil {

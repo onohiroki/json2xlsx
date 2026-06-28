@@ -114,7 +114,7 @@ func formatSeparator(align string, width int) string {
 
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
 func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
-	sheets, _ := flattenWorkbook(&wb)
+	sheets := wb.Sheets
 
 	var b strings.Builder
 	var hasWarning bool
