@@ -289,36 +289,12 @@ func formatTimeOnly(serial float64, z string) string {
 
 // normalizeDateCells は z に日付/時刻書式コードを持つセルの T を "d" に書き換える。
 func normalizeDateCells(wb *Workbook) {
-	for axis, cell := range wb.Cells {
+	forEachCell(wb, func(axis string, cell Cell) Cell {
 		if cell.Z != "" && cell.T != "d" && cell.T != "f" {
 			if isDateFormat(cell.Z, 0) {
 				cell.T = "d"
-				wb.Cells[axis] = cell
 			}
 		}
-	}
-	for i := range wb.Sheets {
-		for axis, cell := range wb.Sheets[i].Cells {
-			if cell.Z != "" && cell.T != "d" && cell.T != "f" {
-				if isDateFormat(cell.Z, 0) {
-					cell.T = "d"
-					wb.Sheets[i].Cells[axis] = cell
-				}
-			}
-		}
-	}
-	if wb.Book != nil {
-		for name := range wb.Book.Sheets {
-			sh := wb.Book.Sheets[name]
-			for axis, cell := range sh.Cells {
-				if cell.Z != "" && cell.T != "d" && cell.T != "f" {
-					if isDateFormat(cell.Z, 0) {
-						cell.T = "d"
-						sh.Cells[axis] = cell
-					}
-				}
-			}
-			wb.Book.Sheets[name] = sh
-		}
-	}
+		return cell
+	})
 }

@@ -2,6 +2,119 @@ package json2xlsx
 
 import "testing"
 
+func TestForEachCell_SingleSheet(t *testing.T) {
+	wb := &Workbook{
+		Cells: map[string]Cell{
+			"A1": {T: "n", V: float64(1)},
+			"B1": {T: "s", V: "x"},
+		},
+	}
+	var visited []string
+	forEachCell(wb, func(axis string, cell Cell) Cell {
+		visited = append(visited, axis)
+		return cell
+	})
+	if len(visited) != 2 {
+		t.Fatalf("expected 2 cells visited, got %d", len(visited))
+	}
+}
+
+func TestForEachCell_MultiSheet(t *testing.T) {
+	wb := &Workbook{
+		Sheets: []Sheet{
+			{Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}}},
+			{Cells: map[string]Cell{"B1": {T: "s", V: "y"}}},
+		},
+	}
+	var visited []string
+	forEachCell(wb, func(axis string, cell Cell) Cell {
+		visited = append(visited, axis)
+		return cell
+	})
+	if len(visited) != 2 {
+		t.Fatalf("expected 2 cells visited, got %d", len(visited))
+	}
+}
+
+func TestForEachCell_BookWrapper(t *testing.T) {
+	wb := &Workbook{
+		Book: &Book{
+			Sheets: map[string]Sheet{
+				"S1": {Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}}},
+				"S2": {Cells: map[string]Cell{"B1": {T: "s", V: "y"}}},
+			},
+		},
+	}
+	var visited []string
+	forEachCell(wb, func(axis string, cell Cell) Cell {
+		visited = append(visited, axis)
+		return cell
+	})
+	if len(visited) != 2 {
+		t.Fatalf("expected 2 cells visited, got %d", len(visited))
+	}
+}
+
+func TestForEachCell_Mutation(t *testing.T) {
+	wb := &Workbook{
+		Cells: map[string]Cell{"A1": {T: "n", V: float64(1)}},
+		Sheets: []Sheet{
+			{Cells: map[string]Cell{"B1": {T: "s", V: "x"}}},
+		},
+		Book: &Book{
+			Sheets: map[string]Sheet{
+				"S1": {Cells: map[string]Cell{"C1": {T: "b", V: false}}},
+			},
+		},
+	}
+	forEachCell(wb, func(axis string, cell Cell) Cell {
+		cell.T = "s"
+		cell.V = "mutated"
+		return cell
+	})
+	if wb.Cells["A1"].V != "mutated" {
+		t.Errorf("single: A1.V = %v, want mutated", wb.Cells["A1"].V)
+	}
+	if wb.Sheets[0].Cells["B1"].V != "mutated" {
+		t.Errorf("multi: B1.V = %v, want mutated", wb.Sheets[0].Cells["B1"].V)
+	}
+	if wb.Book.Sheets["S1"].Cells["C1"].V != "mutated" {
+		t.Errorf("book: C1.V = %v, want mutated", wb.Book.Sheets["S1"].Cells["C1"].V)
+	}
+}
+
+func TestForEachCell_NilMaps(t *testing.T) {
+	wb := &Workbook{}
+	// nil Cells, nil Sheets, nil Book でも panic しないことを確認
+	var count int
+	forEachCell(wb, func(axis string, cell Cell) Cell {
+		count++
+		return cell
+	})
+	if count != 0 {
+		t.Fatalf("expected 0 calls, got %d", count)
+	}
+}
+
+func TestForEachCell_MixedFormats(t *testing.T) {
+	// 3形式すべてにセルがある場合に正しく処理されることを確認
+	wb := &Workbook{
+		Cells:  map[string]Cell{"A1": {T: "n", V: float64(1)}},
+		Sheets: []Sheet{{Cells: map[string]Cell{"B1": {T: "s", V: "x"}}}},
+		Book: &Book{
+			Sheets: map[string]Sheet{"S1": {Cells: map[string]Cell{"C1": {T: "b", V: false}}}},
+		},
+	}
+	var visited []string
+	forEachCell(wb, func(axis string, cell Cell) Cell {
+		visited = append(visited, axis)
+		return cell
+	})
+	if len(visited) != 3 {
+		t.Fatalf("expected 3 cells visited, got %d: %v", len(visited), visited)
+	}
+}
+
 func TestFlattenWorkbook_BookWrapper(t *testing.T) {
 	wb := &Workbook{
 		Book: &Book{

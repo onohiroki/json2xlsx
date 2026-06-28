@@ -519,3 +519,92 @@ func TestFormatTimeOnly_HourBracket(t *testing.T) {
 		t.Fatalf("expected 25:00:00, got %q", got)
 	}
 }
+
+func TestNormalizeDateCells_SingleSheet(t *testing.T) {
+	wb := &Workbook{
+		Cells: map[string]Cell{
+			"A1": {T: "n", V: float64(45000), Z: "yyyy-mm-dd"},
+			"B1": {T: "s", V: "hello"}, // 日付書式なし
+		},
+	}
+	normalizeDateCells(wb)
+	if wb.Cells["A1"].T != "d" {
+		t.Errorf("A1.T = %q, want d", wb.Cells["A1"].T)
+	}
+	if wb.Cells["B1"].T != "s" {
+		t.Errorf("B1.T = %q, want s (unchanged)", wb.Cells["B1"].T)
+	}
+}
+
+func TestNormalizeDateCells_MultiSheet(t *testing.T) {
+	wb := &Workbook{
+		Sheets: []Sheet{
+			{Cells: map[string]Cell{"A1": {T: "n", V: float64(45000), Z: "yyyy-mm-dd"}}},
+			{Cells: map[string]Cell{"B1": {T: "n", V: float64(100), Z: "m/d/yy"}}},
+		},
+	}
+	normalizeDateCells(wb)
+	if wb.Sheets[0].Cells["A1"].T != "d" {
+		t.Errorf("Sheet0 A1.T = %q, want d", wb.Sheets[0].Cells["A1"].T)
+	}
+	if wb.Sheets[1].Cells["B1"].T != "d" {
+		t.Errorf("Sheet1 B1.T = %q, want d", wb.Sheets[1].Cells["B1"].T)
+	}
+}
+
+func TestNormalizeDateCells_BookWrapper(t *testing.T) {
+	wb := &Workbook{
+		Book: &Book{
+			Sheets: map[string]Sheet{
+				"S1": {Cells: map[string]Cell{"A1": {T: "n", V: float64(45000), Z: "yyyy-mm-dd"}}},
+			},
+		},
+	}
+	normalizeDateCells(wb)
+	if wb.Book.Sheets["S1"].Cells["A1"].T != "d" {
+		t.Errorf("A1.T = %q, want d", wb.Book.Sheets["S1"].Cells["A1"].T)
+	}
+}
+
+func TestNormalizeDateCells_NoChangeWhenAlreadyDate(t *testing.T) {
+	wb := &Workbook{
+		Cells: map[string]Cell{
+			"A1": {T: "d", V: float64(45000), Z: "yyyy-mm-dd"}, // 既に t=d
+		},
+	}
+	normalizeDateCells(wb)
+	if wb.Cells["A1"].T != "d" {
+		t.Errorf("A1.T = %q, want d (should remain d)", wb.Cells["A1"].T)
+	}
+}
+
+func TestNormalizeDateCells_NoChangeWhenFormula(t *testing.T) {
+	wb := &Workbook{
+		Cells: map[string]Cell{
+			"A1": {T: "f", F: "TODAY()", Z: "yyyy-mm-dd"}, // t=f はスキップ
+		},
+	}
+	normalizeDateCells(wb)
+	if wb.Cells["A1"].T != "f" {
+		t.Errorf("A1.T = %q, want f (formula should not change)", wb.Cells["A1"].T)
+	}
+}
+
+func TestNormalizeDateCells_NoChangeWhenNoFormat(t *testing.T) {
+	wb := &Workbook{
+		Cells: map[string]Cell{
+			"A1": {T: "n", V: float64(42)}, // z なし
+		},
+	}
+	normalizeDateCells(wb)
+	if wb.Cells["A1"].T != "n" {
+		t.Errorf("A1.T = %q, want n (no format code)", wb.Cells["A1"].T)
+	}
+}
+
+func TestNormalizeDateCells_NilCells(t *testing.T) {
+	// nil Cells / nil Sheets / nil Book でも panic しない
+	wb := &Workbook{}
+	normalizeDateCells(wb)
+	// panic しなければ成功
+}
