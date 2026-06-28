@@ -223,59 +223,9 @@ func buildMergeMap(merges []Merge) (hidden map[string]bool, anchors map[string]m
 
 // renderSheetHTML は単一シートを <table> としてレンダリングする。
 func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) (string, bool) {
-	if len(sh.Cells) == 0 && len(sh.Rows) == 0 {
+	cg, ok := BuildCellGrid(sh)
+	if !ok {
 		return "", false
-	}
-	maxCol, maxRow := 0, 0
-	if len(sh.Cells) > 0 {
-		for axis := range sh.Cells {
-			c, r, err := excelize.CellNameToCoordinates(axis)
-			if err != nil {
-				continue
-			}
-			if c > maxCol {
-				maxCol = c
-			}
-			if r > maxRow {
-				maxRow = r
-			}
-		}
-	} else {
-		maxRow = len(sh.Rows)
-		for _, row := range sh.Rows {
-			if len(row) > maxCol {
-				maxCol = len(row)
-			}
-		}
-	}
-	if maxCol == 0 || maxRow == 0 {
-		return "", false
-	}
-
-	rows := make([][]Cell, maxRow+1)
-	for r := 1; r <= maxRow; r++ {
-		rows[r] = make([]Cell, maxCol+1)
-	}
-
-	if len(sh.Cells) > 0 {
-		for axis, cell := range sh.Cells {
-			c, r, err := excelize.CellNameToCoordinates(axis)
-			if err == nil && c <= maxCol && r <= maxRow {
-				rows[r][c] = cell
-			}
-		}
-	} else {
-		for r, row := range sh.Rows {
-			for c, val := range row {
-				rows[r+1][c+1] = Cell{V: val}
-			}
-		}
-	}
-
-	colNames := make([]string, maxCol+1)
-	for c := 1; c <= maxCol; c++ {
-		name, _ := excelize.ColumnNumberToName(c)
-		colNames[c] = name
 	}
 
 	hidden, anchors := buildMergeMap(sh.Merges)
@@ -292,26 +242,26 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) (stri
 		b.WriteString("<th " + thStyle + ">")
 		b.WriteString(htmlEsc(""))
 		b.WriteString("</th>")
-		for c := 1; c <= maxCol; c++ {
+		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString("<th " + thStyle + ">")
-			b.WriteString(htmlEsc(colNames[c]))
+			b.WriteString(htmlEsc(cg.ColNames[c]))
 			b.WriteString("</th>")
 		}
 		b.WriteString("</tr>\n")
 	}
-	for r := 1; r <= maxRow; r++ {
+	for r := 1; r <= cg.MaxRow; r++ {
 		b.WriteString("<tr>")
 		if withHeader {
 			b.WriteString("<th " + thStyle + ">")
 			b.WriteString(strconv.Itoa(r))
 			b.WriteString("</th>")
 		}
-		for c := 1; c <= maxCol; c++ {
-			axis := colNames[c] + strconv.Itoa(r)
+		for c := 1; c <= cg.MaxCol; c++ {
+			axis := cg.ColNames[c] + strconv.Itoa(r)
 			if hidden[axis] {
 				continue
 			}
-			cell := rows[r][c]
+			cell := cg.Rows[r][c]
 			mi, isAnchor := anchors[axis]
 
 			b.WriteString("<td")
@@ -391,39 +341,9 @@ func htmlEsc(s string) string {
 	return s
 }
 
-// formatCellHTML は 1 セルの HTML 表現を返す。
-// 値優先 (v) でフォーマットし、HTML エスケープを行う。
+// formatCellHTML は 1 セルの HTML 表現を返す（値優先モード）。
 func formatCellHTML(cell Cell, hasWarning *bool) string {
-	vStr := scalarToString(cell.V)
-	hasV := cell.V != nil && vStr != ""
-	hasF := cell.F != ""
-
-	var raw string
-	switch cell.T {
-	case "f":
-		if hasV {
-			raw = vStr
-		} else if hasF {
-			raw = "=" + cell.F
-			*hasWarning = true
-		}
-	case "d":
-		if hasV {
-			if cell.Z != "" && isTimeOnlyFormat(cell.Z) {
-				raw = formatTimeOnly(toFloat64(cell.V), cell.Z)
-			} else {
-				raw = dateCellToString(cell.V)
-			}
-		}
-	default:
-		if hasV {
-			raw = vStr
-		} else if hasF {
-			raw = "=" + cell.F
-			*hasWarning = true
-		}
-	}
-
+	raw := CellDisplayValue(cell, MarkdownModeValue, hasWarning)
 	raw = strings.ReplaceAll(raw, "&", "&amp;")
 	raw = strings.ReplaceAll(raw, "<", "&lt;")
 	raw = strings.ReplaceAll(raw, ">", "&gt;")
@@ -435,58 +355,7 @@ func formatCellHTML(cell Cell, hasWarning *bool) string {
 
 // formatCellHTMLMode は mode に応じてセル値を HTML 表現に変換する。
 func formatCellHTMLMode(cell Cell, mode MarkdownMode, hasWarning *bool) string {
-	vStr := scalarToString(cell.V)
-	hasV := cell.V != nil && vStr != ""
-	hasF := cell.F != ""
-
-	var raw string
-	switch cell.T {
-	case "f":
-		switch mode {
-		case MarkdownModeValue:
-			if hasV {
-				raw = vStr
-			} else if hasF {
-				raw = "=" + cell.F
-				*hasWarning = true
-			}
-		case MarkdownModeBoth:
-			if hasV && hasF {
-				raw = vStr + "<br />=" + cell.F
-			} else if hasF {
-				raw = "=" + cell.F
-				*hasWarning = true
-			} else if hasV {
-				raw = vStr
-			}
-		default: // MarkdownModeFormula
-			if hasF {
-				raw = "=" + cell.F
-			} else if hasV {
-				raw = vStr
-			}
-		}
-	case "d":
-		if hasV {
-			if cell.Z != "" && isTimeOnlyFormat(cell.Z) {
-				raw = formatTimeOnly(toFloat64(cell.V), cell.Z)
-			} else {
-				raw = dateCellToString(cell.V)
-			}
-		}
-	default:
-		if hasV {
-			raw = vStr
-		} else if hasF {
-			if mode == MarkdownModeValue || mode == MarkdownModeBoth {
-				raw = "=" + cell.F
-				*hasWarning = true
-			} else {
-				raw = "=" + cell.F
-			}
-		}
-	}
-
+	raw := CellDisplayValue(cell, mode, hasWarning)
 	raw = strings.ReplaceAll(raw, "<br />", "\x00")
 	raw = strings.ReplaceAll(raw, "&", "&amp;")
 	raw = strings.ReplaceAll(raw, "<", "&lt;")

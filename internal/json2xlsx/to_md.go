@@ -2,16 +2,13 @@ package json2xlsx
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/mattn/go-runewidth"
-	"github.com/xuri/excelize/v2"
 )
 
 // MarkdownMode はセル値の出力方針を表す。
@@ -78,94 +75,6 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		}
 	}
 	return nil
-}
-
-// normalizeDateCells は z に日付/時刻書式コードを持つセルの T を "d" に書き換える。
-func normalizeDateCells(wb *Workbook) {
-	for axis, cell := range wb.Cells {
-		if cell.Z != "" && cell.T != "d" && cell.T != "f" {
-			if isDateFormat(cell.Z, 0) {
-				cell.T = "d"
-				wb.Cells[axis] = cell
-			}
-		}
-	}
-	for i := range wb.Sheets {
-		for axis, cell := range wb.Sheets[i].Cells {
-			if cell.Z != "" && cell.T != "d" && cell.T != "f" {
-				if isDateFormat(cell.Z, 0) {
-					cell.T = "d"
-					wb.Sheets[i].Cells[axis] = cell
-				}
-			}
-		}
-	}
-	if wb.Book != nil {
-		for name := range wb.Book.Sheets {
-			sh := wb.Book.Sheets[name]
-			for axis, cell := range sh.Cells {
-				if cell.Z != "" && cell.T != "d" && cell.T != "f" {
-					if isDateFormat(cell.Z, 0) {
-						cell.T = "d"
-						sh.Cells[axis] = cell
-					}
-				}
-			}
-			wb.Book.Sheets[name] = sh
-		}
-	}
-}
-
-// isTimeOnlyFormat は書式コードが時刻のみ（日付コンポーネントなし）かどうかを判定する。
-func isTimeOnlyFormat(code string) bool {
-	if code == "" {
-		return false
-	}
-	lc := strings.ToLower(code)
-	hasTime := strings.Contains(lc, "h") || strings.Contains(lc, "mm") || strings.Contains(lc, "ss")
-	hasDate := strings.Contains(lc, "y") || strings.Contains(lc, "d")
-	return hasTime && !hasDate
-}
-
-// formatTimeOnly は時刻シリアル値を書式コードに従って文字列化する。
-func formatTimeOnly(serial float64, z string) string {
-	totalSec := int(math.Round(serial * 86400))
-	abs := totalSec
-	sign := ""
-	if abs < 0 {
-		sign = "-"
-		abs = -abs
-	}
-
-	h := abs / 3600
-	m := (abs % 3600) / 60
-	s := abs % 60
-
-	lc := strings.ToLower(z)
-	hasSeconds := strings.Contains(lc, "ss")
-	hourLeadZero := strings.Contains(lc, "hh")
-	hasHours := strings.Contains(lc, "h") || strings.Contains(lc, "[h]")
-
-	if hasHours {
-		if hasSeconds {
-			if hourLeadZero {
-				return fmt.Sprintf("%s%02d:%02d:%02d", sign, h, m, s)
-			}
-			return fmt.Sprintf("%s%01d:%02d:%02d", sign, h, m, s)
-		}
-		if hourLeadZero {
-			return fmt.Sprintf("%s%02d:%02d", sign, h, m)
-		}
-		return fmt.Sprintf("%s%01d:%02d", sign, h, m)
-	}
-
-	// No hours (e.g. "mm:ss") → total minutes:seconds
-	totalMin := abs / 60
-	sec := abs % 60
-	if hasSeconds {
-		return fmt.Sprintf("%02d:%02d", totalMin, sec)
-	}
-	return fmt.Sprintf("%02d:%02d", totalMin, sec)
 }
 
 // displayWidth は文字列の表示幅を返す（全角2、半角1）。
@@ -240,63 +149,13 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
 // FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--first-row-header）。
 // それ以外は A/B/C 列名ヘッダ + 行番号を表示する（デフォルト）。
 func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
-	if len(sh.Cells) == 0 && len(sh.Rows) == 0 {
-		return "", false
-	}
-	maxCol, maxRow := 0, 0
-	if len(sh.Cells) > 0 {
-		for axis := range sh.Cells {
-			c, r, err := excelize.CellNameToCoordinates(axis)
-			if err != nil {
-				continue
-			}
-			if c > maxCol {
-				maxCol = c
-			}
-			if r > maxRow {
-				maxRow = r
-			}
-		}
-	} else {
-		maxRow = len(sh.Rows)
-		for _, row := range sh.Rows {
-			if len(row) > maxCol {
-				maxCol = len(row)
-			}
-		}
-	}
-	if maxCol == 0 || maxRow == 0 {
+	cg, ok := BuildCellGrid(sh)
+	if !ok {
 		return "", false
 	}
 
-	rows := make([][]Cell, maxRow+1)
-	for r := 1; r <= maxRow; r++ {
-		rows[r] = make([]Cell, maxCol+1)
-	}
-
-	if len(sh.Cells) > 0 {
-		for axis, cell := range sh.Cells {
-			c, r, err := excelize.CellNameToCoordinates(axis)
-			if err == nil && c <= maxCol && r <= maxRow {
-				rows[r][c] = cell
-			}
-		}
-	} else {
-		for r, row := range sh.Rows {
-			for c, val := range row {
-				rows[r+1][c+1] = Cell{V: val}
-			}
-		}
-	}
-
-	colNames := make([]string, maxCol+1)
-	for c := 1; c <= maxCol; c++ {
-		name, _ := excelize.ColumnNumberToName(c)
-		colNames[c] = name
-	}
-
-	colAlign := make([]string, maxCol+1)
-	for c := 1; c <= maxCol; c++ {
+	colAlign := make([]string, cg.MaxCol+1)
+	for c := 1; c <= cg.MaxCol; c++ {
 		colAlign[c] = "---"
 	}
 	startRow := 3
@@ -304,16 +163,16 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		startRow = 2
 	}
 	sampleEnd := startRow + 4
-	if sampleEnd > maxRow {
-		sampleEnd = maxRow
+	if sampleEnd > cg.MaxRow {
+		sampleEnd = cg.MaxRow
 	}
-	typeCount := make([]map[string]int, maxCol+1)
-	for c := 1; c <= maxCol; c++ {
+	typeCount := make([]map[string]int, cg.MaxCol+1)
+	for c := 1; c <= cg.MaxCol; c++ {
 		typeCount[c] = map[string]int{}
 	}
 	for r := startRow; r <= sampleEnd; r++ {
-		for c := 1; c <= maxCol; c++ {
-			cell := rows[r][c]
+		for c := 1; c <= cg.MaxCol; c++ {
+			cell := cg.Rows[r][c]
 			t := cell.T
 			if t == "f" {
 				if _, isNum := cell.V.(float64); isNum {
@@ -325,7 +184,6 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			if t != "" {
 				typeCount[c][t]++
 			} else if cell.V != nil {
-				// 推論
 				switch cell.V.(type) {
 				case float64, int, int64:
 					typeCount[c]["n"]++
@@ -337,7 +195,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			}
 		}
 	}
-	for c := 1; c <= maxCol; c++ {
+	for c := 1; c <= cg.MaxCol; c++ {
 		total := 0
 		for _, v := range typeCount[c] {
 			total += v
@@ -355,21 +213,20 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		}
 	}
 
-	// 第1パス: 列ごとの最大表示幅を計算
-	colWidths := make([]int, maxCol+1)
-	for c := 1; c <= maxCol; c++ {
-		colWidths[c] = displayWidth(colNames[c])
+	colWidths := make([]int, cg.MaxCol+1)
+	for c := 1; c <= cg.MaxCol; c++ {
+		colWidths[c] = displayWidth(cg.ColNames[c])
 	}
 
 	rowIndexWidth := 0
 	if opts.RowIndex && !opts.FirstRowHeader {
-		rowIndexWidth = len(strconv.Itoa(maxRow))
+		rowIndexWidth = len(strconv.Itoa(cg.MaxRow))
 	}
 
 	var hasWarning bool
 	if opts.FirstRowHeader {
-		for c := 1; c <= maxCol; c++ {
-			cell := rows[1][c]
+		for c := 1; c <= cg.MaxCol; c++ {
+			cell := cg.Rows[1][c]
 			if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
 				colWidths[c] = w
 			}
@@ -380,9 +237,9 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	if opts.FirstRowHeader {
 		dataStart = 2
 	}
-	for r := dataStart; r <= maxRow; r++ {
-		for c := 1; c <= maxCol; c++ {
-			cell := rows[r][c]
+	for r := dataStart; r <= cg.MaxRow; r++ {
+		for c := 1; c <= cg.MaxCol; c++ {
+			cell := cg.Rows[r][c]
 			if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
 				colWidths[c] = w
 			}
@@ -390,7 +247,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	}
 
 	const minSepWidth = 3
-	for c := 1; c <= maxCol; c++ {
+	for c := 1; c <= cg.MaxCol; c++ {
 		if colWidths[c] < minSepWidth {
 			colWidths[c] = minSepWidth
 		}
@@ -399,13 +256,12 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		rowIndexWidth = minSepWidth
 	}
 
-	// 第2パス: 描画
 	var b strings.Builder
 
 	if opts.FirstRowHeader {
 		b.WriteString("|")
-		for c := 1; c <= maxCol; c++ {
-			cell := rows[1][c]
+		for c := 1; c <= cg.MaxCol; c++ {
+			cell := cg.Rows[1][c]
 			val := formatCell(cell, opts.Mode, &hasWarning)
 			b.WriteString(" ")
 			b.WriteString(padCell(val, colWidths[c], "---"))
@@ -414,17 +270,17 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		b.WriteString("\n")
 
 		b.WriteString("|")
-		for c := 1; c <= maxCol; c++ {
+		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString(" ")
 			b.WriteString(formatSeparator(colAlign[c], colWidths[c]))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
 
-		for r := 2; r <= maxRow; r++ {
+		for r := 2; r <= cg.MaxRow; r++ {
 			b.WriteString("|")
-			for c := 1; c <= maxCol; c++ {
-				cell := rows[r][c]
+			for c := 1; c <= cg.MaxCol; c++ {
+				cell := cg.Rows[r][c]
 				val := formatCell(cell, opts.Mode, &hasWarning)
 				b.WriteString(" ")
 				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
@@ -439,9 +295,9 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			b.WriteString(padCell("", rowIndexWidth, "---:"))
 			b.WriteString(" |")
 		}
-		for c := 1; c <= maxCol; c++ {
+		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString(" ")
-			b.WriteString(padCell(colNames[c], colWidths[c], "---"))
+			b.WriteString(padCell(cg.ColNames[c], colWidths[c], "---"))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
@@ -452,22 +308,22 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			b.WriteString(formatSeparator("---:", rowIndexWidth))
 			b.WriteString(" |")
 		}
-		for c := 1; c <= maxCol; c++ {
+		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString(" ")
 			b.WriteString(formatSeparator(colAlign[c], colWidths[c]))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
 
-		for r := 1; r <= maxRow; r++ {
+		for r := 1; r <= cg.MaxRow; r++ {
 			b.WriteString("|")
 			if opts.RowIndex {
 				b.WriteString(" ")
 				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---:"))
 				b.WriteString(" |")
 			}
-			for c := 1; c <= maxCol; c++ {
-				cell := rows[r][c]
+			for c := 1; c <= cg.MaxCol; c++ {
+				cell := cg.Rows[r][c]
 				val := formatCell(cell, opts.Mode, &hasWarning)
 				b.WriteString(" ")
 				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
@@ -482,160 +338,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 
 // formatCell は 1 セルの Markdown 表現を返す。
 func formatCell(cell Cell, mode MarkdownMode, hasWarning *bool) string {
-	vStr := scalarToString(cell.V)
-	hasV := cell.V != nil && vStr != ""
-	hasF := cell.F != ""
-
-	var raw string
-	switch cell.T {
-	case "f":
-		switch mode {
-		case MarkdownModeValue:
-			if hasV {
-				raw = vStr
-			} else if hasF {
-				raw = "=" + cell.F
-				*hasWarning = true
-			}
-		case MarkdownModeBoth:
-			if hasV && hasF {
-				raw = vStr + "<br />=" + cell.F
-			} else if hasF {
-				raw = "=" + cell.F
-				*hasWarning = true
-			} else if hasV {
-				raw = vStr
-			}
-		default: // MarkdownModeFormula
-			if hasF {
-				raw = "=" + cell.F
-			} else if hasV {
-				raw = vStr
-			}
-		}
-	case "d":
-		if hasV {
-			if cell.Z != "" && isTimeOnlyFormat(cell.Z) {
-				raw = formatTimeOnly(toFloat64(cell.V), cell.Z)
-			} else {
-				raw = dateCellToString(cell.V)
-			}
-		}
-	default:
-		// t = s/n/b/空 はすべて v を文字列化。
-		if hasV {
-			raw = vStr
-		} else if hasF {
-			// 型未指定だが数式がある場合
-			if mode == MarkdownModeValue || mode == MarkdownModeBoth {
-				raw = "=" + cell.F
-				*hasWarning = true
-			} else {
-				raw = "=" + cell.F
-			}
-		}
-	}
-
-	return escapeMarkdownCell(raw)
-}
-
-// scalarToString は Cell.V (interface{}) を文字列化する。
-func scalarToString(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-	switch x := v.(type) {
-	case string:
-		return x
-	case bool:
-		if x {
-			return "true"
-		}
-		return "false"
-	case float64:
-		// 整数なら小数点なしで表示。
-		if x == float64(int64(x)) {
-			return strconv.FormatInt(int64(x), 10)
-		}
-		return strconv.FormatFloat(x, 'g', -1, 64)
-	case float32:
-		return scalarToString(float64(x))
-	case int:
-		return strconv.FormatInt(int64(x), 10)
-	case int64:
-		return strconv.FormatInt(x, 10)
-	case json.Number:
-		return x.String()
-	default:
-		return fmt.Sprint(v)
-	}
-}
-
-// toFloat64 は interface{} から float64 を抽出する。失敗時は 0 を返す。
-func toFloat64(v interface{}) float64 {
-	if v == nil {
-		return 0
-	}
-	switch x := v.(type) {
-	case float64:
-		return x
-	case float32:
-		return float64(x)
-	case int:
-		return float64(x)
-	case int64:
-		return float64(x)
-	case json.Number:
-		f, err := x.Float64()
-		if err == nil {
-			return f
-		}
-		return 0
-	default:
-		if s, ok := v.(string); ok {
-			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return f
-			}
-		}
-		return 0
-	}
-}
-
-// dateCellToString は日付セルの V を文字列化する。
-// 数値（シリアル値）の場合は RFC3339、文字列の場合はそのまま返す。
-func dateCellToString(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	var serial float64
-	switch x := v.(type) {
-	case float64:
-		serial = x
-	case float32:
-		serial = float64(x)
-	case int:
-		serial = float64(x)
-	case int64:
-		serial = float64(x)
-	case json.Number:
-		if f, err := x.Float64(); err == nil {
-			serial = f
-		} else {
-			return x.String()
-		}
-	default:
-		return fmt.Sprint(v)
-	}
-	if t, err := excelize.ExcelDateToTime(serial, false); err == nil {
-		return t.UTC().Format("2006-01-02T15:04:05")
-	}
-	if serial == float64(int64(serial)) {
-		return strconv.FormatInt(int64(serial), 10)
-	}
-	return strconv.FormatFloat(serial, 'g', -1, 64)
+	return escapeMarkdownCell(CellDisplayValue(cell, mode, hasWarning))
 }
 
 // escapeMarkdownCell は Markdown テーブルセル向けのエスケープを行う。
