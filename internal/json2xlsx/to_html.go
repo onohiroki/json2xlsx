@@ -43,11 +43,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		fmt.Fprintln(os.Stderr, msg)
 	}
 	if hasWarning {
-		if opts.Mode == MarkdownModeBoth {
-			fmt.Fprintln(os.Stderr, "Warning: Missing values for some cells; showing only formulas.")
-		} else {
-			fmt.Fprintln(os.Stderr, "Warning: Missing values for some cells; showing formulas instead.")
-		}
+		fmt.Fprintln(os.Stderr, warnMissingFormulaValue(opts.Mode))
 	}
 	return nil
 }

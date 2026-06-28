@@ -266,7 +266,7 @@ func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName
 		return fmt.Errorf("write csv row: %w", err)
 	}
 	if hasWarning {
-		fmt.Fprintln(os.Stderr, "Warning: Some cells have formulas but no values; treating them as empty.")
+		fmt.Fprintln(os.Stderr, warnFormulaOnlyCSV())
 	}
 	return nil
 }
