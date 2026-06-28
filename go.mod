@@ -1,4 +1,4 @@
-module json2xlsx
+module github.com/onohiroki/json2xlsx
 
 go 1.22
 

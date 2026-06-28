@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"json2xlsx/internal/json2xlsx"
+	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
 )
 
 // Note: Japanese text in this file uses "，" and "．" as punctuation

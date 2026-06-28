@@ -46,7 +46,13 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 
 ## Installation
 
-In the initial phase, the tool is intended to be built and used locally.
+### `go install` (recommended)
+
+```bash
+go install github.com/onohiroki/json2xlsx/cmd/json2xlsx@latest
+```
+
+### Build from source
 
 ```bash
 git clone git@github.com:onohiroki/json2xlsx.git
@@ -54,15 +60,9 @@ cd json2xlsx
 go build -o json2xlsx ./cmd/json2xlsx
 ```
 
-Support for `go install` is planned in the future.
-
-```bash
-go install json2xlsx/cmd/json2xlsx@latest
-```
-
 ## Usage
 
-`json2xlsx` is a single-binary CLI that converts between XLSX and JSON. Subcommands are `to-json` (XLSX → JSON), `to-xlsx` (JSON → XLSX), `to-md` (JSON / XLSX → Markdown table), `to-html` (JSON / XLSX → HTML `<table>`), and `to-csv` (csvtk csv2json reverse). If the subcommand is omitted, it behaves as `to-xlsx` by default.
+`json2xlsx` is a single-binary CLI that converts between XLSX and JSON. Subcommands are `to-json` (XLSX → JSON), `to-xlsx` (JSON → XLSX), `to-md` (JSON / XLSX → Markdown table), `to-html` (JSON / XLSX → HTML `<table>`), and `to-csv` (JSON / XLSX → CSV). If the subcommand is omitted, it behaves as `to-xlsx` by default.
 
 ### `to-json` — XLSX → JSON
 
@@ -70,7 +70,6 @@ Read an XLSX and output JSON in a format acceptable to `json2xlsx` (cell map for
 
 ```bash
 json2xlsx to-json -i input.xlsx -o output.json
-json2xlsx to-json -i input.xlsx -o output.json --date-serial
 json2xlsx to-json -i input.xlsx -o output.json --date-display
 json2xlsx to-json -i input.xlsx -o output.json --date-rfc3339
 ```
@@ -81,7 +80,7 @@ If `-i` is omitted, standard input is used; if `-o` is omitted, standard output 
 cat input.xlsx | json2xlsx to-json > output.json
 ```
 
-Date/time cells (`t: "d"`) default to outputting Excel's internal serial value in `v`. Only with `--date-display` will the display string be used in `v`. Only with `--date-rfc3339` will the serial be reinterpreted to RFC3339 (UTC). `--date-serial` outputs the Excel serial as a number. Time-only values (`9:05`) are treated as time without a date.
+Date/time cells (`t: "d"`) default to outputting Excel's internal serial value as a number in `v`. Use `--date-display` to output the display string instead, or `--date-rfc3339` to output RFC3339 (UTC) strings. The `--date-serial` flag is a compatibility alias that behaves identically to the default. Time-only values (`9:05`) are treated as time without a date.
 
 ### `to-xlsx` — JSON → XLSX (default)
 
@@ -351,12 +350,13 @@ require (
     github.com/xuri/excelize/v2 v2.8.1
     github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
     github.com/mattn/go-runewidth v0.0.24
+    golang.org/x/text v0.14.0
 )
 ```
 
-`excelize` is a widely used OSS library for reading and writing Excel files in Go, `jsonschema` is used for JSON Schema validation, and `go-runewidth` is used to calculate text width for Markdown output.[2][1]
+`excelize` is a widely used OSS library for reading and writing Excel files in Go, `jsonschema` is used for JSON Schema validation, `go-runewidth` is used to calculate text width for Markdown output, and `golang.org/x/text` is used for locale-aware error messages.[2][1]
 
-## Proposed Go data structures
+## Go data structures
 
 ```go
 type Cell struct {
