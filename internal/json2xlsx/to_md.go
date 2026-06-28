@@ -1,7 +1,6 @@
 package json2xlsx
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -41,10 +40,8 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 	if opts.Mode == "" {
 		opts.Mode = MarkdownModeFormula
 	}
-	switch opts.Mode {
-	case MarkdownModeFormula, MarkdownModeValue, MarkdownModeBoth:
-	default:
-		return fmt.Errorf("invalid mode: %q (expected f|v|both)", opts.Mode)
+	if err := ValidateMode(opts.Mode); err != nil {
+		return err
 	}
 
 	res, err := ReadWorkbook(r, opts.DataJSON)
@@ -53,12 +50,7 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 	}
 	wb := res.Workbook
 
-	var pendingWarnings []string
-	if !res.IsXLSX && len(res.RawData) > 0 && bytes.TrimSpace(res.RawData)[0] == '[' {
-		if opts.ExplicitMode && (opts.Mode == MarkdownModeFormula || opts.Mode == MarkdownModeBoth) {
-			pendingWarnings = append(pendingWarnings, fmt.Sprintf("Warning: --mode=%s is ignored for JSON array input (formulas not supported in this format).", opts.Mode))
-		}
-	}
+	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
 
 	out, hasWarning := renderMarkdown(*wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
@@ -349,8 +341,7 @@ func escapeMarkdownCell(s string) string {
 	// バックスラッシュを先に処理。
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, "|", `\|`)
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\r", "\n")
+	s = normalizeNewlines(s)
 	s = strings.ReplaceAll(s, "\n", "<br />")
 	return s
 }

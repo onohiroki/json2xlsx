@@ -223,10 +223,8 @@ func runToMD(args []string) {
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	_ = fs.Parse(args)
 
-	switch json2xlsx.MarkdownMode(mode) {
-	case json2xlsx.MarkdownModeFormula, json2xlsx.MarkdownModeValue, json2xlsx.MarkdownModeBoth:
-	default:
-		fmt.Fprintf(os.Stderr, "to-md: invalid -mode %q (expected f|v|both)\n", mode)
+	if err := json2xlsx.ValidateMode(json2xlsx.MarkdownMode(mode)); err != nil {
+		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
 		os.Exit(2)
 	}
 
@@ -276,10 +274,8 @@ func runToHTML(args []string) {
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	_ = fs.Parse(args)
 
-	switch json2xlsx.MarkdownMode(mode) {
-	case json2xlsx.MarkdownModeFormula, json2xlsx.MarkdownModeValue, json2xlsx.MarkdownModeBoth:
-	default:
-		fmt.Fprintf(os.Stderr, "to-html: invalid --mode %q (expected f|v|both)\n", mode)
+	if err := json2xlsx.ValidateMode(json2xlsx.MarkdownMode(mode)); err != nil {
+		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
 		os.Exit(2)
 	}
 

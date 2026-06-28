@@ -1,7 +1,6 @@
 package json2xlsx
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -24,10 +23,8 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 	if opts.Mode == "" {
 		opts.Mode = MarkdownModeValue
 	}
-	switch opts.Mode {
-	case MarkdownModeFormula, MarkdownModeValue, MarkdownModeBoth:
-	default:
-		return fmt.Errorf("invalid mode: %q (expected f|v|both)", opts.Mode)
+	if err := ValidateMode(opts.Mode); err != nil {
+		return err
 	}
 
 	res, err := ReadWorkbook(r, opts.DataJSON)
@@ -36,12 +33,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 	}
 	wb := res.Workbook
 
-	var pendingWarnings []string
-	if !res.IsXLSX && len(res.RawData) > 0 && bytes.TrimSpace(res.RawData)[0] == '[' {
-		if opts.ExplicitMode && (opts.Mode == MarkdownModeFormula || opts.Mode == MarkdownModeBoth) {
-			pendingWarnings = append(pendingWarnings, fmt.Sprintf("Warning: --mode=%s is ignored for JSON array input (formulas not supported in this format).", opts.Mode))
-		}
-	}
+	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
 
 	out, hasWarning := renderHTML(*wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
@@ -347,8 +339,7 @@ func formatCellHTML(cell Cell, hasWarning *bool) string {
 	raw = strings.ReplaceAll(raw, "&", "&amp;")
 	raw = strings.ReplaceAll(raw, "<", "&lt;")
 	raw = strings.ReplaceAll(raw, ">", "&gt;")
-	raw = strings.ReplaceAll(raw, "\r\n", "\n")
-	raw = strings.ReplaceAll(raw, "\r", "\n")
+	raw = normalizeNewlines(raw)
 	raw = strings.ReplaceAll(raw, "\n", "<br />")
 	return raw
 }
@@ -361,8 +352,7 @@ func formatCellHTMLMode(cell Cell, mode MarkdownMode, hasWarning *bool) string {
 	raw = strings.ReplaceAll(raw, "<", "&lt;")
 	raw = strings.ReplaceAll(raw, ">", "&gt;")
 	raw = strings.ReplaceAll(raw, "\x00", "<br />")
-	raw = strings.ReplaceAll(raw, "\r\n", "\n")
-	raw = strings.ReplaceAll(raw, "\r", "\n")
+	raw = normalizeNewlines(raw)
 	raw = strings.ReplaceAll(raw, "\n", "<br />")
 	return raw
 }

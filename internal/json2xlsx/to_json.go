@@ -343,8 +343,4 @@ func parseScalar(s string) interface{} {
 	return s
 }
 
-func normalizeNewlines(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\r", "\n")
-	return s
-}
+

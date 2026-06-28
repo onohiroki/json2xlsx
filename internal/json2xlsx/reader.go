@@ -51,9 +51,7 @@ func ReadWorkbook(r io.Reader, dataJSON bool) (*ReadWorkbookResult, error) {
 		return nil, fmt.Errorf("read input: %w", err)
 	}
 	// UTF-8 BOM を除去
-	if len(data) >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF {
-		data = data[3:]
-	}
+	data = trimBOM(data)
 	wb, err := UnmarshalWorkbook(data, dataJSON)
 	if err != nil {
 		return nil, err

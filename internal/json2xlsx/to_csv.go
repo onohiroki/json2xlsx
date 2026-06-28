@@ -208,9 +208,7 @@ func normalizeCSVInput(data []byte) (isWorkbook bool, trimmed []byte, err error)
 		return false, nil, errors.New("empty input")
 	}
 
-	if len(trimmed) >= 3 && trimmed[0] == 0xEF && trimmed[1] == 0xBB && trimmed[2] == 0xBF {
-		trimmed = bytes.TrimLeft(trimmed[3:], " \t\r\n")
-	}
+	trimmed = bytes.TrimLeft(trimBOM(trimmed), " \t\r\n")
 	if len(trimmed) == 0 {
 		return false, nil, errors.New("empty input")
 	}

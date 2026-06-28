@@ -17,3 +17,5 @@ scripts/
 samples/*.txt
 samples/*xlsx
 samples/*_test.json
+coverage.html
+coverage.out
