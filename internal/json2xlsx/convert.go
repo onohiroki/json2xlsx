@@ -284,39 +284,61 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 
 	sheets, styles := flattenWorkbook(wb)
 
-	// シートがなくてもチャートがあれば許容
-	if len(sheets) == 0 {
-		hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
-		if !hasCharts {
-			return fmt.Errorf("no sheets found in JSON input: expected a \"sheets\" array, \"cells\" object, or a \"book\" wrapper with \"sheets\"")
-		}
-	} else {
-		hasData := false
-		for _, sh := range sheets {
-			if len(sh.Cells) > 0 || len(sh.Rows) > 0 {
-				hasData = true
-				break
-			}
-		}
-		if !hasData {
-			hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
-			if !hasCharts {
-				return fmt.Errorf("no valid cell data found in JSON input: each sheet must contain a \"cells\" object (e.g. \"A1\": {...}) or a \"rows\" array")
-			}
-		}
+	if err := validateWorkbook(sheets, wb); err != nil {
+		return err
 	}
 
-	// スタイル ID -> excelize スタイル ID マッピング
 	styleMap, err := buildStyles(f, styles)
 	if err != nil {
 		return fmt.Errorf("build styles: %w", err)
 	}
 
-	// 既定シート名 ("Sheet1") を最初のシートに割り当て
+	var warnings int
+	if err := createSheets(f, sheets, styleMap, styles, &warnings); err != nil {
+		return err
+	}
+
+	if err := addChartsToFile(f, wb); err != nil {
+		return err
+	}
+
+	if err := f.Write(out); err != nil {
+		return fmt.Errorf("write xlsx: %w", err)
+	}
+
+	if warnings > 0 {
+		return fmt.Errorf("conversion completed with %d warning(s)", warnings)
+	}
+	return nil
+}
+
+func validateWorkbook(sheets []Sheet, wb *Workbook) error {
+	if len(sheets) == 0 {
+		hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
+		if !hasCharts {
+			return fmt.Errorf("no sheets found in JSON input: expected a \"sheets\" array, \"cells\" object, or a \"book\" wrapper with \"sheets\"")
+		}
+		return nil
+	}
+	hasData := false
+	for _, sh := range sheets {
+		if len(sh.Cells) > 0 || len(sh.Rows) > 0 {
+			hasData = true
+			break
+		}
+	}
+	if !hasData {
+		hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
+		if !hasCharts {
+			return fmt.Errorf("no valid cell data found in JSON input: each sheet must contain a \"cells\" object (e.g. \"A1\": {...}) or a \"rows\" array")
+		}
+	}
+	return nil
+}
+
+func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *int) error {
 	defaultName := f.GetSheetName(0)
 	firstAssigned := false
-
-	var warnings int
 
 	for i, sh := range sheets {
 		name := sh.Name
@@ -337,110 +359,102 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 			}
 		}
 
-		if err := writeSheet(f, name, sh, styleMap, styles, &warnings); err != nil {
+		if err := writeSheet(f, name, sh, styleMap, styles, warnings); err != nil {
 			return fmt.Errorf("write sheet %q: %w", name, err)
 		}
 	}
+	return nil
+}
 
-	// チャート変換 (book ラッパー形式のみ)
-	if wb.Book != nil {
-		// すべての系列名のうち、リテラル文字列（!を含まない）を補助シートのセルに書き込み、
-		// セル参照に置き換える。これにより excelize が有効な strRef を出力する。
-		helperSheet := "_xlsxchart_helper"
-		helperRow := 1
-		helperCreated := false
-		for _, ch := range wb.Book.Charts {
-			for i := range ch.Ser {
-				name := ch.Ser[i].Name
-				if name != "" && !strings.Contains(name, "!") {
-					if !helperCreated {
-						if _, err := f.NewSheet(helperSheet); err != nil {
-							return fmt.Errorf("create helper sheet: %w", err)
-						}
-						if err := f.SetSheetVisible(helperSheet, false); err != nil {
-							return fmt.Errorf("hide helper sheet: %w", err)
-						}
-						helperCreated = true
+func addChartsToFile(f *excelize.File, wb *Workbook) error {
+	if wb.Book == nil {
+		return nil
+	}
+
+	helperSheet := "_xlsxchart_helper"
+	helperRow := 1
+	helperCreated := false
+	for _, ch := range wb.Book.Charts {
+		for i := range ch.Ser {
+			name := ch.Ser[i].Name
+			if name != "" && !strings.Contains(name, "!") {
+				if !helperCreated {
+					if _, err := f.NewSheet(helperSheet); err != nil {
+						return fmt.Errorf("create helper sheet: %w", err)
 					}
-					cell, _ := excelize.CoordinatesToCellName(1, helperRow)
-					if err := f.SetCellValue(helperSheet, cell, name); err != nil {
-						return fmt.Errorf("write series name to helper sheet: %w", err)
+					if err := f.SetSheetVisible(helperSheet, false); err != nil {
+						return fmt.Errorf("hide helper sheet: %w", err)
 					}
-					ch.Ser[i].Name = fmt.Sprintf("'%s'!%s", helperSheet, cell)
-					helperRow++
+					helperCreated = true
 				}
-			}
-		}
-		for _, ch := range wb.Book.Charts {
-			ct, err := chartTypeFromString(ch.Ct)
-			if err != nil {
-				return fmt.Errorf("chart %q: %w", ch.ID, err)
-			}
-			ec := excelize.Chart{
-				Type:   ct,
-				Series: toExcelizeSeriesList(ch.Ser),
-			}
-			if ch.Title != nil && ch.Title.Tx != "" {
-				ec.Title = []excelize.RichTextRun{{Text: ch.Title.Tx}}
-			}
-			if ch.Legend != nil {
-				ec.Legend = excelize.ChartLegend{
-					Position: ch.Legend.Pos,
+				cell, _ := excelize.CoordinatesToCellName(1, helperRow)
+				if err := f.SetCellValue(helperSheet, cell, name); err != nil {
+					return fmt.Errorf("write series name to helper sheet: %w", err)
 				}
-			}
-			if ch.XAxis != nil {
-				ec.XAxis = toExcelizeAxis(*ch.XAxis)
-			}
-			if ch.YAxis != nil {
-				ec.YAxis = toExcelizeAxis(*ch.YAxis)
-			}
-			if ch.Dim != nil {
-				ec.Dimension = excelize.ChartDimension{
-					Width:  uint(ch.Dim.W),
-					Height: uint(ch.Dim.H),
-				}
-			}
-			if ch.Plot != nil {
-				ec.VaryColors = &ch.Plot.VaryColors
-				ec.ShowBlanksAs = ch.Plot.ShowBlanksAs
-			}
-			// 各系列の dLbls（最初の系列）→ PlotArea
-			for _, s := range ch.Ser {
-				if s.DLbls != nil {
-					ec.PlotArea = excelize.ChartPlotArea{
-						ShowVal:         s.DLbls.ShowVal,
-						ShowCatName:     s.DLbls.ShowCatName,
-						ShowSerName:     s.DLbls.ShowSerName,
-						ShowPercent:     s.DLbls.ShowPercent,
-						ShowLeaderLines: s.DLbls.ShowLeaderLn,
-					}
-					break
-				}
-			}
-			switch ch.Mode {
-			case "", "embedded":
-				ec.Format = chartGraphicOptions(ch.Dim)
-				if err := f.AddChart(ch.Sheet, ch.Anchor, &ec); err != nil {
-					return fmt.Errorf("chart %q: add chart: %w", ch.ID, err)
-				}
-			case "chartSheet":
-				// AddChartSheet は anchor/offset を受け付けず、シート名のみ
-				if err := f.AddChartSheet(ch.Sheet, &ec); err != nil {
-					return fmt.Errorf("chart %q: add chart sheet: %w", ch.ID, err)
-				}
-			default:
-				return fmt.Errorf("chart %q: unknown mode %q", ch.ID, ch.Mode)
+				ch.Ser[i].Name = fmt.Sprintf("'%s'!%s", helperSheet, cell)
+				helperRow++
 			}
 		}
 	}
 
-	// 警告があっても XLSX 出力は常に行う
-	if err := f.Write(out); err != nil {
-		return fmt.Errorf("write xlsx: %w", err)
-	}
-
-	if warnings > 0 {
-		return fmt.Errorf("conversion completed with %d warning(s)", warnings)
+	for _, ch := range wb.Book.Charts {
+		ct, err := chartTypeFromString(ch.Ct)
+		if err != nil {
+			return fmt.Errorf("chart %q: %w", ch.ID, err)
+		}
+		ec := excelize.Chart{
+			Type:   ct,
+			Series: toExcelizeSeriesList(ch.Ser),
+		}
+		if ch.Title != nil && ch.Title.Tx != "" {
+			ec.Title = []excelize.RichTextRun{{Text: ch.Title.Tx}}
+		}
+		if ch.Legend != nil {
+			ec.Legend = excelize.ChartLegend{
+				Position: ch.Legend.Pos,
+			}
+		}
+		if ch.XAxis != nil {
+			ec.XAxis = toExcelizeAxis(*ch.XAxis)
+		}
+		if ch.YAxis != nil {
+			ec.YAxis = toExcelizeAxis(*ch.YAxis)
+		}
+		if ch.Dim != nil {
+			ec.Dimension = excelize.ChartDimension{
+				Width:  uint(ch.Dim.W),
+				Height: uint(ch.Dim.H),
+			}
+		}
+		if ch.Plot != nil {
+			ec.VaryColors = &ch.Plot.VaryColors
+			ec.ShowBlanksAs = ch.Plot.ShowBlanksAs
+		}
+		for _, s := range ch.Ser {
+			if s.DLbls != nil {
+				ec.PlotArea = excelize.ChartPlotArea{
+					ShowVal:         s.DLbls.ShowVal,
+					ShowCatName:     s.DLbls.ShowCatName,
+					ShowSerName:     s.DLbls.ShowSerName,
+					ShowPercent:     s.DLbls.ShowPercent,
+					ShowLeaderLines: s.DLbls.ShowLeaderLn,
+				}
+				break
+			}
+		}
+		switch ch.Mode {
+		case "", "embedded":
+			ec.Format = chartGraphicOptions(ch.Dim)
+			if err := f.AddChart(ch.Sheet, ch.Anchor, &ec); err != nil {
+				return fmt.Errorf("chart %q: add chart: %w", ch.ID, err)
+			}
+		case "chartSheet":
+			if err := f.AddChartSheet(ch.Sheet, &ec); err != nil {
+				return fmt.Errorf("chart %q: add chart sheet: %w", ch.ID, err)
+			}
+		default:
+			return fmt.Errorf("chart %q: unknown mode %q", ch.ID, ch.Mode)
+		}
 	}
 	return nil
 }
