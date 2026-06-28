@@ -583,25 +583,29 @@ func TestNormalizeDateCells_NoChangeWhenAlreadyDate(t *testing.T) {
 
 func TestNormalizeDateCells_NoChangeWhenFormula(t *testing.T) {
 	wb := &Workbook{
-		Cells: map[string]Cell{
-			"A1": {T: "f", F: "TODAY()", Z: "yyyy-mm-dd"}, // t=f はスキップ
-		},
+		Sheets: []Sheet{{
+			Cells: map[string]Cell{
+				"A1": {T: "f", F: "TODAY()", Z: "yyyy-mm-dd"}, // t=f はスキップ
+			},
+		}},
 	}
 	normalizeDateCells(wb)
-	if wb.Cells["A1"].T != "f" {
-		t.Errorf("A1.T = %q, want f (formula should not change)", wb.Cells["A1"].T)
+	if wb.Sheets[0].Cells["A1"].T != "f" {
+		t.Errorf("A1.T = %q, want f (formula should not change)", wb.Sheets[0].Cells["A1"].T)
 	}
 }
 
 func TestNormalizeDateCells_NoChangeWhenNoFormat(t *testing.T) {
 	wb := &Workbook{
-		Cells: map[string]Cell{
-			"A1": {T: "n", V: float64(42)}, // z なし
-		},
+		Sheets: []Sheet{{
+			Cells: map[string]Cell{
+				"A1": {T: "n", V: float64(42)}, // z なし
+			},
+		}},
 	}
 	normalizeDateCells(wb)
-	if wb.Cells["A1"].T != "n" {
-		t.Errorf("A1.T = %q, want n (no format code)", wb.Cells["A1"].T)
+	if wb.Sheets[0].Cells["A1"].T != "n" {
+		t.Errorf("A1.T = %q, want n (no format code)", wb.Sheets[0].Cells["A1"].T)
 	}
 }
 

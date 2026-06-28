@@ -242,22 +242,26 @@ func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex
 }
 
 func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName string, sheetIndex int) error {
-	cells, err := resolveSheetCells(wb, sheetName, sheetIndex)
+	sh, err := resolveSheet(wb, sheetName, sheetIndex)
 	if err != nil {
 		return err
 	}
-	if len(cells) == 0 && data != nil {
-		cells = guessCellMapFromData(data)
+	if len(sh.Cells) == 0 && data != nil {
+		if cells := guessCellMapFromData(data); len(cells) > 0 {
+			sh.Cells = cells
+		}
 	}
-	if len(cells) == 0 {
+	if len(sh.Cells) == 0 {
 		return errors.New("empty input: no cells found")
 	}
 
-	grid, hasWarning := cellMapToGrid(cells)
-	if len(grid) == 0 {
+	cg, ok := BuildCellGrid(sh)
+	if !ok {
 		return errors.New("empty input: no valid cells found")
 	}
 
+	var hasWarning bool
+	grid := cellGridToCSVRows(cg, &hasWarning)
 	if err := writeCSVRecords(w, grid); err != nil {
 		return fmt.Errorf("write csv row: %w", err)
 	}
@@ -278,28 +282,28 @@ func writeCSVRecords(w io.Writer, records [][]string) error {
 	return csvw.Error()
 }
 
-func resolveSheetCells(wb Workbook, sheetName string, sheetIndex int) (map[string]Cell, error) {
+func resolveSheet(wb Workbook, sheetName string, sheetIndex int) (Sheet, error) {
 	switch {
 	case sheetName != "":
 		for _, s := range wb.Sheets {
 			if s.Name == sheetName {
-				return s.Cells, nil
+				return s, nil
 			}
 		}
-		return nil, fmt.Errorf("sheet %q not found", sheetName)
+		return Sheet{}, fmt.Errorf("sheet %q not found", sheetName)
 
 	case sheetIndex > 0:
 		idx := sheetIndex - 1
 		if idx < len(wb.Sheets) {
-			return wb.Sheets[idx].Cells, nil
+			return wb.Sheets[idx], nil
 		}
-		return nil, fmt.Errorf("sheet index %d not found", sheetIndex)
+		return Sheet{}, fmt.Errorf("sheet index %d not found", sheetIndex)
 
 	case len(wb.Sheets) > 0:
-		return wb.Sheets[0].Cells, nil
+		return wb.Sheets[0], nil
 
 	default:
-		return nil, nil
+		return Sheet{}, nil
 	}
 }
 
@@ -329,44 +333,7 @@ func guessCellMapFromData(data []byte) map[string]Cell {
 	return nil
 }
 
-func cellMapToGrid(cells map[string]Cell) ([][]string, bool) {
-	type cellInfo struct {
-		r, c int
-		val  string
-	}
-	var cellList []cellInfo
-	maxR, maxC := 0, 0
-	var hasWarning bool
 
-	for addr, cell := range cells {
-		col, row, err := excelize.CellNameToCoordinates(addr)
-		if err != nil {
-			continue
-		}
-		val := ""
-		if cell.V != nil {
-			val = fmt.Sprint(cell.V)
-		} else if cell.F != "" {
-			hasWarning = true
-		}
-		cellList = append(cellList, cellInfo{row, col, val})
-		maxR = max(maxR, row)
-		maxC = max(maxC, col)
-	}
-
-	if len(cellList) == 0 {
-		return nil, hasWarning
-	}
-
-	grid := make([][]string, maxR)
-	for i := range maxR {
-		grid[i] = make([]string, maxC)
-	}
-	for _, ci := range cellList {
-		grid[ci.r-1][ci.c-1] = ci.val
-	}
-	return grid, hasWarning
-}
 
 func normalizeCSVValue(key string, raw interface{}) (*string, error) {
 	switch v := raw.(type) {
