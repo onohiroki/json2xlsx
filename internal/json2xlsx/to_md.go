@@ -241,24 +241,7 @@ func formatSeparator(align string, width int) string {
 
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
 func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
-	var sheets []Sheet
-	if wb.Book != nil {
-		for name, sh := range wb.Book.Sheets {
-			sh.Name = name
-			sheets = append(sheets, sh)
-		}
-	} else if len(wb.Sheets) > 0 {
-		sheets = wb.Sheets
-	} else if wb.Cells != nil || wb.Rows != nil || wb.Name != "" || wb.Merges != nil {
-		sheets = []Sheet{{
-			Name:    wb.Name,
-			Cells:   wb.Cells,
-			Rows:    wb.Rows,
-			Cols:    wb.Cols,
-			RowDims: wb.RowDims,
-			Merges:  wb.Merges,
-		}}
-	}
+	sheets, _ := flattenWorkbook(&wb)
 
 	var b strings.Builder
 	var hasWarning bool

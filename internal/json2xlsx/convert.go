@@ -282,33 +282,7 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// シート一覧を組み立てる (book ラッパー → 配列形式 → 単一シート の優先順)
-	var sheets []Sheet
-	styles := wb.Styles
-
-	if wb.Book != nil {
-		// book ラッパー形式: map を配列に展開
-		for name, sh := range wb.Book.Sheets {
-			sh.Name = name
-			sheets = append(sheets, sh)
-		}
-		if len(wb.Book.Styles) > 0 {
-			styles = wb.Book.Styles
-		}
-		// book.Charts は後で処理
-	} else if len(wb.Sheets) > 0 {
-		sheets = wb.Sheets
-	} else {
-		// 単一シート形式
-		sheets = []Sheet{{
-			Name:    wb.Name,
-			Cells:   wb.Cells,
-			Rows:    wb.Rows,
-			Cols:    wb.Cols,
-			RowDims: wb.RowDims,
-			Merges:  wb.Merges,
-		}}
-	}
+	sheets, styles := flattenWorkbook(wb)
 
 	// シートがなくてもチャートがあれば許容
 	if len(sheets) == 0 {
