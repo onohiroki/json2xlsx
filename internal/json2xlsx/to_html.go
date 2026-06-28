@@ -1,7 +1,6 @@
 package json2xlsx
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -31,44 +30,17 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		return fmt.Errorf("invalid mode: %q (expected f|v|both)", opts.Mode)
 	}
 
-	br := bufio.NewReader(r)
-	head, err := br.Peek(4)
+	res, err := ReadWorkbook(r, opts.DataJSON)
 	if err != nil {
-		return fmt.Errorf("read input: %w", err)
+		return err
 	}
+	wb := res.Workbook
 
-	var wb *Workbook
 	var pendingWarnings []string
-	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
-		data, err := io.ReadAll(br)
-		if err != nil {
-			return fmt.Errorf("read input: %w", err)
+	if !res.IsXLSX && len(res.RawData) > 0 && bytes.TrimSpace(res.RawData)[0] == '[' {
+		if opts.ExplicitMode && (opts.Mode == MarkdownModeFormula || opts.Mode == MarkdownModeBoth) {
+			pendingWarnings = append(pendingWarnings, fmt.Sprintf("Warning: --mode=%s is ignored for JSON array input (formulas not supported in this format).", opts.Mode))
 		}
-		f, err := excelize.OpenReader(bytes.NewReader(data))
-		if err != nil {
-			return fmt.Errorf("open xlsx: %w", err)
-		}
-		defer f.Close()
-		tmp, err := extractWorkbookWithOptions(f, ToJSONOptions{DateMode: DateModeDisplay})
-		if err != nil {
-			return err
-		}
-		wb = &tmp
-	} else {
-		data, err := io.ReadAll(br)
-		if err != nil {
-			return fmt.Errorf("read input: %w", err)
-		}
-		wb, err = UnmarshalWorkbook(data, opts.DataJSON)
-		if err != nil {
-			return err
-		}
-		if len(data) > 0 && bytes.TrimSpace(data)[0] == '[' {
-			if opts.ExplicitMode && (opts.Mode == MarkdownModeFormula || opts.Mode == MarkdownModeBoth) {
-				pendingWarnings = append(pendingWarnings, fmt.Sprintf("Warning: --mode=%s is ignored for JSON array input (formulas not supported in this format).", opts.Mode))
-			}
-		}
-		normalizeDateCells(wb)
 	}
 
 	out, hasWarning := renderHTML(*wb, opts)
