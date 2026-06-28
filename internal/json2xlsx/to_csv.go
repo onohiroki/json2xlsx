@@ -26,20 +26,11 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 	}
 
 	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
-		data, err := io.ReadAll(br)
-		if err != nil {
-			return fmt.Errorf("read input: %w", err)
-		}
-		f, err := excelize.OpenReader(bytes.NewReader(data))
-		if err != nil {
-			return fmt.Errorf("open xlsx: %w", err)
-		}
-		defer f.Close()
-		wb, err := extractWorkbookWithOptions(f, ToJSONOptions{DateMode: DateModeDisplay})
+		res, err := ReadWorkbook(br, dataJSON)
 		if err != nil {
 			return err
 		}
-		return convertWorkbookObjectToCSV(wb, w, nil, sheetName, sheetIndex)
+		return convertWorkbookObjectToCSV(*res.Workbook, w, nil, sheetName, sheetIndex)
 	}
 
 	data, err := io.ReadAll(br)
@@ -51,7 +42,7 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 		return convertDataJSONToCSV(data, w)
 	}
 
-	isWorkbook, trimmed, err := normalizeCSVInput(data)
+	isWorkbook, trimmed, err := detectCSVInputFormat(data)
 	if err != nil {
 		return err
 	}
@@ -60,7 +51,11 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 		return convertWorkbookToCSV(trimmed, w, sheetName, sheetIndex)
 	}
 
-	dec := json.NewDecoder(bytes.NewReader(trimmed))
+	return convertArrayOfObjectsToCSV(trimmed, w)
+}
+
+func convertArrayOfObjectsToCSV(data []byte, w io.Writer) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 
 	t, err := dec.Token()
@@ -202,13 +197,13 @@ func convertDataJSONToCSV(data []byte, w io.Writer) error {
 	return csvw.Error()
 }
 
-func normalizeCSVInput(data []byte) (isWorkbook bool, trimmed []byte, err error) {
+func detectCSVInputFormat(data []byte) (isWorkbook bool, trimmed []byte, err error) {
 	trimmed = bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) == 0 {
 		return false, nil, errors.New("empty input")
 	}
-
-	trimmed = bytes.TrimLeft(trimBOM(trimmed), " \t\r\n")
+	trimmed = trimBOM(trimmed)
+	trimmed = bytes.TrimLeft(trimmed, " \t\r\n")
 	if len(trimmed) == 0 {
 		return false, nil, errors.New("empty input")
 	}
@@ -238,100 +233,119 @@ func normalizeCSVInput(data []byte) (isWorkbook bool, trimmed []byte, err error)
 }
 
 func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int) error {
-	var m map[string]interface{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return fmt.Errorf("parse json: %w", err)
-	}
 	var wb Workbook
-	json.Unmarshal(data, &wb)
-
+	if err := json.Unmarshal(data, &wb); err != nil {
+		return fmt.Errorf("parse workbook json: %w", err)
+	}
 	return convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex)
 }
 
 func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName string, sheetIndex int) error {
-	var cells map[string]Cell
-	if sheetName != "" {
-		if wb.Book != nil && wb.Book.Sheets[sheetName].Cells != nil {
-			cells = wb.Book.Sheets[sheetName].Cells
-		} else {
-			for _, s := range wb.Sheets {
-				if s.Name == sheetName {
-					cells = s.Cells
-					break
-				}
-			}
-		}
-		if cells == nil {
-			return fmt.Errorf("sheet %q not found", sheetName)
-		}
-	} else if sheetIndex > 0 {
-		idx := sheetIndex - 1
-		if wb.Book != nil {
-			// map is random, so we need some stable order or just use wb.Sheets if available
-			// For Workbook JSON with Book.Sheets, index is less meaningful than Sheet list
-			// But if we have it, let's try to find it.
-			// Actually, excelize.Workbook usually has a list of sheets in order.
-			// In our internal Workbook struct:
-			// type Workbook struct {
-			//    Sheets []Sheet
-			//    Book *struct { Sheets map[string]Sheet ... }
-			// }
-			if idx < len(wb.Sheets) {
-				cells = wb.Sheets[idx].Cells
-			} else if wb.Book != nil {
-				// Fallback for Book.Sheets map: not ideal for indexing but we'll try something
-				// Better would be to have a sorted list of names or use the order in the XLSX
-				return fmt.Errorf("sheet index %d out of range (use --sheet for map-based sheets)", sheetIndex)
-			}
-		} else if idx < len(wb.Sheets) {
-			cells = wb.Sheets[idx].Cells
-		}
-
-		if cells == nil {
-			return fmt.Errorf("sheet index %d not found", sheetIndex)
-		}
-	} else if wb.Cells != nil {
-		cells = wb.Cells
-	} else if len(wb.Sheets) > 0 {
-		cells = wb.Sheets[0].Cells
-	} else if wb.Book != nil && len(wb.Book.Sheets) > 0 {
-		// Sort keys to get a deterministic first sheet if possible, but map is random.
-		// For now, take the first one found.
-		for _, s := range wb.Book.Sheets {
-			cells = s.Cells
-			break
-		}
+	cells, err := resolveSheetCells(wb, sheetName, sheetIndex)
+	if err != nil {
+		return err
 	}
-
 	if len(cells) == 0 && data != nil {
-		// Try to find any sheet-like object if it's a simple map of sheet names to cells
-		var m map[string]interface{}
-		json.Unmarshal(data, &m) // We need m for this fallback
-
-		for _, v := range m {
-			if sheet, ok := v.(map[string]interface{}); ok {
-				// Check if it looks like a cells map (keys are cell addresses)
-				isCells := true
-				for k := range sheet {
-					if _, _, err := excelize.CellNameToCoordinates(k); err != nil {
-						isCells = false
-						break
-					}
-				}
-				if isCells && len(sheet) > 0 {
-					// Re-unmarshal this part as cells
-					cellData, _ := json.Marshal(sheet)
-					json.Unmarshal(cellData, &cells)
-					break
-				}
-			}
-		}
+		cells = guessCellMapFromData(data)
 	}
-
 	if len(cells) == 0 {
 		return errors.New("empty input: no cells found")
 	}
 
+	grid, hasWarning := cellMapToGrid(cells)
+	if len(grid) == 0 {
+		return errors.New("empty input: no valid cells found")
+	}
+
+	if err := writeCSVRecords(w, grid); err != nil {
+		return fmt.Errorf("write csv row: %w", err)
+	}
+	if hasWarning {
+		fmt.Fprintln(os.Stderr, "Warning: Some cells have formulas but no values; treating them as empty.")
+	}
+	return nil
+}
+
+func writeCSVRecords(w io.Writer, records [][]string) error {
+	csvw := csv.NewWriter(w)
+	for _, record := range records {
+		if err := csvw.Write(record); err != nil {
+			return err
+		}
+	}
+	csvw.Flush()
+	return csvw.Error()
+}
+
+func resolveSheetCells(wb Workbook, sheetName string, sheetIndex int) (map[string]Cell, error) {
+	switch {
+	case sheetName != "":
+		if wb.Book != nil {
+			if c := wb.Book.Sheets[sheetName].Cells; c != nil {
+				return c, nil
+			}
+		}
+		for _, s := range wb.Sheets {
+			if s.Name == sheetName {
+				return s.Cells, nil
+			}
+		}
+		return nil, fmt.Errorf("sheet %q not found", sheetName)
+
+	case sheetIndex > 0:
+		idx := sheetIndex - 1
+		if idx < len(wb.Sheets) {
+			return wb.Sheets[idx].Cells, nil
+		}
+		if wb.Book != nil {
+			return nil, fmt.Errorf("sheet index %d out of range (use --sheet for map-based sheets)", sheetIndex)
+		}
+		return nil, fmt.Errorf("sheet index %d not found", sheetIndex)
+
+	case wb.Cells != nil:
+		return wb.Cells, nil
+
+	case len(wb.Sheets) > 0:
+		return wb.Sheets[0].Cells, nil
+
+	case wb.Book != nil && len(wb.Book.Sheets) > 0:
+		for _, s := range wb.Book.Sheets {
+			return s.Cells, nil
+		}
+		return nil, nil
+
+	default:
+		return nil, nil
+	}
+}
+
+func guessCellMapFromData(data []byte) map[string]Cell {
+	var m map[string]interface{}
+	json.Unmarshal(data, &m)
+
+	for _, v := range m {
+		sheet, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		isCells := true
+		for k := range sheet {
+			if _, _, err := excelize.CellNameToCoordinates(k); err != nil {
+				isCells = false
+				break
+			}
+		}
+		if isCells && len(sheet) > 0 {
+			cellData, _ := json.Marshal(sheet)
+			var cells map[string]Cell
+			json.Unmarshal(cellData, &cells)
+			return cells
+		}
+	}
+	return nil
+}
+
+func cellMapToGrid(cells map[string]Cell) ([][]string, bool) {
 	type cellInfo struct {
 		r, c int
 		val  string
@@ -351,37 +365,23 @@ func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName
 		} else if cell.F != "" {
 			hasWarning = true
 		}
-
 		cellList = append(cellList, cellInfo{row, col, val})
 		maxR = max(maxR, row)
 		maxC = max(maxC, col)
 	}
 
 	if len(cellList) == 0 {
-		return errors.New("empty input: no valid cells found")
+		return nil, hasWarning
 	}
 
-	// 1-based to 0-based for matrix, but maxR/maxC are 1-based sizes
 	grid := make([][]string, maxR)
 	for i := range maxR {
 		grid[i] = make([]string, maxC)
 	}
-
 	for _, ci := range cellList {
 		grid[ci.r-1][ci.c-1] = ci.val
 	}
-
-	csvw := csv.NewWriter(w)
-	for _, row := range grid {
-		if err := csvw.Write(row); err != nil {
-			return fmt.Errorf("write csv row: %w", err)
-		}
-	}
-	csvw.Flush()
-	if hasWarning {
-		fmt.Fprintln(os.Stderr, "Warning: Some cells have formulas but no values; treating them as empty.")
-	}
-	return csvw.Error()
+	return grid, hasWarning
 }
 
 func normalizeCSVValue(key string, raw interface{}) (*string, error) {

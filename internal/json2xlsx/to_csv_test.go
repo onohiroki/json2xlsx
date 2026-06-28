@@ -302,6 +302,251 @@ func TestToCSV_BOM(t *testing.T) {
 	}
 }
 
+func TestResolveSheetCells(t *testing.T) {
+	t.Run("single sheet with Cells", func(t *testing.T) {
+		wb := Workbook{Cells: map[string]Cell{"A1": {V: "x"}}}
+		cells, err := resolveSheetCells(wb, "", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells["A1"].V != "x" {
+			t.Errorf("expected A1=x, got %v", cells["A1"].V)
+		}
+	})
+
+	t.Run("Sheets array first", func(t *testing.T) {
+		wb := Workbook{Sheets: []Sheet{
+			{Name: "S1", Cells: map[string]Cell{"A1": {V: "s1"}}},
+			{Name: "S2", Cells: map[string]Cell{"A1": {V: "s2"}}},
+		}}
+		cells, err := resolveSheetCells(wb, "", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells["A1"].V != "s1" {
+			t.Errorf("expected s1, got %v", cells["A1"].V)
+		}
+	})
+
+	t.Run("sheet name from Sheets array", func(t *testing.T) {
+		wb := Workbook{Sheets: []Sheet{
+			{Name: "Sheet1", Cells: map[string]Cell{"B2": {V: "found"}}},
+		}}
+		cells, err := resolveSheetCells(wb, "Sheet1", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells["B2"].V != "found" {
+			t.Errorf("expected found, got %v", cells["B2"].V)
+		}
+	})
+
+	t.Run("sheet name from Book.Sheets", func(t *testing.T) {
+		wb := Workbook{
+			Book: &Book{Sheets: map[string]Sheet{
+				"Report": {Cells: map[string]Cell{"C3": {V: "book_val"}}},
+			}},
+		}
+		cells, err := resolveSheetCells(wb, "Report", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells["C3"].V != "book_val" {
+			t.Errorf("expected book_val, got %v", cells["C3"].V)
+		}
+	})
+
+	t.Run("sheet name not found", func(t *testing.T) {
+		wb := Workbook{Sheets: []Sheet{{Name: "S1"}}}
+		_, err := resolveSheetCells(wb, "NONEXIST", 0)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("sheet index valid", func(t *testing.T) {
+		wb := Workbook{Sheets: []Sheet{
+			{Cells: map[string]Cell{"A1": {V: "idx0"}}},
+			{Cells: map[string]Cell{"A1": {V: "idx1"}}},
+		}}
+		cells, err := resolveSheetCells(wb, "", 2)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells["A1"].V != "idx1" {
+			t.Errorf("expected idx1, got %v", cells["A1"].V)
+		}
+	})
+
+	t.Run("sheet index out of range", func(t *testing.T) {
+		wb := Workbook{Sheets: []Sheet{{Cells: map[string]Cell{"A1": {V: "x"}}}}}
+		_, err := resolveSheetCells(wb, "", 999)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("sheet index with Book (error)", func(t *testing.T) {
+		wb := Workbook{
+			Sheets: []Sheet{},
+			Book:   &Book{Sheets: map[string]Sheet{"S1": {}}},
+		}
+		_, err := resolveSheetCells(wb, "", 1)
+		if err == nil {
+			t.Fatal("expected error about map-based sheets")
+		}
+	})
+
+	t.Run("Book.Sheets fallback (no name, no index)", func(t *testing.T) {
+		wb := Workbook{
+			Book: &Book{Sheets: map[string]Sheet{
+				"X": {Cells: map[string]Cell{"Z99": {V: "fallback"}}},
+			}},
+		}
+		cells, err := resolveSheetCells(wb, "", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells["Z99"].V != "fallback" {
+			t.Errorf("expected fallback, got %v", cells["Z99"].V)
+		}
+	})
+
+	t.Run("no cells anywhere", func(t *testing.T) {
+		wb := Workbook{}
+		cells, err := resolveSheetCells(wb, "", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cells != nil {
+			t.Errorf("expected nil, got %v", cells)
+		}
+	})
+}
+
+func TestCellMapToGrid(t *testing.T) {
+	t.Run("basic grid", func(t *testing.T) {
+		cells := map[string]Cell{
+			"A1": {V: "a1"},
+			"B1": {V: "b1"},
+			"A2": {V: "a2"},
+		}
+		grid, warn := cellMapToGrid(cells)
+		if warn {
+			t.Error("expected no warning")
+		}
+		if len(grid) != 2 || len(grid[0]) != 2 {
+			t.Fatalf("expected 2x2 grid, got %dx%d", len(grid), len(grid[0]))
+		}
+		if grid[0][0] != "a1" || grid[0][1] != "b1" || grid[1][0] != "a2" {
+			t.Errorf("unexpected grid content: %v", grid)
+		}
+	})
+
+	t.Run("formula without value triggers warning", func(t *testing.T) {
+		cells := map[string]Cell{
+			"A1": {F: "SUM(B:B)"},
+		}
+		grid, warn := cellMapToGrid(cells)
+		if !warn {
+			t.Error("expected warning")
+		}
+		if len(grid) != 1 || grid[0][0] != "" {
+			t.Errorf("expected empty cell, got %v", grid[0][0])
+		}
+	})
+
+	t.Run("empty cell map", func(t *testing.T) {
+		grid, warn := cellMapToGrid(map[string]Cell{})
+		if warn {
+			t.Error("expected no warning for empty")
+		}
+		if grid != nil {
+			t.Error("expected nil grid")
+		}
+	})
+
+	t.Run("invalid cell addresses are skipped", func(t *testing.T) {
+		cells := map[string]Cell{
+			"A1": {V: "ok"},
+			"??": {V: "bad"},
+		}
+		grid, _ := cellMapToGrid(cells)
+		if len(grid) != 1 || grid[0][0] != "ok" {
+			t.Errorf("expected single cell 'ok', got %v", grid)
+		}
+	})
+
+	t.Run("value with formula (no warning)", func(t *testing.T) {
+		cells := map[string]Cell{
+			"A1": {V: 42.0, F: "SUM(B1:B10)"},
+		}
+		grid, warn := cellMapToGrid(cells)
+		if warn {
+			t.Error("expected no warning when value present")
+		}
+		if grid[0][0] != "42" {
+			t.Errorf("expected 42, got %q", grid[0][0])
+		}
+	})
+}
+
+func TestWriteCSVRecords(t *testing.T) {
+	t.Run("basic write", func(t *testing.T) {
+		var buf bytes.Buffer
+		records := [][]string{
+			{"a", "b"},
+			{"1", "2"},
+		}
+		if err := writeCSVRecords(&buf, records); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "a,b\n1,2\n"
+		if got := buf.String(); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("empty records", func(t *testing.T) {
+		var buf bytes.Buffer
+		if err := writeCSVRecords(&buf, [][]string{}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := buf.String(); got != "" {
+			t.Errorf("expected empty, got %q", got)
+		}
+	})
+}
+
+func TestGuessCellMapFromData(t *testing.T) {
+	t.Run("valid cell map", func(t *testing.T) {
+		data := []byte(`{"Sheet1":{"A1":{"v":"hello"},"B1":{"v":123}}}`)
+		cells := guessCellMapFromData(data)
+		if cells == nil || len(cells) != 2 {
+			t.Fatalf("expected 2 cells, got %d", len(cells))
+		}
+		if cells["A1"].V != "hello" || cells["B1"].V != float64(123) {
+			t.Errorf("unexpected cell values: %v", cells)
+		}
+	})
+
+	t.Run("not cell-like map returns nil", func(t *testing.T) {
+		data := []byte(`{"config":{"debug":true}}`)
+		cells := guessCellMapFromData(data)
+		if cells != nil {
+			t.Error("expected nil for non-cell data")
+		}
+	})
+
+	t.Run("non-object map returns nil", func(t *testing.T) {
+		data := []byte(`"just a string"`)
+		cells := guessCellMapFromData(data)
+		if cells != nil {
+			t.Error("expected nil for string input")
+		}
+	})
+}
+
 func TestToCSV_XLSXInput(t *testing.T) {
 	// Create a temporary XLSX file
 	f := excelize.NewFile()
