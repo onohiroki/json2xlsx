@@ -31,7 +31,7 @@ func usageJa() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
@@ -41,6 +41,7 @@ Usage:
   -i                   入力ファイル (省略時 stdin)．JSON (SheetJS 形式 / データ JSON) または XLSX
   -o                   出力ファイル (省略時 stdout)
   --data-json          入力をデータ JSON (二次元配列 / オブジェクト配列 / Map-of-Arrays) として扱う
+  --compute            数式 (t=f) を評価し v を補完する (to-xlsx のみ)
   --sheet              to-csv で入力 XLSX または JSON から抽出するシート名
   --sheet-index        to-csv で入力 XLSX または JSON から抽出するシート番号 (1から開始)
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
@@ -63,7 +64,7 @@ func usageEn() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
@@ -73,6 +74,7 @@ Options:
   -i                   Input file (default: stdin). JSON (SheetJS / data JSON) or XLSX
   -o                   Output file (default: stdout)
   --data-json          Treat input as data JSON (2D array / array of objects / map-of-arrays)
+  --compute            Evaluate formulas (t=f) and fill cached values (to-xlsx only)
   --sheet              Sheet name for to-csv
   --sheet-index        Sheet index for to-csv (1-based)
   --date-serial        Emit date cells as Excel serial values (default)
@@ -185,10 +187,11 @@ func runToXLSX(args []string) {
 	fs := flag.NewFlagSet("to-xlsx", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output string
-	var dataJSON bool
+	var dataJSON, compute bool
 	fs.StringVar(&input, "i", "", "input JSON file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output XLSX file (default: stdout)")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
+	fs.BoolVar(&compute, "compute", false, "evaluate simple formulas and fill cached values")
 	_ = fs.Parse(args)
 
 	r, closeR, err := openInput(input)
@@ -205,7 +208,7 @@ func runToXLSX(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON}); err != nil {
+	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON, EvalFormulas: compute}); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}

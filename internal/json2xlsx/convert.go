@@ -20,6 +20,9 @@ type ConvertOptions struct {
 	// 二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する．
 	// false (デフォルト) の場合は SheetJS 形式のみを受け付け，失敗したらエラーを返す．
 	DataJSON bool
+	// EvalFormulas が true の場合，t="f" かつ v のないセルの数式を評価し，
+	// 計算結果を v に補完する．
+	EvalFormulas bool
 }
 
 // Convert は JSON を読み込み，XLSX を out に書き出す．
@@ -32,6 +35,10 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 	wb, err := UnmarshalWorkbook(data, opts.DataJSON)
 	if err != nil {
 		return err
+	}
+
+	if opts.EvalFormulas {
+		EvalWorkbookFormulas(wb)
 	}
 
 	if err := convertWorkbook(wb, out); err != nil {

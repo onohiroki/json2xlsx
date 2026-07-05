@@ -292,3 +292,43 @@ func TestCLI_ToJSON_DateRFC3339(t *testing.T) {
 		t.Fatal("to-json --date-rfc3339 output is not valid JSON")
 	}
 }
+
+func TestCLI_ToXLSX_Compute(t *testing.T) {
+	js := `{"name":"S1","cells":{"A1":{"t":"n","v":3},"B1":{"t":"n","v":7},"C1":{"t":"f","f":"SUM(A1:B1)"}}}`
+	xlsxOut, stderr, code := runCLIWithStdin(t, js, "to-xlsx", "--compute")
+	if code != 0 {
+		t.Fatalf("to-xlsx --compute exit code = %d, stderr: %s", code, stderr)
+	}
+
+	// Verify the computed value is present by converting back to JSON
+	jsonOut, stderr, code := runCLIWithStdin(t, xlsxOut, "to-json")
+	if code != 0 {
+		t.Fatalf("to-json exit code = %d, stderr: %s", code, stderr)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonOut), &result); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	// Navigate to C1
+	book := result["book"].(map[string]interface{})
+	sheets := book["sheets"].(map[string]interface{})
+	s1 := sheets["S1"].(map[string]interface{})
+	cells := s1["cells"].(map[string]interface{})
+	c1 := cells["C1"].(map[string]interface{})
+
+	v, ok := c1["v"]
+	if !ok {
+		t.Fatal("C1.v is missing -- formula was not computed")
+	}
+	if v.(float64) != 10 {
+		t.Errorf("C1.v = %v, want 10", v)
+	}
+
+	// Formula should still be present
+	f, ok := c1["f"]
+	if !ok || f != "SUM(A1:B1)" {
+		t.Errorf("C1.f = %v, want SUM(A1:B1)", f)
+	}
+}
