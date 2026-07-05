@@ -3,6 +3,7 @@ package json2xlsx
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -81,6 +82,9 @@ var knownFuncs = map[string]bool{
 	"SUM": true, "AVERAGE": true, "COUNT": true,
 	"MIN": true, "MAX": true, "ABS": true, "ROUND": true,
 	"IF": true, "AND": true, "OR": true, "NOT": true,
+	"PRODUCT": true, "ROUNDUP": true, "ROUNDDOWN": true, "SUMPRODUCT": true,
+	"MEDIAN": true, "STDEV": true, "STDEV.S": true, "STDEV.P": true,
+	"SUMIF": true, "COUNTIF": true,
 }
 
 func (t *tokenizer) next() token {
@@ -170,7 +174,7 @@ func (t *tokenizer) readIdent() token {
 	start := t.pos
 	for t.pos < len(t.input) {
 		ch := t.input[t.pos]
-		if ch == '$' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+		if ch == '$' || ch == '.' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
 			t.pos++
 		} else {
 			break
@@ -337,6 +341,24 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncOr(ctx, e.args)
 	case "NOT":
 		return evalFuncNot(ctx, e.args)
+	case "PRODUCT":
+		return evalFuncProduct(ctx, e.args)
+	case "ROUNDUP":
+		return evalFuncRoundup(ctx, e.args)
+	case "ROUNDDOWN":
+		return evalFuncRounddown(ctx, e.args)
+	case "SUMPRODUCT":
+		return evalFuncSumproduct(ctx, e.args)
+	case "MEDIAN":
+		return evalFuncMedian(ctx, e.args)
+	case "STDEV", "STDEV.S":
+		return evalFuncStdevS(ctx, e.args)
+	case "STDEV.P":
+		return evalFuncStdevP(ctx, e.args)
+	case "SUMIF":
+		return evalFuncSumif(ctx, e.args)
+	case "COUNTIF":
+		return evalFuncCountif(ctx, e.args)
 	}
 	return 0, fmt.Errorf("unknown function: %s", e.name)
 }
@@ -809,6 +831,232 @@ func evalFuncNot(ctx *evalContext, args []expr) (float64, error) {
 		return 1, nil
 	}
 	return 0, nil
+}
+
+func evalFuncProduct(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) == 0 {
+		return 0, nil
+	}
+	total := 1.0
+	for _, arg := range args {
+		vals, err := ctx.evalArg(arg)
+		if err != nil {
+			return 0, err
+		}
+		for _, v := range vals {
+			total *= v
+		}
+	}
+	return total, nil
+}
+
+func evalFuncRoundup(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("ROUNDUP requires exactly 2 arguments")
+	}
+	val, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	digitsRaw, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	digits := int(digitsRaw)
+	pow := math.Pow(10, float64(digits))
+	if val >= 0 {
+		return math.Ceil(val*pow) / pow, nil
+	}
+	return math.Floor(val*pow) / pow, nil
+}
+
+func evalFuncRounddown(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("ROUNDDOWN requires exactly 2 arguments")
+	}
+	val, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	digitsRaw, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	digits := int(digitsRaw)
+	pow := math.Pow(10, float64(digits))
+	if val >= 0 {
+		return math.Floor(val*pow) / pow, nil
+	}
+	return math.Ceil(val*pow) / pow, nil
+}
+
+func evalFuncSumproduct(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 2 {
+		return 0, fmt.Errorf("SUMPRODUCT requires at least 2 arguments")
+	}
+	var arrays [][]float64
+	for _, arg := range args {
+		vals, err := ctx.evalArg(arg)
+		if err != nil {
+			return 0, err
+		}
+		arrays = append(arrays, vals)
+	}
+	minLen := len(arrays[0])
+	for _, a := range arrays[1:] {
+		if len(a) < minLen {
+			minLen = len(a)
+		}
+	}
+	var total float64
+	for i := 0; i < minLen; i++ {
+		prod := 1.0
+		for _, a := range arrays {
+			prod *= a[i]
+		}
+		total += prod
+	}
+	return total, nil
+}
+
+func evalFuncMedian(ctx *evalContext, args []expr) (float64, error) {
+	var all []float64
+	for _, arg := range args {
+		vals, err := ctx.evalArg(arg)
+		if err != nil {
+			return 0, err
+		}
+		all = append(all, vals...)
+	}
+	if len(all) == 0 {
+		return 0, fmt.Errorf("MEDIAN of empty set")
+	}
+	sort.Float64s(all)
+	n := len(all)
+	if n%2 == 1 {
+		return all[n/2], nil
+	}
+	return (all[n/2-1] + all[n/2]) / 2, nil
+}
+
+func evalFuncStdev(ctx *evalContext, args []expr, population bool) (float64, error) {
+	var all []float64
+	for _, arg := range args {
+		vals, err := ctx.evalArg(arg)
+		if err != nil {
+			return 0, err
+		}
+		all = append(all, vals...)
+	}
+	n := len(all)
+	if n == 0 {
+		return 0, fmt.Errorf("STDEV of empty set")
+	}
+	if !population && n < 2 {
+		return 0, fmt.Errorf("STDEV.S requires at least 2 values")
+	}
+	var sum float64
+	for _, v := range all {
+		sum += v
+	}
+	mean := sum / float64(n)
+	var sqDiff float64
+	for _, v := range all {
+		d := v - mean
+		sqDiff += d * d
+	}
+	divisor := float64(n)
+	if !population {
+		divisor = float64(n - 1)
+	}
+	return math.Sqrt(sqDiff / divisor), nil
+}
+
+func evalFuncStdevS(ctx *evalContext, args []expr) (float64, error) {
+	return evalFuncStdev(ctx, args, false)
+}
+
+func evalFuncStdevP(ctx *evalContext, args []expr) (float64, error) {
+	return evalFuncStdev(ctx, args, true)
+}
+
+func evalFuncSumif(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 2 || len(args) > 3 {
+		return 0, fmt.Errorf("SUMIF requires 2 or 3 arguments")
+	}
+	checkRange, err := rangeOrCellRefs(ctx, args[0])
+	if err != nil {
+		return 0, fmt.Errorf("SUMIF first argument: %w", err)
+	}
+	criteriaVal, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var sumRefs []string
+	if len(args) == 3 {
+		sumRefs, err = rangeOrCellRefs(ctx, args[2])
+		if err != nil {
+			return 0, fmt.Errorf("SUMIF third argument: %w", err)
+		}
+	} else {
+		sumRefs = checkRange
+	}
+	limit := len(checkRange)
+	if len(sumRefs) < limit {
+		limit = len(sumRefs)
+	}
+	var total float64
+	for i := 0; i < limit; i++ {
+		cellVal, err := ctx.getCellValue(checkRange[i])
+		if err != nil {
+			continue
+		}
+		if cellVal == criteriaVal {
+			sumVal, err := ctx.getCellValue(sumRefs[i])
+			if err == nil {
+				total += sumVal
+			}
+		}
+	}
+	return total, nil
+}
+
+func evalFuncCountif(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("COUNTIF requires exactly 2 arguments")
+	}
+	refs, err := rangeOrCellRefs(ctx, args[0])
+	if err != nil {
+		return 0, fmt.Errorf("COUNTIF first argument: %w", err)
+	}
+	criteriaVal, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var count float64
+	for _, ref := range refs {
+		cellVal, err := ctx.getCellValue(ref)
+		if err != nil {
+			continue
+		}
+		if cellVal == criteriaVal {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// rangeOrCellRefs extracts a list of cell references from an expression.
+// Accepts *rangeExpr (expanded) or *cellRefExpr (single element).
+func rangeOrCellRefs(ctx *evalContext, arg expr) ([]string, error) {
+	switch a := arg.(type) {
+	case *rangeExpr:
+		return expandRange(a.start, a.end), nil
+	case *cellRefExpr:
+		return []string{a.ref}, nil
+	default:
+		return nil, fmt.Errorf("expected a cell reference or range")
+	}
 }
 
 // ---------------------------------------------------------------------------

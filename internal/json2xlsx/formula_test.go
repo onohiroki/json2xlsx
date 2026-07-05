@@ -2,6 +2,7 @@ package json2xlsx
 
 import (
 	"bytes"
+	"math"
 	"strings"
 	"testing"
 
@@ -1429,6 +1430,323 @@ func TestEval_IfWithNestedFunc(t *testing.T) {
 	got = evalFormula(t, cells, "IF(SUM(A1:A3)<50,SUM(A1:A3)*2,999)")
 	if got != 999 {
 		t.Errorf("got %v, want 999", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Group A: PRODUCT, ROUNDUP, ROUNDDOWN, SUMPRODUCT tests
+// ---------------------------------------------------------------------------
+
+func TestEval_Product(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"PRODUCT(2,3,4)", 24},
+		{"PRODUCT(10,0.5)", 5},
+		{"PRODUCT(-2,3)", -6},
+		{"PRODUCT(5)", 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_ProductWithRange(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 2.0},
+		"A2": {T: "n", V: 3.0},
+		"A3": {T: "n", V: 4.0},
+	}
+	got := evalFormula(t, cells, "PRODUCT(A1:A3)")
+	if got != 24 {
+		t.Errorf("got %v, want 24", got)
+	}
+	got = evalFormula(t, cells, "PRODUCT(A1:A2, A3)")
+	if got != 24 {
+		t.Errorf("got %v, want 24", got)
+	}
+}
+
+func TestEval_ProductEmpty(t *testing.T) {
+	got := evalFormula(t, nil, "PRODUCT()")
+	if got != 0 {
+		t.Errorf("PRODUCT() = %v, want 0", got)
+	}
+}
+
+func TestEval_Roundup(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ROUNDUP(3.1415,2)", 3.15},
+		{"ROUNDUP(3.1415,0)", 4},
+		{"ROUNDUP(3.1415,3)", 3.142},
+		{"ROUNDUP(-3.1415,2)", -3.15},
+		{"ROUNDUP(5.0,0)", 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_RoundupWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "ROUNDUP(1)")
+	if !strings.Contains(errMsg, "requires exactly 2 arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Rounddown(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ROUNDDOWN(3.1415,2)", 3.14},
+		{"ROUNDDOWN(3.1415,0)", 3},
+		{"ROUNDDOWN(3.1415,3)", 3.141},
+		{"ROUNDDOWN(-3.1415,2)", -3.14},
+		{"ROUNDDOWN(5.0,0)", 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_RounddownWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "ROUNDDOWN(1)")
+	if !strings.Contains(errMsg, "requires exactly 2 arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Sumproduct(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0},
+		"A2": {T: "n", V: 2.0},
+		"A3": {T: "n", V: 3.0},
+		"B1": {T: "n", V: 10.0},
+		"B2": {T: "n", V: 20.0},
+		"B3": {T: "n", V: 30.0},
+	}
+	got := evalFormula(t, cells, "SUMPRODUCT(A1:A3,B1:B3)")
+	if got != 1*10+2*20+3*30 { // 10+40+90=140
+		t.Errorf("got %v, want 140", got)
+	}
+}
+
+func TestEval_SumproductSingleValue(t *testing.T) {
+	got := evalFormula(t, nil, "SUMPRODUCT(5,10)")
+	if got != 50 {
+		t.Errorf("got %v, want 50", got)
+	}
+}
+
+func TestEval_SumproductWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SUMPRODUCT(5)")
+	if !strings.Contains(errMsg, "requires at least 2 arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Group B: MEDIAN, STDEV/STDEV.P/STDEV.S tests
+// ---------------------------------------------------------------------------
+
+func TestEval_Median(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"MEDIAN(1,2,3,4,5)", 3},
+		{"MEDIAN(1,2,3,4)", 2.5},
+		{"MEDIAN(5)", 5},
+		{"MEDIAN(3,1,2)", 2}, // unsorted
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_MedianWithRange(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"A2": {T: "n", V: 20.0},
+		"A3": {T: "n", V: 30.0},
+		"A4": {T: "n", V: 40.0},
+	}
+	got := evalFormula(t, cells, "MEDIAN(A1:A4)")
+	if got != 25 {
+		t.Errorf("got %v, want 25", got)
+	}
+}
+
+func TestEval_MedianEmpty(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "MEDIAN(Z1:Z999)")
+	if !strings.Contains(errMsg, "MEDIAN of empty set") {
+		t.Errorf("expected 'MEDIAN of empty set', got %q", errMsg)
+	}
+}
+
+func TestEval_StdevS(t *testing.T) {
+	// sample: 2,4,4,4,5,5,7,9
+	// mean = 5, SS = (9+1+1+1+0+0+4+16)=32, var=32/7≈4.5714, stdev≈2.138
+	got := evalFormula(t, nil, "STDEV.S(2,4,4,4,5,5,7,9)")
+	if math.Abs(got-2.138) > 0.001 {
+		t.Errorf("STDEV.S = %v, want ~2.138", got)
+	}
+}
+
+func TestEval_StdevP(t *testing.T) {
+	// population: 2,4,4,4,5,5,7,9
+	// mean = 5, SS = 32, var=32/8=4, stdev=2
+	got := evalFormula(t, nil, "STDEV.P(2,4,4,4,5,5,7,9)")
+	if got != 2 {
+		t.Errorf("STDEV.P = %v, want 2", got)
+	}
+}
+
+func TestEval_StdevAlias(t *testing.T) {
+	// STDEV should equal STDEV.S
+	gotS := evalFormula(t, nil, "STDEV.S(2,4,4,4,5,5,7,9)")
+	got := evalFormula(t, nil, "STDEV(2,4,4,4,5,5,7,9)")
+	if got != gotS {
+		t.Errorf("STDEV = %v, STDEV.S = %v, want equal", got, gotS)
+	}
+}
+
+func TestEval_StdevSEmpty(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "STDEV.S(Z1:Z999)")
+	if !strings.Contains(errMsg, "STDEV of empty set") {
+		t.Errorf("expected empty set error, got %q", errMsg)
+	}
+}
+
+func TestEval_StdevSSingleValue(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "STDEV.S(42)")
+	if !strings.Contains(errMsg, "requires at least 2 values") {
+		t.Errorf("expected 'requires at least 2 values', got %q", errMsg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Group C: SUMIF, COUNTIF tests
+// ---------------------------------------------------------------------------
+
+func TestEval_Sumif(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"A2": {T: "n", V: 20.0},
+		"A3": {T: "n", V: 10.0},
+		"A4": {T: "n", V: 30.0},
+		"A5": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "SUMIF(A1:A5,10)")
+	if got != 30 { // A1(10)+A3(10)+A5(10) = 30
+		t.Errorf("got %v, want 30", got)
+	}
+}
+
+func TestEval_SumifWithSumRange(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"A2": {T: "n", V: 20.0},
+		"A3": {T: "n", V: 10.0},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, "SUMIF(A1:A3,10,B1:B3)")
+	if got != 400 { // B1(100)+B3(300) = 400
+		t.Errorf("got %v, want 400", got)
+	}
+}
+
+func TestEval_SumifNoMatch(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"A2": {T: "n", V: 20.0},
+	}
+	got := evalFormula(t, cells, "SUMIF(A1:A2,999)")
+	if got != 0 {
+		t.Errorf("got %v, want 0", got)
+	}
+}
+
+func TestEval_SumifSingleCell(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "SUMIF(A1,10)")
+	if got != 10 {
+		t.Errorf("got %v, want 10", got)
+	}
+	got = evalFormula(t, cells, "SUMIF(A1,20)")
+	if got != 0 {
+		t.Errorf("got %v, want 0", got)
+	}
+}
+
+func TestEval_SumifWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SUMIF(A1)")
+	if !strings.Contains(errMsg, "requires 2 or 3 arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Countif(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"A2": {T: "n", V: 20.0},
+		"A3": {T: "n", V: 10.0},
+		"A4": {T: "n", V: 30.0},
+		"A5": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "COUNTIF(A1:A5,10)")
+	if got != 3 {
+		t.Errorf("got %v, want 3", got)
+	}
+	got = evalFormula(t, cells, "COUNTIF(A1:A5,99)")
+	if got != 0 {
+		t.Errorf("got %v, want 0", got)
+	}
+}
+
+func TestEval_CountifSingleCell(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "COUNTIF(A1,10)")
+	if got != 1 {
+		t.Errorf("got %v, want 1", got)
+	}
+}
+
+func TestEval_CountifWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "COUNTIF(A1)")
+	if !strings.Contains(errMsg, "requires exactly 2 arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
 
