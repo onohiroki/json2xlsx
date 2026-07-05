@@ -53,6 +53,12 @@ const (
 	tokenLParen
 	tokenRParen
 	tokenComma
+	tokenEQ
+	tokenNE
+	tokenLT
+	tokenGT
+	tokenLE
+	tokenGE
 	tokenEOF
 	tokenIllegal
 )
@@ -74,6 +80,7 @@ func newTokenizer(input string) *tokenizer {
 var knownFuncs = map[string]bool{
 	"SUM": true, "AVERAGE": true, "COUNT": true,
 	"MIN": true, "MAX": true, "ABS": true, "ROUND": true,
+	"IF": true, "AND": true, "OR": true, "NOT": true,
 }
 
 func (t *tokenizer) next() token {
@@ -109,6 +116,26 @@ func (t *tokenizer) next() token {
 	case ch == ':':
 		t.pos++
 		return token{typ: tokenColon, lit: ":"}
+	case ch == '<':
+		t.pos++
+		if t.pos < len(t.input) && t.input[t.pos] == '=' {
+			t.pos++
+			return token{typ: tokenLE, lit: "<="}
+		} else if t.pos < len(t.input) && t.input[t.pos] == '>' {
+			t.pos++
+			return token{typ: tokenNE, lit: "<>"}
+		}
+		return token{typ: tokenLT, lit: "<"}
+	case ch == '>':
+		t.pos++
+		if t.pos < len(t.input) && t.input[t.pos] == '=' {
+			t.pos++
+			return token{typ: tokenGE, lit: ">="}
+		}
+		return token{typ: tokenGT, lit: ">"}
+	case ch == '=':
+		t.pos++
+		return token{typ: tokenEQ, lit: "="}
 	case ch == '.' || (ch >= '0' && ch <= '9'):
 		return t.readNumber()
 	default:
@@ -221,6 +248,13 @@ type binaryExpr struct {
 	op          tokenType
 }
 
+func boolToFloat(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func (e *binaryExpr) eval(ctx *evalContext) (float64, error) {
 	left, err := e.left.eval(ctx)
 	if err != nil {
@@ -242,6 +276,18 @@ func (e *binaryExpr) eval(ctx *evalContext) (float64, error) {
 			return 0, fmt.Errorf("division by zero")
 		}
 		return left / right, nil
+	case tokenEQ:
+		return boolToFloat(left == right), nil
+	case tokenNE:
+		return boolToFloat(left != right), nil
+	case tokenLT:
+		return boolToFloat(left < right), nil
+	case tokenGT:
+		return boolToFloat(left > right), nil
+	case tokenLE:
+		return boolToFloat(left <= right), nil
+	case tokenGE:
+		return boolToFloat(left >= right), nil
 	}
 	return 0, fmt.Errorf("internal: unknown binary operator %d", e.op)
 }
@@ -283,6 +329,14 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncAbs(ctx, e.args)
 	case "ROUND":
 		return evalFuncRound(ctx, e.args)
+	case "IF":
+		return evalFuncIf(ctx, e.args)
+	case "AND":
+		return evalFuncAnd(ctx, e.args)
+	case "OR":
+		return evalFuncOr(ctx, e.args)
+	case "NOT":
+		return evalFuncNot(ctx, e.args)
 	}
 	return 0, fmt.Errorf("unknown function: %s", e.name)
 }
@@ -293,11 +347,13 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 //
 // Grammar:
 //
-//	expr     → term (('+' | '-') term)*
-//	term     → factor (('*' | '/') factor)*
-//	factor   → primary (':' primary)?
-//	primary  → NUMBER | CELL_REF | '(' expr ')' | FUNC '(' args ')' | '-' primary
-//	args     → expr (',' expr)*
+//	expr         → comparison
+//	comparison   → addition (('<' | '>' | '=' | '<=' | '>=' | '<>') addition)*
+//	addition     → term (('+' | '-') term)*
+//	term         → factor (('*' | '/') factor)*
+//	factor       → primary (':' primary)?
+//	primary      → NUMBER | CELL_REF | '(' expr ')' | FUNC '(' args ')' | '-' primary
+//	args         → expr (',' expr)*
 
 type parser struct {
 	input  string
@@ -334,6 +390,21 @@ func (p *parser) parse() (expr, error) {
 }
 
 func (p *parser) parseExpr() expr {
+	return p.parseComparison()
+}
+
+func (p *parser) parseComparison() expr {
+	left := p.parseAddition()
+	for p.peek().typ == tokenLT || p.peek().typ == tokenGT || p.peek().typ == tokenEQ ||
+		p.peek().typ == tokenLE || p.peek().typ == tokenGE || p.peek().typ == tokenNE {
+		op := p.next().typ
+		right := p.parseAddition()
+		left = &binaryExpr{left: left, right: right, op: op}
+	}
+	return left
+}
+
+func (p *parser) parseAddition() expr {
 	left := p.parseTerm()
 	for p.peek().typ == tokenPlus || p.peek().typ == tokenMinus {
 		op := p.next().typ
@@ -684,6 +755,60 @@ func evalFuncRound(ctx *evalContext, args []expr) (float64, error) {
 	digits := int(digitsRaw)
 	pow := math.Pow(10, float64(digits))
 	return math.Round(val*pow) / pow, nil
+}
+
+func evalFuncIf(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 3 {
+		return 0, fmt.Errorf("IF requires exactly 3 arguments")
+	}
+	cond, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if cond != 0 {
+		return args[1].eval(ctx)
+	}
+	return args[2].eval(ctx)
+}
+
+func evalFuncAnd(ctx *evalContext, args []expr) (float64, error) {
+	for _, arg := range args {
+		v, err := arg.eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if v == 0 {
+			return 0, nil
+		}
+	}
+	return 1, nil
+}
+
+func evalFuncOr(ctx *evalContext, args []expr) (float64, error) {
+	for _, arg := range args {
+		v, err := arg.eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if v != 0 {
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+
+func evalFuncNot(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("NOT requires exactly 1 argument")
+	}
+	v, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if v == 0 {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 // ---------------------------------------------------------------------------
