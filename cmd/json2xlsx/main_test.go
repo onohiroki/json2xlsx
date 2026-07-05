@@ -332,3 +332,80 @@ func TestCLI_ToXLSX_Compute(t *testing.T) {
 		t.Errorf("C1.f = %v, want SUM(A1:B1)", f)
 	}
 }
+
+const formulaJSON = `{"name":"S1","cells":{"A1":{"t":"n","v":3},"B1":{"t":"n","v":7},"C1":{"t":"f","f":"SUM(A1:B1)"}}}`
+
+func TestCLI_ToMD_Compute(t *testing.T) {
+	t.Run("with --compute", func(t *testing.T) {
+		stdout, stderr, code := runCLIWithStdin(t, formulaJSON, "to-md", "--mode", "v", "--compute")
+		if code != 0 {
+			t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+		}
+		if !strings.Contains(stdout, "10") {
+			t.Errorf("expected computed value '10' in output, got: %s", stdout)
+		}
+		if strings.Contains(stderr, "Warning") {
+			t.Errorf("no warning expected with --compute, got: %s", stderr)
+		}
+	})
+
+	t.Run("without --compute", func(t *testing.T) {
+		_, stderr, code := runCLIWithStdin(t, formulaJSON, "to-md", "--mode", "v")
+		if code != 0 {
+			t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+		}
+		if !strings.Contains(stderr, "Warning") {
+			t.Errorf("expected warning about missing values, got: %s", stderr)
+		}
+	})
+}
+
+func TestCLI_ToHTML_Compute(t *testing.T) {
+	t.Run("with --compute", func(t *testing.T) {
+		stdout, stderr, code := runCLIWithStdin(t, formulaJSON, "to-html", "--mode", "v", "--compute")
+		if code != 0 {
+			t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+		}
+		if !strings.Contains(stdout, "10") {
+			t.Errorf("expected computed value '10' in output, got: %s", stdout)
+		}
+		if strings.Contains(stderr, "Warning") {
+			t.Errorf("no warning expected with --compute, got: %s", stderr)
+		}
+	})
+
+	t.Run("without --compute", func(t *testing.T) {
+		_, stderr, code := runCLIWithStdin(t, formulaJSON, "to-html", "--mode", "v")
+		if code != 0 {
+			t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+		}
+		if !strings.Contains(stderr, "Warning") {
+			t.Errorf("expected warning about missing values, got: %s", stderr)
+		}
+	})
+}
+
+func TestCLI_ToCSV_Compute(t *testing.T) {
+	t.Run("with --compute", func(t *testing.T) {
+		stdout, stderr, code := runCLIWithStdin(t, formulaJSON, "to-csv", "--compute")
+		if code != 0 {
+			t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+		}
+		if !strings.Contains(stdout, "10") {
+			t.Errorf("expected computed value '10' in output, got: %s", stdout)
+		}
+		if strings.Contains(stderr, "Warning") {
+			t.Errorf("no warning expected with --compute, got: %s", stderr)
+		}
+	})
+
+	t.Run("without --compute", func(t *testing.T) {
+		_, stderr, code := runCLIWithStdin(t, formulaJSON, "to-csv")
+		if code != 0 {
+			t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+		}
+		if !strings.Contains(stderr, "Warning") {
+			t.Errorf("expected warning about missing values, got: %s", stderr)
+		}
+	})
+}

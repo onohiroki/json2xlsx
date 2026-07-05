@@ -32,6 +32,7 @@ type MarkdownOptions struct {
 	FirstRowHeader bool
 	ExplicitMode   bool
 	DataJSON       bool
+	EvalFormulas   bool
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -49,12 +50,19 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		return err
 	}
 	wb := res.Workbook
+	var formulaWarnings []string
+	if opts.EvalFormulas {
+		formulaWarnings = EvalWorkbookFormulas(wb)
+	}
 
 	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
 
 	out, hasWarning := renderMarkdown(*wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
+	}
+	for _, msg := range formulaWarnings {
+		fmt.Fprintln(os.Stderr, msg)
 	}
 	for _, msg := range pendingWarnings {
 		fmt.Fprintln(os.Stderr, msg)

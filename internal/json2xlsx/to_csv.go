@@ -18,7 +18,7 @@ type csvKeyValue struct {
 	Value *string
 }
 
-func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON bool) error {
+func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON bool, compute bool) error {
 	br := bufio.NewReader(r)
 	head, err := br.Peek(4)
 	if err != nil && err != io.EOF {
@@ -30,7 +30,17 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 		if err != nil {
 			return err
 		}
-		return convertWorkbookObjectToCSV(*res.Workbook, w, nil, sheetName, sheetIndex)
+		var formulaWarnings []string
+		if compute {
+			formulaWarnings = EvalWorkbookFormulas(res.Workbook)
+		}
+		if err := convertWorkbookObjectToCSV(*res.Workbook, w, nil, sheetName, sheetIndex); err != nil {
+			return err
+		}
+		for _, msg := range formulaWarnings {
+			fmt.Fprintln(os.Stderr, msg)
+		}
+		return nil
 	}
 
 	data, err := io.ReadAll(br)
@@ -48,7 +58,14 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 	}
 
 	if isWorkbook {
-		return convertWorkbookToCSV(trimmed, w, sheetName, sheetIndex)
+		formulaWarnings, err := convertWorkbookToCSV(trimmed, w, sheetName, sheetIndex, compute)
+		if err != nil {
+			return err
+		}
+		for _, msg := range formulaWarnings {
+			fmt.Fprintln(os.Stderr, msg)
+		}
+		return nil
 	}
 
 	return convertArrayOfObjectsToCSV(trimmed, w)
@@ -232,13 +249,20 @@ func detectCSVInputFormat(data []byte) (isWorkbook bool, trimmed []byte, err err
 	}
 }
 
-func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int) error {
+func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int, compute bool) ([]string, error) {
 	var wb Workbook
 	if err := json.Unmarshal(data, &wb); err != nil {
-		return fmt.Errorf("parse workbook json: %w", err)
+		return nil, fmt.Errorf("parse workbook json: %w", err)
 	}
 	normalizeWorkbook(&wb)
-	return convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex)
+	var formulaWarnings []string
+	if compute {
+		formulaWarnings = EvalWorkbookFormulas(&wb)
+	}
+	if err := convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex); err != nil {
+		return nil, err
+	}
+	return formulaWarnings, nil
 }
 
 func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName string, sheetIndex int) error {

@@ -34,16 +34,16 @@ func usageJa() {
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute]
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json] [--compute]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json] [--compute]
   json2xlsx         [-i input.json] [-o output.xlsx]
 
 オプション:
   -i                   入力ファイル (省略時 stdin)．JSON (SheetJS 形式 / データ JSON) または XLSX
   -o                   出力ファイル (省略時 stdout)
   --data-json          入力をデータ JSON (二次元配列 / オブジェクト配列 / Map-of-Arrays) として扱う
-  --compute            数式 (t=f) を評価し v を補完する (to-xlsx のみ)
+  --compute            数式 (t=f) を評価し v を補完する
   --sheet              to-csv で入力 XLSX または JSON から抽出するシート名
   --sheet-index        to-csv で入力 XLSX または JSON から抽出するシート番号 (1から開始)
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
@@ -67,16 +67,16 @@ func usageEn() {
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute]
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json]
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json] [--compute]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json] [--compute]
   json2xlsx         [-i input.json] [-o output.xlsx]
 
 Options:
   -i                   Input file (default: stdin). JSON (SheetJS / data JSON) or XLSX
   -o                   Output file (default: stdout)
   --data-json          Treat input as data JSON (2D array / array of objects / map-of-arrays)
-  --compute            Evaluate formulas (t=f) and fill cached values (to-xlsx only)
+  --compute            Evaluate formulas (t=f) and fill cached values
   --sheet              Sheet name for to-csv
   --sheet-index        Sheet index for to-csv (1-based)
   --date-serial        Emit date cells as Excel serial values (default)
@@ -103,6 +103,7 @@ func main() {
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
+			fmt.Fprintln(os.Stderr, "json2xlsx", version)
 			usage()
 			return
 		case "-version", "--version", "version":
@@ -223,12 +224,13 @@ func runToMD(args []string) {
 	fs := flag.NewFlagSet("to-md", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output, mode string
-	var firstRowHeader, dataJSON bool
+	var firstRowHeader, dataJSON, compute bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output Markdown file (default: stdout)")
 	fs.StringVar(&mode, "mode", "f", "cell display mode: f|v|both")
 	fs.BoolVar(&firstRowHeader, "first-row-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
+	fs.BoolVar(&compute, "compute", false, "evaluate formulas (t=f) and fill cached values")
 	_ = fs.Parse(args)
 
 	if err := json2xlsx.ValidateMode(json2xlsx.MarkdownMode(mode)); err != nil {
@@ -263,6 +265,7 @@ func runToMD(args []string) {
 		RowIndex:       !firstRowHeader,
 		ExplicitMode:   explicitMode,
 		DataJSON:       dataJSON,
+		EvalFormulas:   compute,
 	}
 	if err := json2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
@@ -274,12 +277,13 @@ func runToHTML(args []string) {
 	fs := flag.NewFlagSet("to-html", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output, mode string
-	var grid, dataJSON bool
+	var grid, dataJSON, compute bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output HTML file (default: stdout)")
 	fs.StringVar(&mode, "mode", "v", "cell display mode: f|v|both (default: v)")
 	fs.BoolVar(&grid, "grid", false, "collapse cellspacing and show thin gray borders on all cells")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
+	fs.BoolVar(&compute, "compute", false, "evaluate formulas (t=f) and fill cached values")
 	_ = fs.Parse(args)
 
 	if err := json2xlsx.ValidateMode(json2xlsx.MarkdownMode(mode)); err != nil {
@@ -313,6 +317,7 @@ func runToHTML(args []string) {
 		GridLines:    grid,
 		ExplicitMode: explicitMode,
 		DataJSON:     dataJSON,
+		EvalFormulas: compute,
 	}
 	if err := json2xlsx.ToHTML(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
@@ -325,12 +330,13 @@ func runToCSV(args []string) {
 	fs.Usage = usage
 	var input, output, sheet string
 	var sheetIndex int
-	var dataJSON bool
+	var dataJSON, compute bool
 	fs.StringVar(&input, "i", "", "input CSV JSON or XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output CSV file (default: stdout)")
 	fs.StringVar(&sheet, "sheet", "", "sheet name for XLSX or Workbook JSON")
 	fs.IntVar(&sheetIndex, "sheet-index", 0, "sheet index (1-based) for XLSX or Workbook JSON")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
+	fs.BoolVar(&compute, "compute", false, "evaluate formulas (t=f) and fill cached values")
 	_ = fs.Parse(args)
 
 	r, closeR, err := openInput(input)
@@ -347,7 +353,7 @@ func runToCSV(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.ToCSV(r, w, sheet, sheetIndex, dataJSON); err != nil {
+	if err := json2xlsx.ToCSV(r, w, sheet, sheetIndex, dataJSON, compute); err != nil {
 		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
 		os.Exit(1)
 	}

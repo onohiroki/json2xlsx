@@ -3,6 +3,7 @@ package json2xlsx
 import (
 	"fmt"
 	"io"
+	"os"
 )
 
 // WarningError は非 fatal な警告を表す．
@@ -37,8 +38,9 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 		return err
 	}
 
+	var formulaWarnings []string
 	if opts.EvalFormulas {
-		EvalWorkbookFormulas(wb)
+		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
 
 	if err := convertWorkbook(wb, out); err != nil {
@@ -48,6 +50,9 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 			}
 		}
 		return err
+	}
+	for _, msg := range formulaWarnings {
+		fmt.Fprintln(os.Stderr, msg)
 	}
 	return nil
 }

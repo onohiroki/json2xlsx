@@ -3,16 +3,16 @@ package json2xlsx
 import (
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 )
 
 // EvalWorkbookFormulas evaluates all formulas in the workbook that lack
 // a cached value (v). Cells with t="f" and no v are evaluated and their
-// results are written into v. Cells that fail evaluation are skipped
-// with a warning printed to stderr.
-func EvalWorkbookFormulas(wb *Workbook) {
+// results are written into v. Cells that fail evaluation are skipped.
+// Warning messages for failed evaluations are returned.
+func EvalWorkbookFormulas(wb *Workbook) []string {
+	var warnings []string
 	for si := range wb.Sheets {
 		sh := &wb.Sheets[si]
 		if len(sh.Cells) == 0 {
@@ -23,7 +23,7 @@ func EvalWorkbookFormulas(wb *Workbook) {
 			if cell.T == "f" && cell.V == nil && cell.F != "" {
 				val, err := ctx.evaluate(axis, cell.F)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "warning: %s=%s: %v\n", axis, cell.F, err)
+					warnings = append(warnings, fmt.Sprintf("warning: %s=%s: %v", axis, cell.F, err))
 					continue
 				}
 				c := sh.Cells[axis]
@@ -32,6 +32,7 @@ func EvalWorkbookFormulas(wb *Workbook) {
 			}
 		}
 	}
+	return warnings
 }
 
 // ---------------------------------------------------------------------------
