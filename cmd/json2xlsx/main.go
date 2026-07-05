@@ -10,6 +10,8 @@ import (
 	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
 )
 
+var version = "dev"
+
 // Note: Japanese text in this file uses "，" and "．" as punctuation
 // (not "、" and "。"). Keep this consistent when editing help messages.
 
@@ -102,6 +104,9 @@ func main() {
 			args = args[1:]
 		case "-h", "--help", "help":
 			usage()
+			return
+		case "-version", "--version", "version":
+			fmt.Fprintln(os.Stderr, "json2xlsx", version)
 			return
 		}
 	}
