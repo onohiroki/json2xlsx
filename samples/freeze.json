@@ -1,0 +1,10 @@
+{
+  "name": "Sheet1",
+  "freeze": {"row": 1},
+  "cells": {
+    "A1": {"t": "s", "v": "Name"},
+    "B1": {"t": "s", "v": "Score"},
+    "A2": {"t": "s", "v": "Alice"},
+    "B2": {"t": "n", "v": 95}
+  }
+}

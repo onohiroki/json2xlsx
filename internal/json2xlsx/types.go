@@ -77,6 +77,12 @@ type Merge struct {
 	Range string `json:"range"` // 例 "A1:B2"
 }
 
+// FreezePane は固定ペイン（フリーズパン）設定。
+type FreezePane struct {
+	Row int `json:"row,omitempty"` // 固定する行数
+	Col int `json:"col,omitempty"` // 固定する列数
+}
+
 // Sheet は 1 シート分の定義。
 type Sheet struct {
 	Name    string           `json:"name,omitempty"`
@@ -85,6 +91,7 @@ type Sheet struct {
 	Cols    []ColInfo        `json:"cols,omitempty"`
 	RowDims []RowInfo        `json:"rowDims,omitempty"`
 	Merges  []Merge          `json:"merges,omitempty"`
+	Freeze  *FreezePane      `json:"freeze,omitempty"`
 }
 
 // Chart はグラフオブジェクト。chart-json-spec.md の ChartObject に対応。
@@ -203,6 +210,7 @@ type Workbook struct {
 	Cols    []ColInfo       `json:"cols,omitempty"`
 	RowDims []RowInfo       `json:"rowDims,omitempty"`
 	Merges  []Merge         `json:"merges,omitempty"`
+	Freeze  *FreezePane     `json:"freeze,omitempty"`
 
 	Styles []Style `json:"styles,omitempty"`
 }

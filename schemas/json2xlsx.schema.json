@@ -24,6 +24,7 @@
         "cols":    { "$ref": "#/$defs/cols" },
         "rowDims": { "$ref": "#/$defs/rowDims" },
         "merges":  { "$ref": "#/$defs/merges" },
+        "freeze":  { "$ref": "#/$defs/freeze" },
         "styles":  { "$ref": "#/$defs/styles" }
       },
       "required": ["cells"],
@@ -43,7 +44,8 @@
               "rows":    { "$ref": "#/$defs/rows" },
               "cols":    { "$ref": "#/$defs/cols" },
               "rowDims": { "$ref": "#/$defs/rowDims" },
-              "merges":  { "$ref": "#/$defs/merges" }
+              "merges":  { "$ref": "#/$defs/merges" },
+              "freeze":  { "$ref": "#/$defs/freeze" }
             },
             "required": ["cells"],
             "additionalProperties": false
@@ -161,6 +163,16 @@
         "range": { "type": "string", "description": "結合範囲 (例: A1:B1)" }
       },
       "required": ["range"],
+      "additionalProperties": false
+    },
+
+    "freeze": {
+      "type": "object",
+      "description": "固定ペイン設定",
+      "properties": {
+        "row": { "type": "integer", "minimum": 1, "description": "固定する行数" },
+        "col": { "type": "integer", "minimum": 1, "description": "固定する列数" }
+      },
       "additionalProperties": false
     },
 
@@ -292,7 +304,8 @@
         "rows":    { "$ref": "#/$defs/rows" },
         "cols":    { "$ref": "#/$defs/cols" },
         "rowDims": { "$ref": "#/$defs/rowDims" },
-        "merges":  { "$ref": "#/$defs/merges" }
+        "merges":  { "$ref": "#/$defs/merges" },
+        "freeze":  { "$ref": "#/$defs/freeze" }
       },
       "required": ["cells"],
       "additionalProperties": false

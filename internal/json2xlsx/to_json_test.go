@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xuri/excelize/v2"
 )
 
 // roundTrip は JSON 文字列を Convert → ToJSON し、結果の Workbook を返す。
@@ -233,5 +235,50 @@ func TestToJSON_DateCells_RFC3339Option(t *testing.T) {
 	}
 	if got := cellText(wb.Cells["B1"]); got != "1899-12-30T18:50:00Z" {
 		t.Fatalf("B1=%q, want RFC3339", got)
+	}
+}
+
+func TestToJSON_FreezePanes_ReadDirect(t *testing.T) {
+	f := excelize.NewFile()
+	defer f.Close()
+
+	f.SetCellValue("Sheet1", "A1", "Name")
+	f.SetCellValue("Sheet1", "B1", "Score")
+	f.SetCellValue("Sheet1", "A2", "Alice")
+	f.SetCellValue("Sheet1", "B2", 95)
+
+	panes := excelize.Panes{
+		Freeze:      true,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomRight",
+	}
+	if err := f.SetPanes("Sheet1", &panes); err != nil {
+		t.Fatalf("SetPanes: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := f.Write(&buf); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := ToJSONWithOptions(bytes.NewReader(buf.Bytes()), &out, ToJSONOptions{DateMode: DateModeSerial}); err != nil {
+		t.Fatalf("ToJSON: %v", err)
+	}
+
+	var wb Workbook
+	if err := json.Unmarshal(out.Bytes(), &wb); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if wb.Freeze == nil {
+		t.Fatal("freeze is nil, expected row=1")
+	}
+	if wb.Freeze.Row != 1 {
+		t.Errorf("freeze.row = %d, want 1", wb.Freeze.Row)
+	}
+	if wb.Freeze.Col != 0 {
+		t.Errorf("freeze.col = %d, want 0", wb.Freeze.Col)
 	}
 }

@@ -76,6 +76,7 @@ description: AI に SheetJS 風 JSON のみを出力させ，`json2xlsx` で XLS
 - 列幅: `"cols": [{"col": "A", "width": 18}]`
 - 行高: `"rowDims": [{"row": 1, "height": 24}]`
 - マージ: `"merges": [{"range": "A1:B1"}]`
+- 固定ペイン: `"freeze": {"row": 1}`（先頭行固定）または `{"col": 1}`（先頭列固定）
 
 ## 代表例: 売上表 (単一シート)
 ```json

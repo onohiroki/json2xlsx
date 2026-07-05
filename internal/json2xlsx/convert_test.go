@@ -11,6 +11,252 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+func TestFreezePanes_Write(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {"row": 1},
+		"cells": {
+			"A1": {"t": "s", "v": "Header"},
+			"A2": {"t": "s", "v": "Data"}
+		}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if !panes.Freeze {
+		t.Error("Freeze = false, want true")
+	}
+	if panes.YSplit != 1 {
+		t.Errorf("YSplit = %d, want 1", panes.YSplit)
+	}
+	if panes.XSplit != 0 {
+		t.Errorf("XSplit = %d, want 0", panes.XSplit)
+	}
+	if panes.TopLeftCell != "A2" {
+		t.Errorf("TopLeftCell = %q, want A2", panes.TopLeftCell)
+	}
+}
+
+func TestFreezePanes_WriteCol(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {"col": 1},
+		"cells": {
+			"A1": {"t": "s", "v": "RowHeader"},
+			"B1": {"t": "s", "v": "Data"}
+		}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if !panes.Freeze {
+		t.Error("Freeze = false, want true")
+	}
+	if panes.YSplit != 0 {
+		t.Errorf("YSplit = %d, want 0", panes.YSplit)
+	}
+	if panes.XSplit != 1 {
+		t.Errorf("XSplit = %d, want 1", panes.XSplit)
+	}
+}
+
+func TestFreezePanes_WriteBoth(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {"row": 1, "col": 1},
+		"cells": {
+			"A1": {"t": "s", "v": "Corner"},
+			"B1": {"t": "s", "v": "ColHdr"},
+			"A2": {"t": "s", "v": "RowHdr"},
+			"B2": {"t": "s", "v": "Data"}
+		}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if !panes.Freeze {
+		t.Error("Freeze = false, want true")
+	}
+	if panes.YSplit != 1 {
+		t.Errorf("YSplit = %d, want 1", panes.YSplit)
+	}
+	if panes.XSplit != 1 {
+		t.Errorf("XSplit = %d, want 1", panes.XSplit)
+	}
+}
+
+func TestFreezePanes_RoundTrip(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {"row": 2},
+		"cells": {
+			"A1": {"t": "s", "v": "h1"},
+			"B1": {"t": "s", "v": "h2"},
+			"A2": {"t": "s", "v": "sub1"},
+			"B2": {"t": "s", "v": "sub2"},
+			"A3": {"t": "s", "v": "d1"},
+			"B3": {"t": "n", "v": 1}
+		}
+	}`
+	wb := roundTrip(t, js)
+	if wb.Freeze == nil {
+		t.Fatal("freeze is nil after round trip")
+	}
+	if wb.Freeze.Row != 2 {
+		t.Errorf("freeze.row = %d, want 2", wb.Freeze.Row)
+	}
+}
+
+func TestFreezePanes_RoundTripMultiSheet(t *testing.T) {
+	js := `{
+		"sheets": [
+			{"name": "S1", "freeze": {"row": 1}, "cells": {"A1":{"t":"s","v":"H"},"A2":{"t":"s","v":"D"}}},
+			{"name": "S2", "freeze": {"col": 1}, "cells": {"A1":{"t":"s","v":"RH"},"B1":{"t":"s","v":"D"}}}
+		]
+	}`
+	wb := roundTrip(t, js)
+	if len(wb.Sheets) != 2 {
+		t.Fatalf("expected 2 sheets, got %d", len(wb.Sheets))
+	}
+	if wb.Sheets[0].Freeze == nil || wb.Sheets[0].Freeze.Row != 1 {
+		t.Errorf("S1 freeze = %+v, want row=1", wb.Sheets[0].Freeze)
+	}
+	if wb.Sheets[1].Freeze == nil || wb.Sheets[1].Freeze.Col != 1 {
+		t.Errorf("S2 freeze = %+v, want col=1", wb.Sheets[1].Freeze)
+	}
+}
+
+func TestFreezePanes_NilOnAbsent(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {"A1": {"t": "s", "v": "no freeze"}}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if panes.Freeze {
+		t.Error("Freeze = true, want false (no freeze specified)")
+	}
+}
+
+func TestFreezePanes_ZeroValues(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {},
+		"cells": {"A1": {"t": "s", "v": "zero"}}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if panes.Freeze {
+		t.Error("Freeze = true, want false (zero-value freeze should be skipped)")
+	}
+}
+
+func TestFreezePanes_BookWrapperRoundTrip(t *testing.T) {
+	js := `{
+		"version": "0.2",
+		"book": {
+			"sheets": {
+				"S1": {"freeze": {"row": 2}, "cells": {"A1":{"t":"s","v":"H"},"A2":{"t":"s","v":"Sub"},"A3":{"t":"s","v":"D"}}}
+			}
+		}
+	}`
+	// Use WrapWithBook to preserve book wrapper format
+	wb := roundTripWithOptions(t, js, ToJSONOptions{DateMode: DateModeSerial, WrapWithBook: true})
+	if wb.Book == nil {
+		t.Fatal("book is nil after round trip")
+	}
+	sh, ok := wb.Book.Sheets["S1"]
+	if !ok {
+		t.Fatal("sheet S1 not found")
+	}
+	if sh.Freeze == nil {
+		t.Fatal("freeze is nil after round trip in book wrapper")
+	}
+	if sh.Freeze.Row != 2 {
+		t.Errorf("freeze.row = %d, want 2", sh.Freeze.Row)
+	}
+}
+
+func TestFreezePanes_WriteRow4(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {"row": 4},
+		"cells": {
+			"A1":{"t":"s","v":"H1"},"A2":{"t":"s","v":"H2"},"A3":{"t":"s","v":"H3"},"A4":{"t":"s","v":"H4"},
+			"A5":{"t":"s","v":"D"}
+		}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if !panes.Freeze {
+		t.Fatal("Freeze = false, want true")
+	}
+	if panes.YSplit != 4 {
+		t.Errorf("YSplit = %d, want 4", panes.YSplit)
+	}
+	if panes.XSplit != 0 {
+		t.Errorf("XSplit = %d, want 0", panes.XSplit)
+	}
+	if panes.TopLeftCell != "A5" {
+		t.Errorf("TopLeftCell = %q, want A5", panes.TopLeftCell)
+	}
+}
+
+func TestFreezePanes_Col3Row2(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"freeze": {"row": 2, "col": 3},
+		"cells": {
+			"A1":{"t":"s","v":"C"},"B1":{"t":"s","v":"C"},"C1":{"t":"s","v":"C"},
+			"A2":{"t":"s","v":"C"},"B2":{"t":"s","v":"C"},"C2":{"t":"s","v":"C"},
+			"D3":{"t":"s","v":"D"}
+		}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	panes, err := f.GetPanes("S1")
+	if err != nil {
+		t.Fatalf("GetPanes error: %v", err)
+	}
+	if !panes.Freeze {
+		t.Fatal("Freeze = false, want true")
+	}
+	if panes.YSplit != 2 {
+		t.Errorf("YSplit = %d, want 2", panes.YSplit)
+	}
+	if panes.XSplit != 3 {
+		t.Errorf("XSplit = %d, want 3", panes.XSplit)
+	}
+}
+
 func TestArrayOfMap_PreservesKeyOrder(t *testing.T) {
 	js := `[
 		{"name": "Alice", "age": 30, "city": "Tokyo",   "score": 88, "active": true},

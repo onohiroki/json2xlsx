@@ -128,6 +128,7 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 		wb.Cols = sh.Cols
 		wb.RowDims = sh.RowDims
 		wb.Merges = sh.Merges
+		wb.Freeze = sh.Freeze
 	} else {
 		wb.Sheets = sheets
 	}
@@ -234,6 +235,13 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSON
 		// ここではデフォルト 15.0 と一致する場合スキップする簡易判定。
 		if h > 0 && h != 15.0 {
 			sh.RowDims = append(sh.RowDims, RowInfo{Row: r, Height: h})
+		}
+	}
+
+	// freeze panes
+	if panes, err := f.GetPanes(name); err == nil && panes.Freeze {
+		if panes.YSplit > 0 || panes.XSplit > 0 {
+			sh.Freeze = &FreezePane{Row: panes.YSplit, Col: panes.XSplit}
 		}
 	}
 

@@ -39,7 +39,7 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 - Lightweight CLI that runs on Go 1.22+.[2]
 - Main dependencies are `excelize` (XLSX read/write) and `jsonschema/v6` (JSON validation).[1]
 - Accepts JSON in both SheetJS-style Cell Objects and simple 2D array formats.[4][3]
-- Supports formulas, newlines, borders, colors, number formats, links, etc. (Note: 2D array format does not support formulas or styles).[6][9][10]
+- Supports formulas, newlines, borders, colors, number formats, links, freeze panes, etc. (Note: 2D array format does not support formulas or styles).[6][9][10]
 - Because the AI generation part is separated, it can be combined with any LLM.[11][12]
 - **Chart generation** — bar, column, line, area, pie, doughnut, scatter, radar charts with customizable titles, legends, axes, and data labels.
 - **Japanese-friendly** — series names containing Japanese characters (e.g., `予算`, `実績`) are automatically preserved in Excel legends.
@@ -339,6 +339,7 @@ See `samples/chart_bar.json`, `samples/chart_scatter.json`, `samples/chart_times
 | Hyperlinks | Yes | specified via `L` field |
 | Merged cells | Yes | specified with `merges` array |
 | Charts | Yes | bar, column, line, area, pie, doughnut, scatter, radar |
+| Freeze panes | Yes | freeze rows/columns via `freeze` field |
 | Rich text | No | out of initial scope [4] |
 
 ## Go dependencies

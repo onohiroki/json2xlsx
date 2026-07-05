@@ -157,6 +157,23 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 	}
 
+	if sh.Freeze != nil && (sh.Freeze.Row > 0 || sh.Freeze.Col > 0) {
+		topLeftCell, err := excelize.CoordinatesToCellName(sh.Freeze.Col+1, sh.Freeze.Row+1)
+		if err != nil {
+			return err
+		}
+		panes := excelize.Panes{
+			Freeze:      true,
+			XSplit:      sh.Freeze.Col,
+			YSplit:      sh.Freeze.Row,
+			TopLeftCell: topLeftCell,
+			ActivePane:  "bottomRight",
+		}
+		if err := f.SetPanes(name, &panes); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -171,7 +171,7 @@ func TestValidate_ValidStyleWithAllBorderTypes(t *testing.T) {
 }
 
 func TestValidate_ExampleFiles(t *testing.T) {
-	for _, name := range []string{"sales.json", "styles.json", "merge.json", "time_diff.json", "time_test.json"} {
+	for _, name := range []string{"sales.json", "styles.json", "merge.json", "time_diff.json", "time_test.json", "freeze.json"} {
 		data, err := os.ReadFile("../../samples/" + name)
 		if err != nil {
 			t.Skipf("skip %s: %v", name, err)
@@ -186,6 +186,29 @@ func TestValidate_EmptyCells(t *testing.T) {
 	data := `{"name":"S","cells":{}}`
 	if err := ValidateJSON([]byte(data)); err != nil {
 		t.Errorf("empty cells should be valid, got: %v", err)
+	}
+}
+
+func TestValidate_FreezePanes_ValidSingleSheet(t *testing.T) {
+	data := `{
+		"name": "Sheet1",
+		"freeze": {"row": 1},
+		"cells": {"A1": {"t": "s", "v": "h"}}
+	}`
+	if err := ValidateJSON([]byte(data)); err != nil {
+		t.Errorf("freeze row=1 should be valid, got: %v", err)
+	}
+}
+
+func TestValidate_FreezePanes_ValidMultiSheet(t *testing.T) {
+	data := `{
+		"sheets": [
+			{"name": "S1", "freeze": {"col": 1}, "cells": {"A1": {"t": "s", "v": "h"}}},
+			{"name": "S2", "cells": {"A1": {"t": "s", "v": "h"}}}
+		]
+	}`
+	if err := ValidateJSON([]byte(data)); err != nil {
+		t.Errorf("freeze col=1 in multiSheet should be valid, got: %v", err)
 	}
 }
 

@@ -76,6 +76,7 @@ Keys are cell addresses like `A1`. Each value may contain the following fields:
 - Column width: `"cols": [{"col": "A", "width": 18}]`
 - Row height: `"rowDims": [{"row": 1, "height": 24}]`
 - Merge ranges: `"merges": [{"range": "A1:B1"}]`
+- Freeze panes: `"freeze": {"row": 1}` (freeze header rows) or `{"col": 1}` (freeze left columns)
 
 ## Example: sales table (single sheet)
 ```json
