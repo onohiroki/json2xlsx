@@ -85,6 +85,13 @@ var knownFuncs = map[string]bool{
 	"PRODUCT": true, "ROUNDUP": true, "ROUNDDOWN": true, "SUMPRODUCT": true,
 	"MEDIAN": true, "STDEV": true, "STDEV.S": true, "STDEV.P": true,
 	"SUMIF": true, "COUNTIF": true,
+	"FLOOR": true, "CEILING": true, "MOD": true, "POWER": true, "SQRT": true, "INT": true,
+	"COUNTA": true,
+	"VAR": true, "VAR.S": true, "VAR.P": true,
+	"RANK": true, "RANK.EQ": true, "LARGE": true, "SMALL": true,
+	"TODAY": true, "NOW": true,
+	"AVERAGEIF": true, "SUMIFS": true, "COUNTIFS": true, "AVERAGEIFS": true,
+	"IFERROR": true,
 }
 
 func (t *tokenizer) next() token {
@@ -359,6 +366,44 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncSumif(ctx, e.args)
 	case "COUNTIF":
 		return evalFuncCountif(ctx, e.args)
+	case "FLOOR":
+		return evalFuncFloor(ctx, e.args)
+	case "CEILING":
+		return evalFuncCeiling(ctx, e.args)
+	case "MOD":
+		return evalFuncMod(ctx, e.args)
+	case "POWER":
+		return evalFuncPower(ctx, e.args)
+	case "SQRT":
+		return evalFuncSqrt(ctx, e.args)
+	case "INT":
+		return evalFuncInt(ctx, e.args)
+	case "COUNTA":
+		return evalFuncCounta(ctx, e.args)
+	case "VAR", "VAR.S":
+		return evalFuncVarS(ctx, e.args)
+	case "VAR.P":
+		return evalFuncVarP(ctx, e.args)
+	case "RANK", "RANK.EQ":
+		return evalFuncRank(ctx, e.args)
+	case "LARGE":
+		return evalFuncLarge(ctx, e.args)
+	case "SMALL":
+		return evalFuncSmall(ctx, e.args)
+	case "TODAY":
+		return evalFuncToday(ctx, e.args)
+	case "NOW":
+		return evalFuncNow(ctx, e.args)
+	case "AVERAGEIF":
+		return evalFuncAverageif(ctx, e.args)
+	case "SUMIFS":
+		return evalFuncSumifs(ctx, e.args)
+	case "COUNTIFS":
+		return evalFuncCountifs(ctx, e.args)
+	case "AVERAGEIFS":
+		return evalFuncAverageifs(ctx, e.args)
+	case "IFERROR":
+		return evalFuncIferror(ctx, e.args)
 	}
 	return 0, fmt.Errorf("unknown function: %s", e.name)
 }
