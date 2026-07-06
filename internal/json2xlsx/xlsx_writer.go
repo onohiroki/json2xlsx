@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -177,6 +178,15 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 	return nil
 }
 
+var futureFuncRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_.]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)\s*\(`)
+
+// addFutureFuncPrefix adds the _xlfn. prefix to future functions
+// (Excel 2010+ functions that contain a dot in their name) in a formula.
+// Without this prefix, Excel returns #NAME? for these functions.
+func addFutureFuncPrefix(formula string) string {
+	return futureFuncRe.ReplaceAllString(formula, `_xlfn.$1(`)
+}
+
 func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int, styles []Style) error {
 	switch c.T {
 	case "f":
@@ -188,7 +198,8 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int,
 				return err
 			}
 		}
-		if err := f.SetCellFormula(sheet, axis, c.F); err != nil {
+		formula := addFutureFuncPrefix(c.F)
+		if err := f.SetCellFormula(sheet, axis, formula); err != nil {
 			return err
 		}
 	case "b":
