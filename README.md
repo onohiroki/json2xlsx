@@ -84,11 +84,17 @@ Date/time cells (`t: "d"`) default to outputting Excel's internal serial value a
 
 ### `to-xlsx` — JSON → XLSX (default)
 
-Read JSON and output `.xlsx`. Input is expected in SheetJS-style Workbook JSON by default. With `--data-json`, accepts 2D array (e.g. `[["A", 1], ["B", 2]]`), array of objects, or map-of-arrays JSON. Note that data JSON formats do not support formulas or styles.
+Read JSON and output `.xlsx`. Input is expected in SheetJS-style Workbook JSON by default. With `--data-json`, accepts 2D array (e.g. `[["A", 1], ["B", 2]]`), array of objects, or map-of-arrays JSON. Note that data JSON formats (`--data-json`) do not support formulas or styles.
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx
 json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
+```
+
+Use `--compute` to evaluate formulas (`t: "f"`) that lack a cached value (`v`). The built-in formula engine supports arithmetic operators, comparison operators, and functions such as `SUM`, `AVERAGE`, `IF`, `MIN`, `MAX`, `ROUND`, `TODAY`, `NOW`, and more. Cells that fail evaluation are skipped with a warning on stderr.
+
+```bash
+json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 ```
 
 Omitting the subcommand has the same behavior.
@@ -105,11 +111,12 @@ cat input.json | json2xlsx to-xlsx -o output.xlsx
 
 ### `to-md` — JSON / XLSX → Markdown
 
-Convert a Workbook to Markdown tables. Input accepts both JSON (json2xlsx-compatible Workbook) and XLSX; auto-detection is done via the first 4 magic bytes (`PK\x03\x04`). Useful as an intermediate representation to show to AI or to inspect with `cat`.
+Convert a Workbook to Markdown tables. Input accepts both JSON (json2xlsx-compatible Workbook) and XLSX; auto-detection is done via the first 4 magic bytes (`PK\x03\x04`). Useful as an intermediate representation to show to AI or to inspect with `cat`. Use `--compute` to evaluate formulas before output.
 
 ```bash
 json2xlsx to-md -i input.json -o output.md
 json2xlsx to-md -i input.xlsx -o output.md
+json2xlsx to-md -i input.json -o output.md --compute
 cat input.xlsx | json2xlsx to-md > output.md
 ```
 
@@ -159,6 +166,7 @@ Convert a Workbook to an HTML `<table>` fragment. Input detection works like `to
 ```bash
 json2xlsx to-html -i input.json -o output.html
 json2xlsx to-html -i input.xlsx -o output.html
+json2xlsx to-html -i input.json -o output.html --grid
 cat input.xlsx | json2xlsx to-html > output.html
 ```
 
@@ -168,6 +176,8 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode f`: show formulas (`=B2*C2`). Column names A/B/C and row numbers are shown in `<th>`.
 - `--mode both`: show both `v` and formula like `v<br />=f`.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
+- `--grid`: show thin gray borders on all cells, including empty ones (collapses cellspacing).
+- `--compute`: evaluate formulas before output.
 
 #### Style mapping
 
@@ -186,8 +196,16 @@ Convert JSON or XLSX to CSV. Supports json2xlsx Workbook JSON, `csvtk csv2json` 
 ```bash
 json2xlsx to-csv -i input.json -o output.csv
 json2xlsx to-csv -i data.json -o output.csv --data-json
+json2xlsx to-csv -i input.xlsx -o output.csv --sheet "Sheet1"
+json2xlsx to-csv -i input.xlsx -o output.csv --sheet-index 1
 cat input.json | json2xlsx to-csv > output.csv
 ```
+
+Options:
+
+- `--sheet`: extract a specific sheet by name (for multi-sheet XLSX or Workbook JSON).
+- `--sheet-index`: extract a sheet by 1-based index (for multi-sheet XLSX or Workbook JSON).
+- `--compute`: evaluate formulas before output.
 
 ## Input JSON concepts
 
@@ -268,7 +286,7 @@ Charts are supported in the `book` wrapper format via the `charts` array. Each c
 | `dim` | object | `{w, h, offx, offy, sx, sy}` — width/height in pixels, offsets in EMU, scale factors |
 | `title` | object | `{tx, overlay}` — chart title text and overlay flag |
 | `legend` | object | `{show, pos}` — `pos`: `"top"`, `"bottom"`, `"left"`, `"right"`, `"topRight"` |
-| `xAxis` | object | `{title, minimum, maximum, majorUnit, reverseOrder, majorGridLines, minorGridLines, numFmt}` |
+| `xAxis` | object | `{title, minimum, maximum, majorUnit, minorUnit, reverseOrder, majorGridLines, minorGridLines, numFmt}` |
 | `yAxis` | object | Same as `xAxis` |
 | `plot` | object | `{varyColors, showBlanksAs}` — plot area options |
 | `ser` | array | Array of series objects (see below) |
@@ -282,6 +300,7 @@ Charts are supported in the `book` wrapper format via the `charts` array. Each c
 | `val` | string | Values range (e.g. `"部門予算!$B$2:$B$7"`) |
 | `xVal` | string | X-values range (scatter only) |
 | `yVal` | string | Y-values range (scatter only) |
+| `bubble` | string | Bubble size range (bubble chart only) |
 | `line` | object | `{width}` — line width in pt |
 | `fill` | object | `{color}` — fill color (e.g. `"#FF0000"`) |
 | `marker` | object | `{symbol, size}` — marker symbol and size |
@@ -402,6 +421,21 @@ type Style struct {
     Font      *Font      `json:"font,omitempty"`
     Alignment *Alignment `json:"alignment,omitempty"`
     NumFmt    string     `json:"numFmt,omitempty"`
+}
+
+type ColInfo struct {
+    Col   string  `json:"col"`
+    Width float64 `json:"width"`
+}
+
+type RowInfo struct {
+    Row    int     `json:"row"`
+    Height float64 `json:"height"`
+}
+
+type FreezePane struct {
+    Row int `json:"row,omitempty"`
+    Col int `json:"col,omitempty"`
 }
 ```
 

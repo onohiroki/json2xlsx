@@ -87,11 +87,17 @@ cat input.xlsx | json2xlsx to-json > output.json
 
 ### `to-xlsx` — JSON → XLSX (デフォルト)
 
-JSON を読み込み，`.xlsx` を出力します．デフォルトでは SheetJS 形式の Workbook JSON を受け付けます．`--data-json` を指定すると，二次元配列（例: `[["A", 1], ["B", 2]]`），オブジェクト配列，Map-of-Arrays の各形式に対応します．データ JSON 形式では数式やスタイルは指定できません．
+JSON を読み込み，`.xlsx` を出力します．デフォルトでは SheetJS 形式の Workbook JSON を受け付けます．`--data-json` を指定すると，二次元配列（例: `[["A", 1], ["B", 2]]`），オブジェクト配列，Map-of-Arrays の各形式に対応します．データ JSON 形式（`--data-json`）では数式やスタイルは指定できません．
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx
 json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
+```
+
+`--compute` を指定すると，キャッシュ値 (`v`) がない数式 (`t: "f"`) を組み込みの数式エンジンで評価します．算術演算子，比較演算子，`SUM`, `AVERAGE`, `IF`, `MIN`, `MAX`, `ROUND`, `TODAY`, `NOW` などの関数に対応しています．評価に失敗したセルはスキップされ，警告が stderr に出力されます．
+
+```bash
+json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 ```
 
 サブコマンド省略時も同じ動作になります．
@@ -108,11 +114,12 @@ cat input.json | json2xlsx to-xlsx -o output.xlsx
 
 ### `to-md` — JSON / XLSX → Markdown
 
-`Workbook` を Markdown のテーブルに変換します．入力は **JSON (json2xlsx 互換 Workbook) と XLSX の両方** に対応し，先頭 4 バイトの magic byte (`PK\x03\x04`) で自動判定します．AI への提示や `cat` での内容確認用の中間表現として使えます．
+`Workbook` を Markdown のテーブルに変換します．入力は **JSON (json2xlsx 互換 Workbook) と XLSX の両方** に対応し，先頭 4 バイトの magic byte (`PK\x03\x04`) で自動判定します．AI への提示や `cat` での内容確認用の中間表現として使えます．`--compute` を指定すると，出力前に数式を評価できます．
 
 ```bash
 json2xlsx to-md -i input.json -o output.md
 json2xlsx to-md -i input.xlsx -o output.md
+json2xlsx to-md -i input.json -o output.md --compute
 cat input.xlsx | json2xlsx to-md > output.md
 ```
 
@@ -162,6 +169,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 ```bash
 json2xlsx to-html -i input.json -o output.html
 json2xlsx to-html -i input.xlsx -o output.html
+json2xlsx to-html -i input.json -o output.html --grid
 cat input.xlsx | json2xlsx to-html > output.html
 ```
 
@@ -171,6 +179,8 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode f`: 数式 (`=B2*C2`) を表示．A/B/C 列名 + 行番号を `<th>` で表示．
 - `--mode both`: `v` と数式の両方を `v<br />=f` のように併記．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
+- `--grid`: 空セルを含む全セルに灰色の細枠線を表示する（cellspacing を collapsed にする）．
+- `--compute`: 出力前に数式を評価する．
 
 #### スタイル反映
 
@@ -189,8 +199,16 @@ JSON または XLSX を CSV に変換します．json2xlsx 形式の JSON，`csv
 ```bash
 json2xlsx to-csv -i input.json -o output.csv
 json2xlsx to-csv -i data.json -o output.csv --data-json
+json2xlsx to-csv -i input.xlsx -o output.csv --sheet "Sheet1"
+json2xlsx to-csv -i input.xlsx -o output.csv --sheet-index 1
 cat input.json | json2xlsx to-csv > output.csv
 ```
+
+オプション:
+
+- `--sheet`: シート名で特定のシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
+- `--sheet-index`: 1 始まりのインデックスでシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
+- `--compute`: 出力前に数式を評価する．
 
 ## 入力JSONの考え方
 
@@ -271,7 +289,7 @@ cat input.json | json2xlsx to-csv > output.csv
 | `dim` | object | `{w, h, offx, offy, sx, sy}` — 幅/高さ(px)，オフセット(EMU)，拡大率 |
 | `title` | object | `{tx, overlay}` — グラフタイトル文字列とオーバーレイフラグ |
 | `legend` | object | `{show, pos}` — `pos`: `"top"`, `"bottom"`, `"left"`, `"right"`, `"topRight"` |
-| `xAxis` | object | `{title, minimum, maximum, majorUnit, reverseOrder, majorGridLines, minorGridLines, numFmt}` |
+| `xAxis` | object | `{title, minimum, maximum, majorUnit, minorUnit, reverseOrder, majorGridLines, minorGridLines, numFmt}` |
 | `yAxis` | object | `xAxis` と同じ構造 |
 | `plot` | object | `{varyColors, showBlanksAs}` — プロットエリアオプション |
 | `ser` | array | 系列オブジェクトの配列（下記参照） |
@@ -285,6 +303,7 @@ cat input.json | json2xlsx to-csv > output.csv
 | `val` | string | 値範囲（例: `"部門予算!$B$2:$B$7"`） |
 | `xVal` | string | X 値範囲（散布図のみ） |
 | `yVal` | string | Y 値範囲（散布図のみ） |
+| `bubble` | string | バブルサイズ範囲（バブルチャートのみ） |
 | `line` | object | `{width}` — 線幅(pt) |
 | `fill` | object | `{color}` — 塗りつぶし色（例: `"#FF0000"`） |
 | `marker` | object | `{symbol, size}` — マーカー記号とサイズ |
@@ -405,6 +424,21 @@ type Style struct {
     Font      *Font      `json:"font,omitempty"`
     Alignment *Alignment `json:"alignment,omitempty"`
     NumFmt    string     `json:"numFmt,omitempty"`
+}
+
+type ColInfo struct {
+    Col   string  `json:"col"`
+    Width float64 `json:"width"`
+}
+
+type RowInfo struct {
+    Row    int     `json:"row"`
+    Height float64 `json:"height"`
+}
+
+type FreezePane struct {
+    Row int `json:"row,omitempty"`
+    Col int `json:"col,omitempty"`
 }
 ```
 
