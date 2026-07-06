@@ -91,11 +91,73 @@ json2xlsx to-xlsx -i input.json -o output.xlsx
 json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
 ```
 
-Use `--compute` to evaluate formulas (`t: "f"`) that lack a cached value (`v`). The built-in formula engine supports arithmetic operators, comparison operators, and functions such as `SUM`, `AVERAGE`, `IF`, `MIN`, `MAX`, `ROUND`, `TODAY`, `NOW`, and more. Cells that fail evaluation are skipped with a warning on stderr.
+Use `--compute` to evaluate formulas (`t: "f"`) that lack a cached value (`v`). Cells that fail evaluation are skipped with a warning on stderr.
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 ```
+
+### Formula engine
+
+The built-in formula engine evaluates formulas cell-by-cell. Below is the full list of supported features.
+
+**Arithmetic operators:** `+`, `-`, `*`, `/`
+
+**Comparison operators:** `<`, `>`, `=`, `<=`, `>=`, `<>` (not equal). Comparison results are `1` (true) or `0` (false).
+
+**Supported functions:**
+
+| Function | Description |
+|----------|-------------|
+| `SUM(n1, n2, ...)` | Sum of numbers |
+| `AVERAGE(n1, n2, ...)` | Arithmetic mean |
+| `COUNT(n1, n2, ...)` | Count of numeric cells |
+| `COUNTA(n1, n2, ...)` | Count of non-empty cells |
+| `MIN(n1, n2, ...)` | Minimum value |
+| `MAX(n1, n2, ...)` | Maximum value |
+| `ABS(x)` | Absolute value |
+| `ROUND(x, digits)` | Round to specified digits |
+| `ROUNDUP(x, digits)` | Round away from zero |
+| `ROUNDDOWN(x, digits)` | Round toward zero |
+| `INT(x)` | Integer portion |
+| `PRODUCT(n1, n2, ...)` | Multiply numbers |
+| `SUMPRODUCT(a1, a2, ...)` | Sum of element-wise products |
+| `POWER(x, y)` | x raised to the power y |
+| `SQRT(x)` | Square root |
+| `MOD(x, y)` | Remainder of x / y |
+| `FLOOR(x, significance)` | Round down to nearest multiple |
+| `CEILING(x, significance)` | Round up to nearest multiple |
+| `MEDIAN(n1, n2, ...)` | Median value |
+| `STDEV.S(n1, n2, ...)` | Sample standard deviation |
+| `STDEV.P(n1, n2, ...)` | Population standard deviation |
+| `VAR.S(n1, n2, ...)` | Sample variance |
+| `VAR.P(n1, n2, ...)` | Population variance |
+| `RANK(x, range, [order])` | Rank of x in range (0=desc, non-zero=asc) |
+| `RANK.EQ(x, range, [order])` | Alias for RANK |
+| `LARGE(range, k)` | k-th largest value |
+| `SMALL(range, k)` | k-th smallest value |
+| `IF(cond, t_val, f_val)` | Conditional (cond != 0 → t_val, else f_val) |
+| `IFERROR(expr, fallback)` | Return fallback if expr errors |
+| `AND(n1, n2, ...)` | Logical AND (1 if all non-zero) |
+| `OR(n1, n2, ...)` | Logical OR (1 if any non-zero) |
+| `NOT(x)` | Logical NOT (1 if zero) |
+| `SUMIF(check_range, criteria, [sum_range])` | Sum cells matching criteria |
+| `COUNTIF(range, criteria)` | Count cells matching criteria |
+| `AVERAGEIF(check_range, criteria, [avg_range])` | Average cells matching criteria |
+| `SUMIFS(sum_range, crit_range1, crit1, ...)` | Sum with multiple criteria |
+| `COUNTIFS(crit_range1, crit1, ...)` | Count with multiple criteria |
+| `AVERAGEIFS(avg_range, crit_range1, crit1, ...)` | Average with multiple criteria |
+| `TODAY()` | Current date as serial number |
+| `NOW()` | Current date and time as serial number |
+
+**Limitations:**
+
+- Only numeric values are supported. Text functions (e.g. `CONCAT`, `LEFT`, `FIND`) and string comparisons in criteria are **not** available.
+- Range references (e.g. `A1:A10`) are valid only inside function arguments; standalone ranges produce an error.
+- Cell references use A1-style only (no R1C1). Column letters are limited to 3 characters (`A`–`ZZZ`).
+- Cross-sheet references are **not** supported.
+- Array formulas, volatile flags, and iterative calculation are **not** supported.
+- Circular references are detected and reported as warnings. All other evaluation errors cause the cell to be skipped.
 
 Omitting the subcommand has the same behavior.
 

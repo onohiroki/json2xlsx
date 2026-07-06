@@ -94,11 +94,73 @@ json2xlsx to-xlsx -i input.json -o output.xlsx
 json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
 ```
 
-`--compute` を指定すると，キャッシュ値 (`v`) がない数式 (`t: "f"`) を組み込みの数式エンジンで評価します．算術演算子，比較演算子，`SUM`, `AVERAGE`, `IF`, `MIN`, `MAX`, `ROUND`, `TODAY`, `NOW` などの関数に対応しています．評価に失敗したセルはスキップされ，警告が stderr に出力されます．
+`--compute` を指定すると，キャッシュ値 (`v`) がない数式 (`t: "f"`) を組み込みの数式エンジンで評価します．評価に失敗したセルはスキップされ，警告が stderr に出力されます．
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 ```
+
+### 数式エンジン
+
+組み込みの数式エンジンはセル単位で数式を評価します．以下に対応一覧を示します．
+
+**算術演算子:** `+`, `-`, `*`, `/`
+
+**比較演算子:** `<`, `>`, `=`, `<=`, `>=`, `<>` (等しくない)．比較結果は `1` (真) または `0` (偽) です．
+
+**対応関数:**
+
+| 関数 | 説明 |
+|------|------|
+| `SUM(n1, n2, ...)` | 数値の合計 |
+| `AVERAGE(n1, n2, ...)` | 算術平均 |
+| `COUNT(n1, n2, ...)` | 数値セルの個数 |
+| `COUNTA(n1, n2, ...)` | 空でないセルの個数 |
+| `MIN(n1, n2, ...)` | 最小値 |
+| `MAX(n1, n2, ...)` | 最大値 |
+| `ABS(x)` | 絶対値 |
+| `ROUND(x, digits)` | 指定桁数に丸める |
+| `ROUNDUP(x, digits)` | 切り上げ |
+| `ROUNDDOWN(x, digits)` | 切り捨て |
+| `INT(x)` | 整数部 |
+| `PRODUCT(n1, n2, ...)` | 乗算 |
+| `SUMPRODUCT(a1, a2, ...)` | 要素ごとの積の和 |
+| `POWER(x, y)` | x の y 乗 |
+| `SQRT(x)` | 平方根 |
+| `MOD(x, y)` | x / y の剰余 |
+| `FLOOR(x, significance)` | 指定した倍数に切り下げ |
+| `CEILING(x, significance)` | 指定した倍数に切り上げ |
+| `MEDIAN(n1, n2, ...)` | 中央値 |
+| `STDEV.S(n1, n2, ...)` | 標本標準偏差 |
+| `STDEV.P(n1, n2, ...)` | 母標準偏差 |
+| `VAR.S(n1, n2, ...)` | 標本分散 |
+| `VAR.P(n1, n2, ...)` | 母分散 |
+| `RANK(x, range, [order])` | 範囲内での順位 (0=降順, 非0=昇順) |
+| `RANK.EQ(x, range, [order])` | RANK の別名 |
+| `LARGE(range, k)` | k 番目に大きい値 |
+| `SMALL(range, k)` | k 番目に小さい値 |
+| `IF(cond, t_val, f_val)` | 条件分岐 (cond != 0 → t_val, それ以外 → f_val) |
+| `IFERROR(expr, fallback)` | エラー時にフォールバック値を返す |
+| `AND(n1, n2, ...)` | 論理積 (すべて非ゼロなら 1) |
+| `OR(n1, n2, ...)` | 論理和 (いずれか非ゼロなら 1) |
+| `NOT(x)` | 論理否定 (ゼロなら 1) |
+| `SUMIF(check_range, criteria, [sum_range])` | 条件に合うセルの合計 |
+| `COUNTIF(range, criteria)` | 条件に合うセルの個数 |
+| `AVERAGEIF(check_range, criteria, [avg_range])` | 条件に合うセルの平均 |
+| `SUMIFS(sum_range, crit_range1, crit1, ...)` | 複数条件での合計 |
+| `COUNTIFS(crit_range1, crit1, ...)` | 複数条件での個数 |
+| `AVERAGEIFS(avg_range, crit_range1, crit1, ...)` | 複数条件での平均 |
+| `TODAY()` | 現在日付をシリアル値で返す |
+| `NOW()` | 現在日時をシリアル値で返す |
+
+**制限:**
+
+- 数値のみ対応しています．文字列関数 (`CONCAT`, `LEFT`, `FIND` など) や条件内の文字列比較は **利用できません**．
+- 範囲参照 (`A1:A10` など) は関数の引数内でのみ有効です．単独の範囲はエラーになります．
+- セル参照は A1 形式のみ対応 (R1C1 は不可)．列文字は 3 文字以内 (`A`–`ZZZ`)．
+- シート間参照は **非対応** です．
+- 配列数式，揮発性フラグ，反復計算は **非対応** です．
+- 循環参照は検出されて警告として報告されます．その他の評価エラーは該当セルがスキップされます．
 
 サブコマンド省略時も同じ動作になります．
 
