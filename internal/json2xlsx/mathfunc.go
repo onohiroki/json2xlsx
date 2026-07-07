@@ -157,6 +157,78 @@ func evalFuncRand(ctx *evalContext, args []expr) (float64, error) {
 	return rand.Float64(), nil
 }
 
+func evalFuncSin(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("SIN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Sin(n), nil
+}
+
+func evalFuncCos(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("COS requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Cos(n), nil
+}
+
+func evalFuncTan(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("TAN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Tan(n), nil
+}
+
+func evalFuncLn(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("LN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("LN #NUM!")
+	}
+	return math.Log(n), nil
+}
+
+func evalFuncLog10(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("LOG10 requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("LOG10 #NUM!")
+	}
+	return math.Log10(n), nil
+}
+
+func evalFuncExp(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("EXP requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Exp(n), nil
+}
+
 func evalFuncCounta(ctx *evalContext, args []expr) (float64, error) {
 	var count float64
 	for _, arg := range args {
