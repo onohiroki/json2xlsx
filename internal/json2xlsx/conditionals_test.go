@@ -36,6 +36,13 @@ func TestEval_AverageifNoAvgRange(t *testing.T) {
 	}
 }
 
+func TestEval_AverageifWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "AVERAGEIF(A1:A2)")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
 func TestEval_AverageifNoMatch(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 1.0},
@@ -66,6 +73,17 @@ func TestEval_Sumifs(t *testing.T) {
 	got := evalFormula(t, cells, "SUMIFS(A1:A3,B1:B3,10,C1:C3,1)")
 	if got != 100 {
 		t.Errorf("SUMIFS = %v, want 100", got)
+	}
+}
+
+func TestEval_SumifsNoMatch(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 100.0},
+		"B1": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "SUMIFS(A1,B1,99)")
+	if got != 0 {
+		t.Errorf("SUMIFS no match = %v, want 0", got)
 	}
 }
 
@@ -137,6 +155,13 @@ func TestEval_Averageifs(t *testing.T) {
 	// Rows 1 and 3 match: 100 and 300 → average 200
 	if got != 200 {
 		t.Errorf("AVERAGEIFS = %v, want 200", got)
+	}
+}
+
+func TestEval_AverageifsWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "AVERAGEIFS(A1:A2)")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
 

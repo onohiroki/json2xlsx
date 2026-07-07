@@ -74,6 +74,13 @@ func TestEval_Vlookup(t *testing.T) {
 	}
 }
 
+func TestEval_VlookupWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "VLOOKUP(10,A1:B2)")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
 func TestEval_VlookupErrors(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 10.0},
@@ -122,6 +129,13 @@ func TestEval_Match(t *testing.T) {
 				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEval_MatchWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "MATCH(10)")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
 
@@ -175,6 +189,32 @@ func TestEval_Index(t *testing.T) {
 				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEval_IndexWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "INDEX()")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "INDEX(A1:B3,1,2,3)")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_IndexColumnOutOfRange(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"B1": {T: "n", V: 100.0},
+	}
+	errMsg := evalFormulaErr(t, cells, "INDEX(A1:B1,1,3)")
+	if !strings.Contains(errMsg, "out of range") {
+		t.Errorf("expected out of range error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, cells, "INDEX(A1:B1,1,0)")
+	if !strings.Contains(errMsg, "out of range") {
+		t.Errorf("expected out of range error, got %q", errMsg)
 	}
 }
 
@@ -237,6 +277,13 @@ func TestEval_XlookupIfNotFound(t *testing.T) {
 	got := evalFormula(t, cells, "XLOOKUP(99,A1:A2,B1:B2,-1)")
 	if got != -1 {
 		t.Errorf("XLOOKUP with not found = %v, want -1", got)
+	}
+}
+
+func TestEval_XlookupWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "XLOOKUP(10,A1:A2)")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
 

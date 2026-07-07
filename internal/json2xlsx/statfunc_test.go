@@ -50,6 +50,13 @@ func TestEval_VarPTooFew(t *testing.T) {
 	}
 }
 
+func TestEval_VarSEmptySet(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "VAR.S(Z1:Z999)")
+	if !strings.Contains(errMsg, "empty") {
+		t.Errorf("expected empty set error, got %q", errMsg)
+	}
+}
+
 func TestEval_VarSTooFew(t *testing.T) {
 	errMsg := evalFormulaErr(t, nil, "VAR.S(1)")
 	if !strings.Contains(errMsg, "at least 2") {

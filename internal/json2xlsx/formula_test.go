@@ -236,6 +236,20 @@ func TestEval_CountEmptyRange(t *testing.T) {
 	}
 }
 
+func TestEval_MinEmpty(t *testing.T) {
+	got := evalFormula(t, nil, "MIN(Z1:Z999)")
+	if got != 0 {
+		t.Errorf("MIN(Z1:Z999) = %v, want 0", got)
+	}
+}
+
+func TestEval_MaxEmpty(t *testing.T) {
+	got := evalFormula(t, nil, "MAX(Z1:Z999)")
+	if got != 0 {
+		t.Errorf("MAX(Z1:Z999) = %v, want 0", got)
+	}
+}
+
 func TestEval_Min(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 10.0},
@@ -295,6 +309,8 @@ func TestEval_Round(t *testing.T) {
 		{"ROUND(3.1415,0)", 3},
 		{"ROUND(3.1415,1)", 3.1},
 		{"ROUND(5.6789,2)", 5.68},
+		{"ROUND(3.1415,-1)", 0},
+		{"ROUND(14.99,-1)", 10},
 	}
 	for _, tt := range tests {
 		t.Run(tt.formula, func(t *testing.T) {
@@ -1271,6 +1287,9 @@ func TestEval_Roundup(t *testing.T) {
 		{"ROUNDUP(3.1415,3)", 3.142},
 		{"ROUNDUP(-3.1415,2)", -3.15},
 		{"ROUNDUP(5.0,0)", 5},
+		{"ROUNDUP(3.1415,-1)", 10},
+		{"ROUNDUP(14.99,-1)", 20},
+		{"ROUNDUP(-3.1415,-1)", -10},
 	}
 	for _, tt := range tests {
 		t.Run(tt.formula, func(t *testing.T) {
@@ -1299,6 +1318,9 @@ func TestEval_Rounddown(t *testing.T) {
 		{"ROUNDDOWN(3.1415,3)", 3.141},
 		{"ROUNDDOWN(-3.1415,2)", -3.14},
 		{"ROUNDDOWN(5.0,0)", 5},
+		{"ROUNDDOWN(3.1415,-1)", 0},
+		{"ROUNDDOWN(14.99,-1)", 10},
+		{"ROUNDDOWN(-3.1415,-1)", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.formula, func(t *testing.T) {
@@ -1343,6 +1365,19 @@ func TestEval_SumproductWrongArgCount(t *testing.T) {
 	errMsg := evalFormulaErr(t, nil, "SUMPRODUCT(5)")
 	if !strings.Contains(errMsg, "requires at least 2 arguments") {
 		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_SumproductDifferentLengths(t *testing.T) {
+	// SUMPRODUCT uses the shortest array length when arrays differ
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0},
+		"A2": {T: "n", V: 2.0},
+		"B1": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "SUMPRODUCT(A1:A2,B1:B1)")
+	if got != 1*10 {
+		t.Errorf("SUMPRODUCT(A1:A2,B1:B1) = %v, want 10", got)
 	}
 }
 
@@ -1414,6 +1449,13 @@ func TestEval_StdevAlias(t *testing.T) {
 	got := evalFormula(t, nil, "STDEV(2,4,4,4,5,5,7,9)")
 	if got != gotS {
 		t.Errorf("STDEV = %v, STDEV.S = %v, want equal", got, gotS)
+	}
+}
+
+func TestEval_StdevPEmpty(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "STDEV.P(Z1:Z999)")
+	if !strings.Contains(errMsg, "empty") {
+		t.Errorf("expected empty error, got %q", errMsg)
 	}
 }
 

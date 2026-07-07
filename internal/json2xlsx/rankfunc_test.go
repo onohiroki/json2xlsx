@@ -82,6 +82,20 @@ func TestEval_RankEq(t *testing.T) {
 	}
 }
 
+func TestEval_RankWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "RANK()")
+	if !strings.Contains(errMsg, "requires") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_RankEmptyRef(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "RANK(1,Z1:Z999)")
+	if !strings.Contains(errMsg, "not found") {
+		t.Errorf("expected not found error, got %q", errMsg)
+	}
+}
+
 func TestEval_RankNotFound(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 10.0},
@@ -132,6 +146,13 @@ func TestEval_LargeErrors(t *testing.T) {
 	}
 }
 
+func TestEval_LargeEmptySet(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "LARGE(Z1:Z999,1)")
+	if !strings.Contains(errMsg, "empty") {
+		t.Errorf("expected empty set error, got %q", errMsg)
+	}
+}
+
 func TestEval_LargeKOutOfRange(t *testing.T) {
 	errMsg := evalFormulaErr(t, nil, "LARGE(1,0)")
 	if !strings.Contains(errMsg, "out of range") {
@@ -168,6 +189,24 @@ func TestEval_Small(t *testing.T) {
 				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEval_SmallWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SMALL(1)")
+	if !strings.Contains(errMsg, "exactly 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "SMALL(1,2,3)")
+	if !strings.Contains(errMsg, "exactly 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_SmallEmptySet(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SMALL(Z1:Z999,1)")
+	if !strings.Contains(errMsg, "empty") {
+		t.Errorf("expected empty set error, got %q", errMsg)
 	}
 }
 
