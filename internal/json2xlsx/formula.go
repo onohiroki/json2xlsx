@@ -92,6 +92,7 @@ var knownFuncs = map[string]bool{
 	"TODAY": true, "NOW": true,
 	"AVERAGEIF": true, "SUMIFS": true, "COUNTIFS": true, "AVERAGEIFS": true,
 	"IFERROR": true,
+	"VLOOKUP": true, "XLOOKUP": true, "INDEX": true, "MATCH": true, "CHOOSE": true,
 }
 
 func (t *tokenizer) next() token {
@@ -404,6 +405,16 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncAverageifs(ctx, e.args)
 	case "IFERROR":
 		return evalFuncIferror(ctx, e.args)
+	case "VLOOKUP":
+		return evalFuncVlookup(ctx, e.args)
+	case "XLOOKUP":
+		return evalFuncXlookup(ctx, e.args)
+	case "INDEX":
+		return evalFuncIndex(ctx, e.args)
+	case "MATCH":
+		return evalFuncMatch(ctx, e.args)
+	case "CHOOSE":
+		return evalFuncChoose(ctx, e.args)
 	}
 	return 0, fmt.Errorf("unknown function: %s", e.name)
 }
