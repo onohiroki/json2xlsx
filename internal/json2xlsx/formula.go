@@ -96,6 +96,9 @@ var knownFuncs = map[string]bool{
 	"TRUNC": true, "SIGN": true, "PI": true, "RAND": true,
 	"SIN": true, "COS": true, "TAN": true, "LN": true, "LOG10": true, "EXP": true,
 	"ASIN": true, "ACOS": true, "ATAN": true, "DEGREES": true, "RADIANS": true,
+	"ATAN2": true, "SINH": true, "COSH": true, "TANH": true,
+	"ASINH": true, "ACOSH": true, "ATANH": true,
+	"LOG": true, "FACT": true,
 }
 
 func (t *tokenizer) next() token {
@@ -448,6 +451,24 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncDegrees(ctx, e.args)
 	case "RADIANS":
 		return evalFuncRadians(ctx, e.args)
+	case "ATAN2":
+		return evalFuncAtan2(ctx, e.args)
+	case "SINH":
+		return evalFuncSinh(ctx, e.args)
+	case "COSH":
+		return evalFuncCosh(ctx, e.args)
+	case "TANH":
+		return evalFuncTanh(ctx, e.args)
+	case "ASINH":
+		return evalFuncAsinh(ctx, e.args)
+	case "ACOSH":
+		return evalFuncAcosh(ctx, e.args)
+	case "ATANH":
+		return evalFuncAtanh(ctx, e.args)
+	case "LOG":
+		return evalFuncLog(ctx, e.args)
+	case "FACT":
+		return evalFuncFact(ctx, e.args)
 	}
 	return 0, fmt.Errorf("unknown function: %s", e.name)
 }

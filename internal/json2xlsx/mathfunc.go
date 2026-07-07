@@ -290,6 +290,142 @@ func evalFuncRadians(ctx *evalContext, args []expr) (float64, error) {
 	return n * math.Pi / 180, nil
 }
 
+func evalFuncAtan2(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("ATAN2 requires exactly 2 arguments")
+	}
+	x, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	y, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Atan2(y, x), nil
+}
+
+func evalFuncSinh(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("SINH requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Sinh(n), nil
+}
+
+func evalFuncCosh(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("COSH requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Cosh(n), nil
+}
+
+func evalFuncTanh(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("TANH requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Tanh(n), nil
+}
+
+func evalFuncAsinh(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ASINH requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Asinh(n), nil
+}
+
+func evalFuncAcosh(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ACOSH requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("ACOSH #NUM!")
+	}
+	return math.Acosh(n), nil
+}
+
+func evalFuncAtanh(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ATANH requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n <= -1 || n >= 1 {
+		return 0, fmt.Errorf("ATANH #NUM!")
+	}
+	return math.Atanh(n), nil
+}
+
+func evalFuncLog(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return 0, fmt.Errorf("LOG requires 1 or 2 arguments")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("LOG #NUM!")
+	}
+	if len(args) == 1 {
+		return math.Log(n), nil
+	}
+	base, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if base <= 0 || base == 1 {
+		return 0, fmt.Errorf("LOG #NUM!")
+	}
+	return math.Log(n) / math.Log(base), nil
+}
+
+func evalFuncFact(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("FACT requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m := int(n)
+	if float64(m) != n {
+		m = int(math.Trunc(n))
+	}
+	if m < 0 {
+		return 0, fmt.Errorf("FACT #NUM!")
+	}
+	if m == 0 {
+		return 1, nil
+	}
+	result := 1.0
+	for i := 2; i <= m; i++ {
+		result *= float64(i)
+	}
+	return result, nil
+}
+
 func evalFuncCounta(ctx *evalContext, args []expr) (float64, error) {
 	var count float64
 	for _, arg := range args {

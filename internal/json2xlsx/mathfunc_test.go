@@ -655,3 +655,281 @@ func TestEval_RadiansErrors(t *testing.T) {
 		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
+
+func TestEval_Atan2(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ATAN2(1,0)", 0},
+		{"ATAN2(0,1)", 1.5707963267948966},
+		{"ATAN2(1,1)", 0.7853981633974483},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_Atan2Errors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "ATAN2(1)")
+	if !strings.Contains(errMsg, "exactly 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Sinh(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"SINH(0)", 0},
+		{"SINH(1)", 1.1752011936438014},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_SinhErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SINH()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Cosh(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"COSH(0)", 1},
+		{"COSH(1)", 1.5430806348152437},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_CoshErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "COSH()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Tanh(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"TANH(0)", 0},
+		{"TANH(1)", 0.7615941559557649},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_TanhErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "TANH()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Asinh(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ASINH(0)", 0},
+		{"ASINH(1)", 0.881373587019543},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_AsinhErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "ASINH()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Acosh(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ACOSH(1)", 0},
+		{"ACOSH(2)", 1.3169578969248166},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_AcoshErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"ACOSH(0.5)", "#NUM!"},
+		{"ACOSH()", "exactly 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_Atanh(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ATANH(0)", 0},
+		{"ATANH(0.5)", 0.5493061443340549},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_AtanhErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"ATANH(1)", "#NUM!"},
+		{"ATANH(-1)", "#NUM!"},
+		{"ATANH()", "exactly 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_Log(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"LOG(1)", 0},
+		{"LOG(10)", 2.302585092994046},
+		{"LOG(100,10)", 2},
+		{"LOG(8,2)", 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_LogErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"LOG(0)", "#NUM!"},
+		{"LOG(-1)", "#NUM!"},
+		{"LOG(10,1)", "#NUM!"},
+		{"LOG(10,0)", "#NUM!"},
+		{"LOG()", "requires 1 or 2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_Fact(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"FACT(0)", 1},
+		{"FACT(1)", 1},
+		{"FACT(5)", 120},
+		{"FACT(3.9)", 6},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_FactErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"FACT(-1)", "#NUM!"},
+		{"FACT()", "exactly 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
