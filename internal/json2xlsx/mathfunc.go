@@ -229,6 +229,67 @@ func evalFuncExp(ctx *evalContext, args []expr) (float64, error) {
 	return math.Exp(n), nil
 }
 
+func evalFuncAsin(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ASIN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n < -1 || n > 1 {
+		return 0, fmt.Errorf("ASIN #NUM!")
+	}
+	return math.Asin(n), nil
+}
+
+func evalFuncAcos(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ACOS requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n < -1 || n > 1 {
+		return 0, fmt.Errorf("ACOS #NUM!")
+	}
+	return math.Acos(n), nil
+}
+
+func evalFuncAtan(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ATAN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Atan(n), nil
+}
+
+func evalFuncDegrees(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("DEGREES requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return n * 180 / math.Pi, nil
+}
+
+func evalFuncRadians(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("RADIANS requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return n * math.Pi / 180, nil
+}
+
 func evalFuncCounta(ctx *evalContext, args []expr) (float64, error) {
 	var count float64
 	for _, arg := range args {

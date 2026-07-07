@@ -501,3 +501,157 @@ func TestEval_ExpErrors(t *testing.T) {
 		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
+
+func TestEval_Asin(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ASIN(0)", 0},
+		{"ASIN(1)", 1.5707963267948966},
+		{"ASIN(-1)", -1.5707963267948966},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_AsinErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"ASIN(2)", "#NUM!"},
+		{"ASIN(-2)", "#NUM!"},
+		{"ASIN()", "exactly 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_Acos(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ACOS(1)", 0},
+		{"ACOS(0)", 1.5707963267948966},
+		{"ACOS(-1)", 3.141592653589793},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_AcosErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"ACOS(2)", "#NUM!"},
+		{"ACOS(-2)", "#NUM!"},
+		{"ACOS()", "exactly 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_Atan(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"ATAN(0)", 0},
+		{"ATAN(1)", 0.7853981633974483},
+		{"ATAN(-1)", -0.7853981633974483},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_AtanErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "ATAN()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Degrees(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"DEGREES(0)", 0},
+		{"DEGREES(3.141592653589793)", 180},
+		{"DEGREES(1.5707963267948966)", 90},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_DegreesErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "DEGREES()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Radians(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"RADIANS(0)", 0},
+		{"RADIANS(180)", 3.141592653589793},
+		{"RADIANS(90)", 1.5707963267948966},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if math.Abs(got-tt.want) > 1e-10 {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_RadiansErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "RADIANS()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
