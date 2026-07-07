@@ -120,13 +120,37 @@ The built-in formula engine evaluates formulas cell-by-cell. Below is the full l
 | `ROUNDUP(x, digits)` | Round away from zero |
 | `ROUNDDOWN(x, digits)` | Round toward zero |
 | `INT(x)` | Integer portion |
+| `TRUNC(x, digits)` | Truncate toward zero |
+| `SIGN(x)` | Sign of x (-1, 0, or 1) |
+| `PI()` | π (3.14159...) |
+| `RAND()` | Random number in [0, 1) |
 | `PRODUCT(n1, n2, ...)` | Multiply numbers |
 | `SUMPRODUCT(a1, a2, ...)` | Sum of element-wise products |
 | `POWER(x, y)` | x raised to the power y |
 | `SQRT(x)` | Square root |
+| `LN(x)` | Natural logarithm |
+| `LOG(x, [base])` | Logarithm (default: natural) |
+| `LOG10(x)` | Base-10 logarithm |
+| `EXP(x)` | e raised to the power x |
 | `MOD(x, y)` | Remainder of x / y |
 | `FLOOR(x, significance)` | Round down to nearest multiple |
 | `CEILING(x, significance)` | Round up to nearest multiple |
+| `SIN(x)` | Sine (radians) |
+| `COS(x)` | Cosine (radians) |
+| `TAN(x)` | Tangent (radians) |
+| `ASIN(x)` | Arc sine |
+| `ACOS(x)` | Arc cosine |
+| `ATAN(x)` | Arc tangent |
+| `ATAN2(x, y)` | Arc tangent of y/x |
+| `DEGREES(x)` | Convert radians to degrees |
+| `RADIANS(x)` | Convert degrees to radians |
+| `SINH(x)` | Hyperbolic sine |
+| `COSH(x)` | Hyperbolic cosine |
+| `TANH(x)` | Hyperbolic tangent |
+| `ASINH(x)` | Inverse hyperbolic sine |
+| `ACOSH(x)` | Inverse hyperbolic cosine |
+| `ATANH(x)` | Inverse hyperbolic tangent |
+| `FACT(x)` | Factorial |
 | `MEDIAN(n1, n2, ...)` | Median value |
 | `STDEV.S(n1, n2, ...)` | Sample standard deviation |
 | `STDEV.P(n1, n2, ...)` | Population standard deviation |
@@ -147,6 +171,11 @@ The built-in formula engine evaluates formulas cell-by-cell. Below is the full l
 | `SUMIFS(sum_range, crit_range1, crit1, ...)` | Sum with multiple criteria |
 | `COUNTIFS(crit_range1, crit1, ...)` | Count with multiple criteria |
 | `AVERAGEIFS(avg_range, crit_range1, crit1, ...)` | Average with multiple criteria |
+| `VLOOKUP(value, table, col_index)` | Vertical lookup (exact match) |
+| `XLOOKUP(value, lookup_arr, return_arr, [not_found])` | Modern lookup with optional default |
+| `INDEX(range, row, [col])` | Value at given row/col |
+| `MATCH(value, range, match_type)` | Position of value in range |
+| `CHOOSE(index, val1, val2, ...)` | Select by 1-based index |
 | `TODAY()` | Current date as serial number |
 | `NOW()` | Current date and time as serial number |
 

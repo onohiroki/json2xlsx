@@ -123,13 +123,37 @@ json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 | `ROUNDUP(x, digits)` | 切り上げ |
 | `ROUNDDOWN(x, digits)` | 切り捨て |
 | `INT(x)` | 整数部 |
+| `TRUNC(x, digits)` | 0 に向かって切り詰め |
+| `SIGN(x)` | x の符号 (-1, 0, または 1) |
+| `PI()` | 円周率 (3.14159...) |
+| `RAND()` | 0 以上 1 未満の乱数 |
 | `PRODUCT(n1, n2, ...)` | 乗算 |
 | `SUMPRODUCT(a1, a2, ...)` | 要素ごとの積の和 |
 | `POWER(x, y)` | x の y 乗 |
 | `SQRT(x)` | 平方根 |
+| `LN(x)` | 自然対数 |
+| `LOG(x, [base])` | 対数 (底省略で自然対数) |
+| `LOG10(x)` | 常用対数 |
+| `EXP(x)` | e の x 乗 |
 | `MOD(x, y)` | x / y の剰余 |
 | `FLOOR(x, significance)` | 指定した倍数に切り下げ |
 | `CEILING(x, significance)` | 指定した倍数に切り上げ |
+| `SIN(x)` | 正弦 (ラジアン) |
+| `COS(x)` | 余弦 (ラジアン) |
+| `TAN(x)` | 正接 (ラジアン) |
+| `ASIN(x)` | 逆正弦 |
+| `ACOS(x)` | 逆余弦 |
+| `ATAN(x)` | 逆正接 |
+| `ATAN2(x, y)` | y/x の逆正接 |
+| `DEGREES(x)` | ラジアンを度に変換 |
+| `RADIANS(x)` | 度をラジアンに変換 |
+| `SINH(x)` | 双曲線正弦 |
+| `COSH(x)` | 双曲線余弦 |
+| `TANH(x)` | 双曲線正接 |
+| `ASINH(x)` | 逆双曲線正弦 |
+| `ACOSH(x)` | 逆双曲線余弦 |
+| `ATANH(x)` | 逆双曲線正接 |
+| `FACT(x)` | 階乗 |
 | `MEDIAN(n1, n2, ...)` | 中央値 |
 | `STDEV.S(n1, n2, ...)` | 標本標準偏差 |
 | `STDEV.P(n1, n2, ...)` | 母標準偏差 |
@@ -150,6 +174,11 @@ json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 | `SUMIFS(sum_range, crit_range1, crit1, ...)` | 複数条件での合計 |
 | `COUNTIFS(crit_range1, crit1, ...)` | 複数条件での個数 |
 | `AVERAGEIFS(avg_range, crit_range1, crit1, ...)` | 複数条件での平均 |
+| `VLOOKUP(value, table, col_index)` | 縦方向検索 (完全一致) |
+| `XLOOKUP(value, lookup_arr, return_arr, [not_found])` | 最新検索関数 (デフォルト値指定可) |
+| `INDEX(range, row, [col])` | 指定行・列の値 |
+| `MATCH(value, range, match_type)` | 範囲内の位置を返す |
+| `CHOOSE(index, val1, val2, ...)` | インデックスで値を選択 |
 | `TODAY()` | 現在日付をシリアル値で返す |
 | `NOW()` | 現在日時をシリアル値で返す |
 
