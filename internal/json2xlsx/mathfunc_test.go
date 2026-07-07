@@ -1,6 +1,7 @@
 package json2xlsx
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -227,5 +228,101 @@ func TestEval_Counta(t *testing.T) {
 				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEval_Trunc(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"TRUNC(3.14)", 3},
+		{"TRUNC(-3.14)", -3},
+		{"TRUNC(123.456,1)", 123.4},
+		{"TRUNC(123.456,-1)", 120},
+		{"TRUNC(5)", 5},
+		{"TRUNC(-5)", -5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_TruncErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"TRUNC()", "requires 1 or 2"},
+		{"TRUNC(1,2,3)", "requires 1 or 2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_Sign(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"SIGN(5)", 1},
+		{"SIGN(0)", 0},
+		{"SIGN(-5)", -1},
+		{"SIGN(3.14)", 1},
+		{"SIGN(-3.14)", -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_SignErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SIGN()")
+	if !strings.Contains(errMsg, "exactly 1") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Pi(t *testing.T) {
+	got := evalFormula(t, nil, "PI()")
+	if got != math.Pi {
+		t.Errorf("PI() = %v, want %v", got, math.Pi)
+	}
+}
+
+func TestEval_PiErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "PI(1)")
+	if !strings.Contains(errMsg, "requires no arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Rand(t *testing.T) {
+	got := evalFormula(t, nil, "RAND()")
+	if got < 0 || got >= 1 {
+		t.Errorf("RAND() = %v, want in [0,1)", got)
+	}
+}
+
+func TestEval_RandErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "RAND(1)")
+	if !strings.Contains(errMsg, "requires no arguments") {
+		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }

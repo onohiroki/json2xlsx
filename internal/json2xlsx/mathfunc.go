@@ -3,6 +3,7 @@ package json2xlsx
 import (
 	"fmt"
 	"math"
+	"math/rand"
 )
 
 func evalFuncFloor(ctx *evalContext, args []expr) (float64, error) {
@@ -103,6 +104,57 @@ func evalFuncInt(ctx *evalContext, args []expr) (float64, error) {
 		return 0, err
 	}
 	return math.Floor(n), nil
+}
+
+func evalFuncTrunc(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return 0, fmt.Errorf("TRUNC requires 1 or 2 arguments")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	digits := 0
+	if len(args) == 2 {
+		d, err := args[1].eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		digits = int(d)
+	}
+	scale := math.Pow(10, float64(digits))
+	return math.Trunc(n*scale) / scale, nil
+}
+
+func evalFuncSign(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("SIGN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		return 1, nil
+	}
+	if n < 0 {
+		return -1, nil
+	}
+	return 0, nil
+}
+
+func evalFuncPi(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 0 {
+		return 0, fmt.Errorf("PI requires no arguments")
+	}
+	return math.Pi, nil
+}
+
+func evalFuncRand(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 0 {
+		return 0, fmt.Errorf("RAND requires no arguments")
+	}
+	return rand.Float64(), nil
 }
 
 func evalFuncCounta(ctx *evalContext, args []expr) (float64, error) {
