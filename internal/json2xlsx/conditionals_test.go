@@ -165,6 +165,81 @@ func TestEval_AverageifsWrongArgCount(t *testing.T) {
 	}
 }
 
+func TestEval_Minifs(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 100.0},
+		"A2": {T: "n", V: 200.0},
+		"A3": {T: "n", V: 300.0},
+		"B1": {T: "n", V: 10.0},
+		"B2": {T: "n", V: 20.0},
+		"B3": {T: "n", V: 10.0},
+		"C1": {T: "n", V: 1.0},
+		"C2": {T: "n", V: 1.0},
+		"C3": {T: "n", V: 2.0},
+	}
+	// MINIFS(A1:A3, B1:B3, 10, C1:C3, 1)
+	// Row 1: B=10, C=1 → match → 100
+	// Row 3: B=10, C=2 → no match
+	got := evalFormula(t, cells, "MINIFS(A1:A3,B1:B3,10,C1:C3,1)")
+	if got != 100 {
+		t.Errorf("MINIFS = %v, want 100", got)
+	}
+}
+
+func TestEval_MinifsNoMatch(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 100.0},
+		"B1": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "MINIFS(A1,B1,99)")
+	if got != 0 {
+		t.Errorf("MINIFS no match = %v, want 0", got)
+	}
+}
+
+func TestEval_MinifsWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "MINIFS(A1:A2)")
+	if !strings.Contains(errMsg, "pairs") {
+		t.Errorf("expected pairs error, got %q", errMsg)
+	}
+}
+
+func TestEval_Maxifs(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 100.0},
+		"A2": {T: "n", V: 200.0},
+		"A3": {T: "n", V: 50.0},
+		"B1": {T: "n", V: 10.0},
+		"B2": {T: "n", V: 20.0},
+		"B3": {T: "n", V: 10.0},
+	}
+	// MAXIFS(A1:A3, B1:B3, 10)
+	// Row 1: B=10 → match → 100
+	// Row 3: B=10 → match → 50
+	got := evalFormula(t, cells, "MAXIFS(A1:A3,B1:B3,10)")
+	if got != 100 {
+		t.Errorf("MAXIFS = %v, want 100", got)
+	}
+}
+
+func TestEval_MaxifsNoMatch(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 100.0},
+		"B1": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "MAXIFS(A1,B1,99)")
+	if got != 0 {
+		t.Errorf("MAXIFS no match = %v, want 0", got)
+	}
+}
+
+func TestEval_MaxifsWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "MAXIFS(A1:A2)")
+	if !strings.Contains(errMsg, "pairs") {
+		t.Errorf("expected pairs error, got %q", errMsg)
+	}
+}
+
 func TestEval_AverageifsNoMatch(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 100.0},

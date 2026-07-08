@@ -91,7 +91,10 @@ var knownFuncs = map[string]bool{
 	"RANK": true, "RANK.EQ": true, "LARGE": true, "SMALL": true,
 	"TODAY": true, "NOW": true,
 	"AVERAGEIF": true, "SUMIFS": true, "COUNTIFS": true, "AVERAGEIFS": true,
+	"MINIFS": true, "MAXIFS": true,
 	"IFERROR": true,
+	"IFS": true,
+	"YEAR": true, "MONTH": true, "DAY": true, "WEEKDAY": true, "WEEKNUM": true,
 	"VLOOKUP": true, "XLOOKUP": true, "INDEX": true, "MATCH": true, "CHOOSE": true,
 	"TRUNC": true, "SIGN": true, "PI": true, "RAND": true,
 	"SIN": true, "COS": true, "TAN": true, "LN": true, "LOG10": true, "EXP": true,
@@ -401,6 +404,16 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncToday(ctx, e.args)
 	case "NOW":
 		return evalFuncNow(ctx, e.args)
+	case "YEAR":
+		return evalFuncYear(ctx, e.args)
+	case "MONTH":
+		return evalFuncMonth(ctx, e.args)
+	case "DAY":
+		return evalFuncDay(ctx, e.args)
+	case "WEEKDAY":
+		return evalFuncWeekday(ctx, e.args)
+	case "WEEKNUM":
+		return evalFuncWeeknum(ctx, e.args)
 	case "AVERAGEIF":
 		return evalFuncAverageif(ctx, e.args)
 	case "SUMIFS":
@@ -409,6 +422,12 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncCountifs(ctx, e.args)
 	case "AVERAGEIFS":
 		return evalFuncAverageifs(ctx, e.args)
+	case "MINIFS":
+		return evalFuncMinifs(ctx, e.args)
+	case "MAXIFS":
+		return evalFuncMaxifs(ctx, e.args)
+	case "IFS":
+		return evalFuncIfs(ctx, e.args)
 	case "IFERROR":
 		return evalFuncIferror(ctx, e.args)
 	case "VLOOKUP":

@@ -147,6 +147,124 @@ func evalFuncCountifs(ctx *evalContext, args []expr) (float64, error) {
 	return count, nil
 }
 
+func evalFuncMinifs(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 3 || len(args)%2 == 0 {
+		return 0, fmt.Errorf("MINIFS requires min_range + criteria_range,criteria pairs")
+	}
+	minRefs, err := rangeOrCellRefs(ctx, args[0])
+	if err != nil {
+		return 0, fmt.Errorf("MINIFS min_range: %w", err)
+	}
+	numPairs := (len(args) - 1) / 2
+	type criteria struct {
+		refs []string
+		val  float64
+	}
+	criteriaList := make([]criteria, numPairs)
+	for i := 0; i < numPairs; i++ {
+		crIdx := 1 + i*2
+		cvIdx := 1 + i*2 + 1
+		refs, err := rangeOrCellRefs(ctx, args[crIdx])
+		if err != nil {
+			return 0, fmt.Errorf("MINIFS criteria_range %d: %w", i+1, err)
+		}
+		val, err := args[cvIdx].eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		criteriaList[i] = criteria{refs, val}
+	}
+	limit := len(minRefs)
+	for _, c := range criteriaList {
+		if len(c.refs) < limit {
+			limit = len(c.refs)
+		}
+	}
+	var minVal *float64
+	for row := 0; row < limit; row++ {
+		match := true
+		for _, c := range criteriaList {
+			cellVal, err := ctx.getCellValue(c.refs[row])
+			if err != nil || cellVal != c.val {
+				match = false
+				break
+			}
+		}
+		if match {
+			val, err := ctx.getCellValue(minRefs[row])
+			if err == nil {
+				if minVal == nil || val < *minVal {
+					v := val
+					minVal = &v
+				}
+			}
+		}
+	}
+	if minVal == nil {
+		return 0, nil
+	}
+	return *minVal, nil
+}
+
+func evalFuncMaxifs(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 3 || len(args)%2 == 0 {
+		return 0, fmt.Errorf("MAXIFS requires max_range + criteria_range,criteria pairs")
+	}
+	maxRefs, err := rangeOrCellRefs(ctx, args[0])
+	if err != nil {
+		return 0, fmt.Errorf("MAXIFS max_range: %w", err)
+	}
+	numPairs := (len(args) - 1) / 2
+	type criteria struct {
+		refs []string
+		val  float64
+	}
+	criteriaList := make([]criteria, numPairs)
+	for i := 0; i < numPairs; i++ {
+		crIdx := 1 + i*2
+		cvIdx := 1 + i*2 + 1
+		refs, err := rangeOrCellRefs(ctx, args[crIdx])
+		if err != nil {
+			return 0, fmt.Errorf("MAXIFS criteria_range %d: %w", i+1, err)
+		}
+		val, err := args[cvIdx].eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		criteriaList[i] = criteria{refs, val}
+	}
+	limit := len(maxRefs)
+	for _, c := range criteriaList {
+		if len(c.refs) < limit {
+			limit = len(c.refs)
+		}
+	}
+	var maxVal *float64
+	for row := 0; row < limit; row++ {
+		match := true
+		for _, c := range criteriaList {
+			cellVal, err := ctx.getCellValue(c.refs[row])
+			if err != nil || cellVal != c.val {
+				match = false
+				break
+			}
+		}
+		if match {
+			val, err := ctx.getCellValue(maxRefs[row])
+			if err == nil {
+				if maxVal == nil || val > *maxVal {
+					v := val
+					maxVal = &v
+				}
+			}
+		}
+	}
+	if maxVal == nil {
+		return 0, nil
+	}
+	return *maxVal, nil
+}
+
 func evalFuncAverageifs(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 3 || len(args)%2 == 0 {
 		return 0, fmt.Errorf("AVERAGEIFS requires avg_range + criteria_range,criteria pairs")

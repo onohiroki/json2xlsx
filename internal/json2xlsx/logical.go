@@ -55,3 +55,19 @@ func evalFuncNot(ctx *evalContext, args []expr) (float64, error) {
 	}
 	return 0, nil
 }
+
+func evalFuncIfs(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 2 || len(args)%2 != 0 {
+		return 0, fmt.Errorf("IFS requires an even number of arguments (condition, value pairs)")
+	}
+	for i := 0; i < len(args); i += 2 {
+		cond, err := args[i].eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if cond != 0 {
+			return args[i+1].eval(ctx)
+		}
+	}
+	return 0, fmt.Errorf("IFS #N/A")
+}

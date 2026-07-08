@@ -202,6 +202,45 @@ func TestEval_CombinedLogical(t *testing.T) {
 	}
 }
 
+func TestEval_Ifs(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 85.0},
+	}
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"IFS(A1>=90,1,A1>=80,2,A1>=60,3)", 2},
+		{"IFS(A1>=90,1,A1>=70,2,A1>=60,3)", 2},
+		{"IFS(A1=85,100,A1=86,200)", 100},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, cells, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_IfsNoMatch(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 50.0},
+	}
+	errMsg := evalFormulaErr(t, cells, "IFS(A1>=90,1,A1>=80,2)")
+	if !strings.Contains(errMsg, "#N/A") {
+		t.Errorf("expected #N/A error, got %q", errMsg)
+	}
+}
+
+func TestEval_IfsWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "IFS(1)")
+	if !strings.Contains(errMsg, "even number") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
 func TestEval_IfWithNestedFunc(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 10.0},
