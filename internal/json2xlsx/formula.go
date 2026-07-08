@@ -201,7 +201,7 @@ func (t *tokenizer) readIdent() token {
 	start := t.pos
 	for t.pos < len(t.input) {
 		ch := t.input[t.pos]
-		if ch == '$' || ch == '.' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+		if ch == '$' || ch == '.' || ch == '_' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
 			t.pos++
 		} else {
 			break
@@ -210,6 +210,8 @@ func (t *tokenizer) readIdent() token {
 	raw := t.input[start:t.pos]
 	cleaned := strings.ReplaceAll(raw, "$", "")
 	upper := strings.ToUpper(cleaned)
+	// Strip _xlfn. prefix added by Excel for future/unsupported functions.
+	upper = strings.TrimPrefix(upper, "_XLFN.")
 
 	if knownFuncs[upper] {
 		return token{typ: tokenFunc, lit: upper}
