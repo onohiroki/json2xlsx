@@ -120,6 +120,16 @@ func TestEval_Iserror(t *testing.T) {
 	}
 }
 
+func TestEval_IserrorCellRef(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "f", F: "1/0", V: nil},
+	}
+	got := evalFormula(t, cells, "ISERROR(A1)")
+	if got != 1 {
+		t.Errorf("ISERROR(A1) = %v, want 1", got)
+	}
+}
+
 func TestEval_Isna(t *testing.T) {
 	tests := []struct {
 		formula string

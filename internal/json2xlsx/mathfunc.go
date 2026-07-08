@@ -525,7 +525,12 @@ func evalFuncMround(ctx *evalContext, args []expr) (float64, error) {
 	if (n > 0 && m < 0) || (n < 0 && m > 0) {
 		return 0, fmt.Errorf("MROUND #NUM!")
 	}
-	return math.Round(n/m) * m, nil
+	r := n / m
+	// Correct for floating-point imprecision near .5 boundary
+	if math.Abs(r-math.Round(r)) < 1e-14 {
+		r = math.Round(r)
+	}
+	return math.Round(r) * m, nil
 }
 
 func evalFuncDelta(ctx *evalContext, args []expr) (float64, error) {

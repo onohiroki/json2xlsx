@@ -1631,6 +1631,28 @@ func TestEval_Column(t *testing.T) {
 	}
 }
 
+func TestEval_RowColumnErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"ROW(A1:A3)", "cell reference"},
+		{"COLUMN(A1:A3)", "cell reference"},
+		{"ROW(42)", "cell reference"},
+		{"COLUMN(42)", "cell reference"},
+		{"ROW(1,2)", "0 or 1"},
+		{"COLUMN(1,2)", "0 or 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helper: convertJSONtoXLSXWithOpts converts JSON with the given options
 // and returns an open excelize.File.

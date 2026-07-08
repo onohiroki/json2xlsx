@@ -1021,6 +1021,24 @@ func TestEval_MroundErrors(t *testing.T) {
 	}
 }
 
+func TestEval_SumsqRange(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0}, "A2": {T: "n", V: 2.0}, "A3": {T: "n", V: 3.0},
+	}
+	got := evalFormula(t, cells, "SUMSQ(A1:A3)")
+	if got != 14 {
+		t.Errorf("SUMSQ(A1:A3) = %v, want 14", got)
+	}
+}
+
+func TestEval_MroundFloat(t *testing.T) {
+	got := evalFormula(t, nil, "MROUND(1.3,0.2)")
+	want := 1.4
+	if math.Abs(got-want) > 1e-12 {
+		t.Errorf("MROUND(1.3,0.2) = %v, want %v", got, want)
+	}
+}
+
 func TestEval_DeltaGestep(t *testing.T) {
 	tests := []struct {
 		formula string

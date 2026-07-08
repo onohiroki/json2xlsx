@@ -304,3 +304,36 @@ func TestEval_Subtotal(t *testing.T) {
 		})
 	}
 }
+
+func TestEval_SubtotalExtended(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 2.0}, "A2": {T: "n", V: 4.0},
+		"A3": {T: "n", V: 6.0},
+	}
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"SUBTOTAL(6,A1:A3)", 48},
+		{"SUBTOTAL(10,A1:A3)", 4},
+		{"SUBTOTAL(11,A1:A3)", 2.6666666666666665},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, cells, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_Subtotal101(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0}, "A2": {T: "n", V: 2.0}, "A3": {T: "n", V: 3.0},
+	}
+	got := evalFormula(t, cells, "SUBTOTAL(101,A1:A3)")
+	if got != 2 {
+		t.Errorf("SUBTOTAL(101,A1:A3) = %v, want 2", got)
+	}
+}
