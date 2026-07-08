@@ -178,18 +178,14 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 	return nil
 }
 
-var dotFuncRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_.]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)\s*\(`)
+var futureFuncRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_.]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)\s*\(`)
 
-var plainFutureFuncRe = regexp.MustCompile(`\b(IFS|SWITCH|MINIFS|MAXIFS|DAYS|CONCAT|TEXTJOIN|DATEDIF|XLOOKUP)\s*\(`)
-
-// addFutureFuncPrefix adds the _xlfn. prefix to future functions in a formula.
-// Functions with a dot in their name (e.g. QUARTILE.INC) are matched by regex;
-// dotless newer functions (e.g. IFS, DAYS) are matched by name.
-// Without this prefix, Excel 2010-2016 returns #NAME? for these functions.
+// addFutureFuncPrefix adds the _xlfn. prefix to functions that contain a dot
+// in their name (e.g. QUARTILE.INC, PERCENTILE.INC). Excel requires this
+// prefix to parse function names with embedded dots. Dotless future functions
+// (e.g. IFS, DAYS) are plain identifiers and do not need the prefix.
 func addFutureFuncPrefix(formula string) string {
-	result := dotFuncRe.ReplaceAllString(formula, `_xlfn.$1(`)
-	result = plainFutureFuncRe.ReplaceAllString(result, `_xlfn.$1(`)
-	return result
+	return futureFuncRe.ReplaceAllString(formula, `_xlfn.$1(`)
 }
 
 func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int, styles []Style) error {
