@@ -159,6 +159,128 @@ func evalFuncEomonth(ctx *evalContext, args []expr) (float64, error) {
 	return timeToExcelSerial(end), nil
 }
 
+func isWeekend(serial float64) bool {
+	t := excelSerialToTime(serial)
+	dow := t.Weekday()
+	return dow == time.Saturday || dow == time.Sunday
+}
+
+func nextWorkday(cur float64, dir float64) float64 {
+	for {
+		cur += dir
+		if !isWeekend(cur) {
+			return cur
+		}
+	}
+}
+
+func collectHolidays(ctx *evalContext, args []expr) ([]float64, error) {
+	var holidays []float64
+	for _, arg := range args {
+		vals, err := ctx.evalArg(arg)
+		if err != nil {
+			return nil, err
+		}
+		holidays = append(holidays, vals...)
+	}
+	return holidays, nil
+}
+
+func isHoliday(serial float64, holidays []float64) bool {
+	for _, h := range holidays {
+		if math.Floor(serial) == math.Floor(h) {
+			return true
+		}
+	}
+	return false
+}
+
+func evalFuncDays(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("DAYS requires exactly 2 arguments")
+	}
+	end, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	start, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return math.Floor(end) - math.Floor(start), nil
+}
+
+func evalFuncNetworkdays(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 2 {
+		return 0, fmt.Errorf("NETWORKDAYS requires at least 2 arguments")
+	}
+	start, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	end, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var holidays []float64
+	if len(args) > 2 {
+		holidays, err = collectHolidays(ctx, args[2:])
+		if err != nil {
+			return 0, err
+		}
+	}
+	startDay := math.Floor(start)
+	endDay := math.Floor(end)
+	dir := 1.0
+	if startDay > endDay {
+		dir = -1
+	}
+	var count float64
+	for d := startDay; ; d += dir {
+		if !isWeekend(d) && !isHoliday(d, holidays) {
+			count++
+		}
+		if d == endDay {
+			break
+		}
+	}
+	return count, nil
+}
+
+func evalFuncWorkday(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 2 {
+		return 0, fmt.Errorf("WORKDAY requires at least 2 arguments")
+	}
+	start, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	days, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var holidays []float64
+	if len(args) > 2 {
+		holidays, err = collectHolidays(ctx, args[2:])
+		if err != nil {
+			return 0, err
+		}
+	}
+	cur := math.Floor(start)
+	dir := 1.0
+	if days < 0 {
+		dir = -1
+		days = -days
+	}
+	for days > 0 {
+		cur += dir
+		if !isWeekend(cur) && !isHoliday(cur, holidays) {
+			days--
+		}
+	}
+	return cur, nil
+}
+
 func evalFuncWeeknum(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("WEEKNUM requires 1 or 2 arguments")

@@ -292,3 +292,109 @@ func TestEval_EomonthWrongArg(t *testing.T) {
 		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
+
+func TestEval_Days(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		// 43836 = 2020-01-06 (Mon), 43831 = 2020-01-01 (Wed)
+		{"DAYS(43836,43831)", 5},
+		{"DAYS(43831,43836)", -5},
+		{"DAYS(43831,43831)", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_DaysWrongArg(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "DAYS(43831)")
+	if !strings.Contains(errMsg, "exactly 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Networkdays(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		// 43831(Wed) to 43836(Mon): skip Sat/Sun → 4
+		{"NETWORKDAYS(43831,43836)", 4},
+		// 43831(Wed) to 43833(Fri): all weekdays → 3
+		{"NETWORKDAYS(43831,43833)", 3},
+		// 43834(Sat) to 43835(Sun): no weekdays → 0
+		{"NETWORKDAYS(43834,43835)", 0},
+		// 43836(Mon) to 43831(Wed): reverse → 4
+		{"NETWORKDAYS(43836,43831)", 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_NetworkdaysWithHolidays(t *testing.T) {
+	// 43831(Wed) to 43833(Fri) with 43832(Thu) as holiday → 2
+	got := evalFormula(t, nil, "NETWORKDAYS(43831,43833,43832)")
+	if got != 2 {
+		t.Errorf("NETWORKDAYS with holiday = %v, want 2", got)
+	}
+}
+
+func TestEval_NetworkdaysWrongArg(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "NETWORKDAYS(43831)")
+	if !strings.Contains(errMsg, "at least 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Workday(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		// 43831(Wed) + 3 workdays = 43836(Mon)
+		{"WORKDAY(43831,3)", 43836},
+		// 43836(Mon) - 3 workdays = 43831(Wed)
+		{"WORKDAY(43836,-3)", 43831},
+		// 43831(Wed) + 1 = 43832(Thu)
+		{"WORKDAY(43831,1)", 43832},
+		// 43833(Fri) + 1 = 43836(Mon)
+		{"WORKDAY(43833,1)", 43836},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_WorkdayWithHolidays(t *testing.T) {
+	// 43831(Wed) + 2 workdays with 43832(Thu) as holiday → 43833 + (skip Thu) + Fri = 43833(Fri)
+	// Actually: start Wed, +1 = skip Thu(holiday) → Fri, +1 = next Mon → 43836
+	got := evalFormula(t, nil, "WORKDAY(43831,2,43832)")
+	if got != 43836 {
+		t.Errorf("WORKDAY with holiday = %v, want 43836", got)
+	}
+}
+
+func TestEval_WorkdayWrongArg(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "WORKDAY(43831)")
+	if !strings.Contains(errMsg, "at least 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}

@@ -96,7 +96,8 @@ var knownFuncs = map[string]bool{
 	"MINIFS": true, "MAXIFS": true,
 	"IFERROR": true,
 	"IFS": true, "SWITCH": true,
-	"YEAR": true, "MONTH": true, "DAY": true, "DATE": true, "EDATE": true, "EOMONTH": true, "WEEKDAY": true, "WEEKNUM": true,
+	"YEAR": true, "MONTH": true, "DAY": true, "DAYS": true, "DATE": true, "EDATE": true, "EOMONTH": true, "WEEKDAY": true, "WEEKNUM": true,
+	"NETWORKDAYS": true, "WORKDAY": true,
 	"VLOOKUP": true, "XLOOKUP": true, "INDEX": true, "MATCH": true, "CHOOSE": true,
 	"TRUNC": true, "SIGN": true, "PI": true, "RAND": true,
 	"SIN": true, "COS": true, "TAN": true, "LN": true, "LOG10": true, "EXP": true,
@@ -422,6 +423,8 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncMonth(ctx, e.args)
 	case "DAY":
 		return evalFuncDay(ctx, e.args)
+	case "DAYS":
+		return evalFuncDays(ctx, e.args)
 	case "DATE":
 		return evalFuncDate(ctx, e.args)
 	case "EDATE":
@@ -432,6 +435,10 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncWeekday(ctx, e.args)
 	case "WEEKNUM":
 		return evalFuncWeeknum(ctx, e.args)
+	case "NETWORKDAYS":
+		return evalFuncNetworkdays(ctx, e.args)
+	case "WORKDAY":
+		return evalFuncWorkday(ctx, e.args)
 	case "AVERAGEIF":
 		return evalFuncAverageif(ctx, e.args)
 	case "SUMIFS":
