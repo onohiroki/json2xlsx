@@ -309,3 +309,58 @@ func TestEval_XlookupErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestEval_Hlookup(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0},
+		"B1": {T: "n", V: 2.0},
+		"C1": {T: "n", V: 3.0},
+		"A2": {T: "n", V: 10.0},
+		"B2": {T: "n", V: 20.0},
+		"C2": {T: "n", V: 30.0},
+		"A3": {T: "n", V: 100.0},
+		"B3": {T: "n", V: 200.0},
+		"C3": {T: "n", V: 300.0},
+	}
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"HLOOKUP(2,A1:C3,2)", 20},
+		{"HLOOKUP(3,A1:C3,3)", 300},
+		{"HLOOKUP(1,A1:C3,1)", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, cells, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_HlookupErrors(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0},
+		"B1": {T: "n", V: 2.0},
+		"A2": {T: "n", V: 10.0},
+		"B2": {T: "n", V: 20.0},
+	}
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"HLOOKUP(5,A1:B2,2)", "not found"},
+		{"HLOOKUP(1,A1:B2,3)", "index out of range"},
+		{"HLOOKUP(1,A1:B2,0)", "index out of range"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errStr := evalFormulaErr(t, cells, tt.formula)
+			if !strings.Contains(errStr, tt.contain) {
+				t.Errorf("eval %q error = %q, want contain %q", tt.formula, errStr, tt.contain)
+			}
+		})
+	}
+}

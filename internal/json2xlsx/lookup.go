@@ -76,6 +76,65 @@ func evalFuncVlookup(ctx *evalContext, args []expr) (float64, error) {
 	return 0, fmt.Errorf("VLOOKUP value not found")
 }
 
+func evalFuncHlookup(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 3 || len(args) > 4 {
+		return 0, fmt.Errorf("HLOOKUP requires 3 or 4 arguments")
+	}
+	lookupVal, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var start, end string
+	switch a := args[1].(type) {
+	case *rangeExpr:
+		start, end = a.start, a.end
+	case *cellRefExpr:
+		start, end = a.ref, a.ref
+	default:
+		return 0, fmt.Errorf("HLOOKUP second argument must be a cell reference or range")
+	}
+	c1, r1 := parseCellRef(start)
+	c2, r2 := parseCellRef(end)
+	minCol, maxCol := c1, c2
+	if c1 > c2 {
+		minCol, maxCol = c2, c1
+	}
+	minRow, maxRow := r1, r2
+	if r1 > r2 {
+		minRow, maxRow = r2, r1
+	}
+	numRows := maxRow - minRow + 1
+	rowIdxVal, err := args[2].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rowIdx := int(rowIdxVal)
+	if rowIdx < 1 || rowIdx > numRows {
+		return 0, fmt.Errorf("HLOOKUP row index out of range")
+	}
+	if len(args) == 4 {
+		approx, err := args[3].eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if approx != 0 {
+			return 0, fmt.Errorf("HLOOKUP approximate match not yet supported")
+		}
+	}
+	refs := expandRange(start, end)
+	numCols := maxCol - minCol + 1
+	for c := 0; c < numCols; c++ {
+		cellVal, err := ctx.getCellValue(refs[c*numRows])
+		if err != nil {
+			continue
+		}
+		if cellVal == lookupVal {
+			return ctx.getCellValue(refs[c*numRows+(rowIdx-1)])
+		}
+	}
+	return 0, fmt.Errorf("HLOOKUP value not found")
+}
+
 func evalFuncMatch(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return 0, fmt.Errorf("MATCH requires 2 or 3 arguments")

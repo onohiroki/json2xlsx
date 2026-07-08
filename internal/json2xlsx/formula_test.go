@@ -1573,6 +1573,64 @@ func TestEval_CountifWrongArgCount(t *testing.T) {
 	}
 }
 
+func evalFormulaAt(t *testing.T, cells map[string]Cell, ref, formula string) float64 {
+	t.Helper()
+	ctx := newEvalContext(cells)
+	val, err := ctx.evaluate(ref, formula)
+	if err != nil {
+		t.Fatalf("eval %q at %s: %v", formula, ref, err)
+	}
+	return val
+}
+
+func TestEval_Row(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"B5": {T: "n", V: 20.0},
+	}
+	tests := []struct {
+		ref     string
+		formula string
+		want    float64
+	}{
+		{"C3", "ROW()", 3},
+		{"A1", "ROW()", 1},
+		{"A1", "ROW(A5)", 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula+"@"+tt.ref, func(t *testing.T) {
+			got := evalFormulaAt(t, cells, tt.ref, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q at %s = %v, want %v", tt.formula, tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_Column(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"B5": {T: "n", V: 20.0},
+	}
+	tests := []struct {
+		ref     string
+		formula string
+		want    float64
+	}{
+		{"C3", "COLUMN()", 3},
+		{"A1", "COLUMN()", 1},
+		{"A1", "COLUMN(B5)", 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula+"@"+tt.ref, func(t *testing.T) {
+			got := evalFormulaAt(t, cells, tt.ref, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q at %s = %v, want %v", tt.formula, tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helper: convertJSONtoXLSXWithOpts converts JSON with the given options
 // and returns an open excelize.File.

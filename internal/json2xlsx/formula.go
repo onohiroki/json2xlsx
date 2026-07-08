@@ -105,6 +105,11 @@ var knownFuncs = map[string]bool{
 	"ATAN2": true, "SINH": true, "COSH": true, "TANH": true,
 	"ASINH": true, "ACOSH": true, "ATANH": true,
 	"LOG": true, "FACT": true,
+	"SUMSQ": true, "EVEN": true, "ODD": true, "MROUND": true, "DELTA": true, "GESTEP": true,
+	"HLOOKUP": true,
+	"MODE": true, "MODE.SNGL": true, "SUBTOTAL": true,
+	"ISNUMBER": true, "ISBLANK": true, "ISTEXT": true, "ISNONTEXT": true, "ISERROR": true, "ISNA": true,
+	"ROW": true, "COLUMN": true,
 }
 
 func (t *tokenizer) next() token {
@@ -515,6 +520,40 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncLog(ctx, e.args)
 	case "FACT":
 		return evalFuncFact(ctx, e.args)
+	case "SUMSQ":
+		return evalFuncSumsq(ctx, e.args)
+	case "EVEN":
+		return evalFuncEven(ctx, e.args)
+	case "ODD":
+		return evalFuncOdd(ctx, e.args)
+	case "MROUND":
+		return evalFuncMround(ctx, e.args)
+	case "DELTA":
+		return evalFuncDelta(ctx, e.args)
+	case "GESTEP":
+		return evalFuncGestep(ctx, e.args)
+	case "HLOOKUP":
+		return evalFuncHlookup(ctx, e.args)
+	case "MODE", "MODE.SNGL":
+		return evalFuncMode(ctx, e.args)
+	case "SUBTOTAL":
+		return evalFuncSubtotal(ctx, e.args)
+	case "ISNUMBER":
+		return evalFuncIsnumber(ctx, e.args)
+	case "ISBLANK":
+		return evalFuncIsblank(ctx, e.args)
+	case "ISTEXT":
+		return evalFuncIstext(ctx, e.args)
+	case "ISNONTEXT":
+		return evalFuncIsnontext(ctx, e.args)
+	case "ISERROR":
+		return evalFuncIserror(ctx, e.args)
+	case "ISNA":
+		return evalFuncIsna(ctx, e.args)
+	case "ROW":
+		return evalFuncRow(ctx, e.args)
+	case "COLUMN":
+		return evalFuncColumn(ctx, e.args)
 	}
 	return 0, fmt.Errorf("unknown function: %s", e.name)
 }
@@ -703,9 +742,10 @@ func (p *parser) error(format string, args ...interface{}) {
 // ---------------------------------------------------------------------------
 
 type evalContext struct {
-	cells    map[string]Cell
-	visiting map[string]bool
-	cache    map[string]float64
+	cells      map[string]Cell
+	visiting   map[string]bool
+	cache      map[string]float64
+	formulaRef string
 }
 
 func newEvalContext(cells map[string]Cell) *evalContext {
@@ -726,6 +766,7 @@ func (ctx *evalContext) evaluate(originAxis, formula string) (float64, error) {
 	ctx.visiting[originAxis] = true
 	defer delete(ctx.visiting, originAxis)
 
+	ctx.formulaRef = originAxis
 	p := newParser(formula)
 	ast, err := p.parse()
 	if err != nil {
@@ -1159,6 +1200,44 @@ func rangeOrCellRefs(ctx *evalContext, arg expr) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("expected a cell reference or range")
 	}
+}
+
+func evalFuncRow(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) > 1 {
+		return 0, fmt.Errorf("ROW requires 0 or 1 argument")
+	}
+	if len(args) == 0 {
+		if ctx.formulaRef == "" {
+			return 0, nil
+		}
+		_, r := parseCellRef(ctx.formulaRef)
+		return float64(r), nil
+	}
+	ref, ok := args[0].(*cellRefExpr)
+	if !ok {
+		return 0, fmt.Errorf("ROW argument must be a cell reference")
+	}
+	_, r := parseCellRef(ref.ref)
+	return float64(r), nil
+}
+
+func evalFuncColumn(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) > 1 {
+		return 0, fmt.Errorf("COLUMN requires 0 or 1 argument")
+	}
+	if len(args) == 0 {
+		if ctx.formulaRef == "" {
+			return 0, nil
+		}
+		c, _ := parseCellRef(ctx.formulaRef)
+		return float64(c), nil
+	}
+	ref, ok := args[0].(*cellRefExpr)
+	if !ok {
+		return 0, fmt.Errorf("COLUMN argument must be a cell reference")
+	}
+	c, _ := parseCellRef(ref.ref)
+	return float64(c), nil
 }
 
 // ---------------------------------------------------------------------------

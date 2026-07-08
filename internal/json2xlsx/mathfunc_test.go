@@ -933,3 +933,115 @@ func TestEval_FactErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestEval_Sumsq(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"SUMSQ(3,4)", 25},
+		{"SUMSQ(1,2,3,4)", 30},
+		{"SUMSQ(0,0)", 0},
+		{"SUMSQ(-2,3)", 13},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_EvenOdd(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"EVEN(0)", 0},
+		{"EVEN(1)", 2},
+		{"EVEN(1.5)", 2},
+		{"EVEN(2.3)", 4},
+		{"EVEN(-0.5)", -2},
+		{"EVEN(-1)", -2},
+		{"ODD(0)", 1},
+		{"ODD(1)", 1},
+		{"ODD(1.5)", 3},
+		{"ODD(2)", 3},
+		{"ODD(-1)", -1},
+		{"ODD(-2)", -3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_Mround(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"MROUND(10,3)", 9},
+		{"MROUND(-10,-3)", -9},
+		{"MROUND(10,3)", 9},
+		{"MROUND(-10,-3)", -9},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_MroundErrors(t *testing.T) {
+	tests := []struct {
+		formula string
+		contain string
+	}{
+		{"MROUND(10,0)", "#DIV/0"},
+		{"MROUND(10,-3)", "#NUM!"},
+		{"MROUND(-10,3)", "#NUM!"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			errMsg := evalFormulaErr(t, nil, tt.formula)
+			if !strings.Contains(errMsg, tt.contain) {
+				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
+			}
+		})
+	}
+}
+
+func TestEval_DeltaGestep(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"DELTA(5,5)", 1},
+		{"DELTA(5,4)", 0},
+		{"DELTA(5)", 0},
+		{"DELTA(0)", 1},
+		{"GESTEP(5,4)", 1},
+		{"GESTEP(4,5)", 0},
+		{"GESTEP(5,5)", 1},
+		{"GESTEP(5)", 1},
+		{"GESTEP(-1)", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}

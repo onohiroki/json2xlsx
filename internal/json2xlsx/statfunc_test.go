@@ -251,3 +251,56 @@ func TestEval_TrimmeanErrors(t *testing.T) {
 		t.Errorf("expected percent range error, got %q", errMsg)
 	}
 }
+
+func TestEval_Mode(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"MODE(1,2,2,3)", 2},
+		{"MODE.SNGL(1,2,2,3,3)", 2},
+		{"MODE(1,1,2,2,3,3,3)", 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_ModeNoMode(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "MODE(1,2,3)")
+	if !strings.Contains(errMsg, "#N/A") {
+		t.Errorf("expected #N/A error, got %q", errMsg)
+	}
+}
+
+func TestEval_Subtotal(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0}, "A2": {T: "n", V: 2.0},
+		"A3": {T: "n", V: 3.0}, "A4": {T: "n", V: 4.0},
+		"B1": {T: "n", V: 10.0},
+	}
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"SUBTOTAL(1,A1:A4)", 2.5},
+		{"SUBTOTAL(2,A1:A4)", 4},
+		{"SUBTOTAL(4,A1:A4)", 4},
+		{"SUBTOTAL(5,A1:A4)", 1},
+		{"SUBTOTAL(9,A1:A4)", 10},
+		{"SUBTOTAL(9,A1:A4,B1)", 20},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, cells, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}

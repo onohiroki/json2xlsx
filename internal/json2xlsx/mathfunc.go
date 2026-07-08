@@ -450,3 +450,128 @@ func evalFuncCounta(ctx *evalContext, args []expr) (float64, error) {
 	}
 	return count, nil
 }
+
+func evalFuncSumsq(ctx *evalContext, args []expr) (float64, error) {
+	var sum float64
+	for _, arg := range args {
+		vals, err := ctx.evalArg(arg)
+		if err != nil {
+			return 0, err
+		}
+		for _, v := range vals {
+			sum += v * v
+		}
+	}
+	return sum, nil
+}
+
+func evalFuncEven(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("EVEN requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	if n > 0 {
+		return math.Ceil(n/2) * 2, nil
+	}
+	return math.Floor(n/2) * 2, nil
+}
+
+func evalFuncOdd(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("ODD requires exactly 1 argument")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 1, nil
+	}
+	var abs = n
+	if abs < 0 {
+		abs = -abs
+	}
+	odd := math.Ceil(abs)
+	if math.Mod(odd, 2) == 0 {
+		odd++
+	}
+	if n < 0 {
+		return -odd, nil
+	}
+	return odd, nil
+}
+
+func evalFuncMround(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("MROUND requires exactly 2 arguments")
+	}
+	n, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if m == 0 {
+		return 0, fmt.Errorf("MROUND #DIV/0!")
+	}
+	if (n > 0 && m < 0) || (n < 0 && m > 0) {
+		return 0, fmt.Errorf("MROUND #NUM!")
+	}
+	return math.Round(n/m) * m, nil
+}
+
+func evalFuncDelta(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return 0, fmt.Errorf("DELTA requires 1 or 2 arguments")
+	}
+	v1, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if len(args) == 1 {
+		if v1 == 0 {
+			return 1, nil
+		}
+		return 0, nil
+	}
+	v2, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if v1 == v2 {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func evalFuncGestep(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return 0, fmt.Errorf("GESTEP requires 1 or 2 arguments")
+	}
+	v1, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if len(args) == 1 {
+		if v1 >= 0 {
+			return 1, nil
+		}
+		return 0, nil
+	}
+	v2, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if v1 >= v2 {
+		return 1, nil
+	}
+	return 0, nil
+}
