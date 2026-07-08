@@ -29,8 +29,7 @@ func EvalWorkbookFormulas(wb *Workbook) []string {
 				}
 				c := sh.Cells[axis]
 				c.V = val
-				c.T = "n"
-				c.F = ""
+				c.T = "f"
 				sh.Cells[axis] = c
 			}
 		}
