@@ -97,6 +97,68 @@ func evalFuncWeekday(ctx *evalContext, args []expr) (float64, error) {
 	}
 }
 
+func evalFuncDate(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 3 {
+		return 0, fmt.Errorf("DATE requires exactly 3 arguments")
+	}
+	year, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	month, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	day, err := args[2].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	t := time.Date(int(year), time.Month(month), int(day), 0, 0, 0, 0, time.UTC)
+	return timeToExcelSerial(t), nil
+}
+
+func evalFuncEdate(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("EDATE requires exactly 2 arguments")
+	}
+	start, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	months, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	t := excelSerialToTime(start)
+	y, m, d := t.Year(), int(t.Month()), t.Day()
+	total := m + int(months)
+	lastDay := time.Date(y, time.Month(total+1), 0, 0, 0, 0, 0, time.UTC).Day()
+	if d > lastDay {
+		d = lastDay
+	}
+	end := time.Date(y, time.Month(total), d, 0, 0, 0, 0, time.UTC)
+	return timeToExcelSerial(end), nil
+}
+
+func evalFuncEomonth(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) != 2 {
+		return 0, fmt.Errorf("EOMONTH requires exactly 2 arguments")
+	}
+	start, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	months, err := args[1].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	t := excelSerialToTime(start)
+	y, m := t.Year(), t.Month()
+	total := int(m) + int(months)
+	end := time.Date(y, time.Month(total+1), 0, 0, 0, 0, 0, time.UTC)
+	return timeToExcelSerial(end), nil
+}
+
 func evalFuncWeeknum(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("WEEKNUM requires 1 or 2 arguments")

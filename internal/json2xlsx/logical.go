@@ -56,6 +56,29 @@ func evalFuncNot(ctx *evalContext, args []expr) (float64, error) {
 	return 0, nil
 }
 
+func evalFuncSwitch(ctx *evalContext, args []expr) (float64, error) {
+	if len(args) < 3 {
+		return 0, fmt.Errorf("SWITCH requires at least 3 arguments")
+	}
+	expr, err := args[0].eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for i := 1; i < len(args)-1; i += 2 {
+		val, err := args[i].eval(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if val == expr {
+			return args[i+1].eval(ctx)
+		}
+	}
+	if len(args)%2 == 0 {
+		return args[len(args)-1].eval(ctx)
+	}
+	return 0, fmt.Errorf("SWITCH #N/A")
+}
+
 func evalFuncIfs(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 2 || len(args)%2 != 0 {
 		return 0, fmt.Errorf("IFS requires an even number of arguments (condition, value pairs)")

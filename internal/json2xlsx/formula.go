@@ -93,8 +93,8 @@ var knownFuncs = map[string]bool{
 	"AVERAGEIF": true, "SUMIFS": true, "COUNTIFS": true, "AVERAGEIFS": true,
 	"MINIFS": true, "MAXIFS": true,
 	"IFERROR": true,
-	"IFS": true,
-	"YEAR": true, "MONTH": true, "DAY": true, "WEEKDAY": true, "WEEKNUM": true,
+	"IFS": true, "SWITCH": true,
+	"YEAR": true, "MONTH": true, "DAY": true, "DATE": true, "EDATE": true, "EOMONTH": true, "WEEKDAY": true, "WEEKNUM": true,
 	"VLOOKUP": true, "XLOOKUP": true, "INDEX": true, "MATCH": true, "CHOOSE": true,
 	"TRUNC": true, "SIGN": true, "PI": true, "RAND": true,
 	"SIN": true, "COS": true, "TAN": true, "LN": true, "LOG10": true, "EXP": true,
@@ -410,6 +410,12 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncMonth(ctx, e.args)
 	case "DAY":
 		return evalFuncDay(ctx, e.args)
+	case "DATE":
+		return evalFuncDate(ctx, e.args)
+	case "EDATE":
+		return evalFuncEdate(ctx, e.args)
+	case "EOMONTH":
+		return evalFuncEomonth(ctx, e.args)
 	case "WEEKDAY":
 		return evalFuncWeekday(ctx, e.args)
 	case "WEEKNUM":
@@ -428,6 +434,8 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncMaxifs(ctx, e.args)
 	case "IFS":
 		return evalFuncIfs(ctx, e.args)
+	case "SWITCH":
+		return evalFuncSwitch(ctx, e.args)
 	case "IFERROR":
 		return evalFuncIferror(ctx, e.args)
 	case "VLOOKUP":

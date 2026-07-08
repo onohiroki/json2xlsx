@@ -241,6 +241,41 @@ func TestEval_IfsWrongArgCount(t *testing.T) {
 	}
 }
 
+func TestEval_Switch(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"SWITCH(1,1,10,2,20)", 10},
+		{"SWITCH(2,1,10,2,20)", 20},
+		{"SWITCH(3,1,10,2,20,99)", 99},
+		{"SWITCH(1+1,1,10,2,20)", 20},
+		{"SWITCH(5,5,100)", 100},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_SwitchNoMatchNoDefault(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SWITCH(3,1,10,2,20)")
+	if !strings.Contains(errMsg, "#N/A") {
+		t.Errorf("expected #N/A error, got %q", errMsg)
+	}
+}
+
+func TestEval_SwitchWrongArgCount(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "SWITCH(1)")
+	if !strings.Contains(errMsg, "at least 3") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
 func TestEval_IfWithNestedFunc(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 10.0},

@@ -210,3 +210,85 @@ func TestEval_WeeknumWrongArgs(t *testing.T) {
 		t.Errorf("expected arg count error, got %q", errMsg)
 	}
 }
+
+func TestEval_Date(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"DATE(2020,1,1)", 43831},
+		{"DATE(2020,2,1)", 43862},
+		{"DATE(2020,1,31)", 43861},
+		{"DATE(2020,2,29)", 43890},
+		{"DATE(1899,12,30)", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_DateWrongArg(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "DATE(2020,1)")
+	if !strings.Contains(errMsg, "exactly 3") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Edate(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"EDATE(43831,1)", 43862},
+		{"EDATE(43831,-1)", 43800},
+		{"EDATE(43831,0)", 43831},
+		{"EDATE(43861,1)", 43890},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_EdateWrongArg(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "EDATE(43831)")
+	if !strings.Contains(errMsg, "exactly 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
+
+func TestEval_Eomonth(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"EOMONTH(43831,0)", 43861},
+		{"EOMONTH(43831,1)", 43890},
+		{"EOMONTH(43831,-1)", 43830},
+		{"EOMONTH(43862,1)", 43921},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_EomonthWrongArg(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "EOMONTH(43831)")
+	if !strings.Contains(errMsg, "exactly 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+}
