@@ -1,6 +1,8 @@
 package json2xlsx
 
 import (
+	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +12,8 @@ import (
 
 	"github.com/xuri/excelize/v2"
 )
+
+var tStrAttrRe = regexp.MustCompile(` t="str"`)
 
 func convertWorkbook(wb *Workbook, out io.Writer) error {
 	f := excelize.NewFile()
@@ -33,8 +37,13 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 		return err
 	}
 
-	if err := f.Write(out); err != nil {
+	var buf bytes.Buffer
+	if err := f.Write(&buf); err != nil {
 		return fmt.Errorf("write xlsx: %w", err)
+	}
+
+	if err := fixSheetXML(&buf, out); err != nil {
+		return err
 	}
 
 	if warnings > 0 {
@@ -276,6 +285,49 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int,
 		}
 	}
 
+	return nil
+}
+
+// fixSheetXML post-processes the XLSX to rewrite formula cells: it removes the
+// t="str" attribute that excelize unconditionally writes via SetCellFormula.
+// Excel can misinterpret a formula cell typed as "str" (especially for newer
+// functions like DAYS), causing #NAME? on initial open. Without a type attribute
+// (or with t="n"), Excel evaluates the formula normally.
+func fixSheetXML(in *bytes.Buffer, out io.Writer) error {
+	zr, err := zip.NewReader(bytes.NewReader(in.Bytes()), int64(in.Len()))
+	if err != nil {
+		return fmt.Errorf("reopen xlsx: %w", err)
+	}
+	zw := zip.NewWriter(out)
+	defer zw.Close()
+
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return err
+		}
+
+		if strings.HasPrefix(f.Name, "xl/worksheets/sheet") && strings.HasSuffix(f.Name, ".xml") {
+			data = tStrAttrRe.ReplaceAll(data, []byte{})
+		}
+
+		hdr := &zip.FileHeader{
+			Name:   f.Name,
+			Method: f.Method,
+		}
+		wc, err := zw.CreateHeader(hdr)
+		if err != nil {
+			return err
+		}
+		if _, err := wc.Write(data); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
