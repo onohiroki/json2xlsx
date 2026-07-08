@@ -83,11 +83,13 @@ var knownFuncs = map[string]bool{
 	"MIN": true, "MAX": true, "ABS": true, "ROUND": true,
 	"IF": true, "AND": true, "OR": true, "NOT": true,
 	"PRODUCT": true, "ROUNDUP": true, "ROUNDDOWN": true, "SUMPRODUCT": true,
-	"MEDIAN": true, "STDEV": true, "STDEV.S": true, "STDEV.P": true,
+	"MEDIAN": true, "QUARTILE": true, "QUARTILE.INC": true, "PERCENTILE": true, "PERCENTILE.INC": true,
+	"STDEV": true, "STDEV.S": true, "STDEV.P": true,
 	"SUMIF": true, "COUNTIF": true,
 	"FLOOR": true, "CEILING": true, "MOD": true, "POWER": true, "SQRT": true, "INT": true,
 	"COUNTA": true,
 	"VAR": true, "VAR.S": true, "VAR.P": true,
+	"GEOMEAN": true, "HARMEAN": true, "TRIMMEAN": true,
 	"RANK": true, "RANK.EQ": true, "LARGE": true, "SMALL": true,
 	"TODAY": true, "NOW": true,
 	"AVERAGEIF": true, "SUMIFS": true, "COUNTIFS": true, "AVERAGEIFS": true,
@@ -368,6 +370,10 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncSumproduct(ctx, e.args)
 	case "MEDIAN":
 		return evalFuncMedian(ctx, e.args)
+	case "QUARTILE", "QUARTILE.INC":
+		return evalFuncQuartileInc(ctx, e.args)
+	case "PERCENTILE", "PERCENTILE.INC":
+		return evalFuncPercentileInc(ctx, e.args)
 	case "STDEV", "STDEV.S":
 		return evalFuncStdevS(ctx, e.args)
 	case "STDEV.P":
@@ -394,6 +400,12 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 		return evalFuncVarS(ctx, e.args)
 	case "VAR.P":
 		return evalFuncVarP(ctx, e.args)
+	case "GEOMEAN":
+		return evalFuncGeomean(ctx, e.args)
+	case "HARMEAN":
+		return evalFuncHarmean(ctx, e.args)
+	case "TRIMMEAN":
+		return evalFuncTrimmean(ctx, e.args)
 	case "RANK", "RANK.EQ":
 		return evalFuncRank(ctx, e.args)
 	case "LARGE":

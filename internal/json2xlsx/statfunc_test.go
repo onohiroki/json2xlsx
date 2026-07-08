@@ -70,3 +70,184 @@ func TestEval_VarPOneValueWorks(t *testing.T) {
 		t.Errorf("VAR.P(5) = %v, want 0", got)
 	}
 }
+
+func TestEval_QuartileInc(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0}, "A2": {T: "n", V: 2.0},
+		"A3": {T: "n", V: 3.0}, "A4": {T: "n", V: 4.0},
+		"A5": {T: "n", V: 5.0}, "A6": {T: "n", V: 6.0},
+		"A7": {T: "n", V: 7.0}, "A8": {T: "n", V: 8.0},
+		"A9": {T: "n", V: 9.0}, "A10": {T: "n", V: 10.0},
+	}
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"QUARTILE.INC(A1:A10,0)", 1},
+		{"QUARTILE.INC(A1:A10,1)", 3.25},
+		{"QUARTILE.INC(A1:A10,2)", 5.5},
+		{"QUARTILE.INC(A1:A10,3)", 7.75},
+		{"QUARTILE.INC(A1:A10,4)", 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, cells, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_QuartileErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "QUARTILE.INC(1)")
+	if !strings.Contains(errMsg, "at least 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "QUARTILE.INC(1,5)")
+	if !strings.Contains(errMsg, "must be 0-4") {
+		t.Errorf("expected quart range error, got %q", errMsg)
+	}
+}
+
+func TestEval_PercentileInc(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"PERCENTILE.INC(1,2,3,4,5,0)", 1},
+		{"PERCENTILE.INC(1,2,3,4,5,0.25)", 2},
+		{"PERCENTILE.INC(1,2,3,4,5,0.5)", 3},
+		{"PERCENTILE.INC(1,2,3,4,5,1)", 5},
+		{"PERCENTILE.INC(1,2,3,4,5,0.3)", 2.2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_PercentileErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "PERCENTILE.INC(1)")
+	if !strings.Contains(errMsg, "at least 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "PERCENTILE.INC(1,2,-0.1)")
+	if !strings.Contains(errMsg, "between 0 and 1") {
+		t.Errorf("expected k range error, got %q", errMsg)
+	}
+}
+
+func TestEval_QuartileAlias(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0}, "A2": {T: "n", V: 2.0},
+		"A3": {T: "n", V: 3.0}, "A4": {T: "n", V: 4.0},
+	}
+	got := evalFormula(t, cells, "QUARTILE(A1:A4,2)")
+	want := evalFormula(t, cells, "QUARTILE.INC(A1:A4,2)")
+	if got != want {
+		t.Errorf("QUARTILE = %v, QUARTILE.INC = %v, want equal", got, want)
+	}
+}
+
+func TestEval_PercentileAlias(t *testing.T) {
+	got := evalFormula(t, nil, "PERCENTILE(1,2,3,4,5,0.5)")
+	want := evalFormula(t, nil, "PERCENTILE.INC(1,2,3,4,5,0.5)")
+	if got != want {
+		t.Errorf("PERCENTILE = %v, PERCENTILE.INC = %v, want equal", got, want)
+	}
+}
+
+func TestEval_Geomean(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"GEOMEAN(1,2,4)", 2},
+		{"GEOMEAN(2,8)", 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_GeomeanErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "GEOMEAN()")
+	if !strings.Contains(errMsg, "empty set") {
+		t.Errorf("expected empty set error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "GEOMEAN(-1,2)")
+	if !strings.Contains(errMsg, "positive") {
+		t.Errorf("expected positive error, got %q", errMsg)
+	}
+}
+
+func TestEval_Harmean(t *testing.T) {
+	tests := []struct {
+		formula string
+		want    float64
+	}{
+		{"HARMEAN(1,2,4)", 12.0 / 7.0},
+		{"HARMEAN(2,8)", 3.2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.formula, func(t *testing.T) {
+			got := evalFormula(t, nil, tt.formula)
+			if got != tt.want {
+				t.Errorf("eval %q = %v, want %v", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEval_HarmeanErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "HARMEAN()")
+	if !strings.Contains(errMsg, "empty set") {
+		t.Errorf("expected empty set error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "HARMEAN(0,2)")
+	if !strings.Contains(errMsg, "positive") {
+		t.Errorf("expected positive error, got %q", errMsg)
+	}
+}
+
+func TestEval_Trimmean(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0}, "A2": {T: "n", V: 2.0},
+		"A3": {T: "n", V: 3.0}, "A4": {T: "n", V: 4.0},
+		"A5": {T: "n", V: 5.0}, "A6": {T: "n", V: 6.0},
+		"A7": {T: "n", V: 7.0}, "A8": {T: "n", V: 8.0},
+		"A9": {T: "n", V: 9.0}, "A10": {T: "n", V: 10.0},
+	}
+	got := evalFormula(t, cells, "TRIMMEAN(A1:A10,0.2)")
+	if got != 5.5 {
+		t.Errorf("TRIMMEAN = %v, want 5.5", got)
+	}
+}
+
+func TestEval_TrimmeanLiteral(t *testing.T) {
+	got := evalFormula(t, nil, "TRIMMEAN(1,2,3,4,5,0)")
+	if got != 3 {
+		t.Errorf("TRIMMEAN = %v, want 3", got)
+	}
+}
+
+func TestEval_TrimmeanErrors(t *testing.T) {
+	errMsg := evalFormulaErr(t, nil, "TRIMMEAN(1)")
+	if !strings.Contains(errMsg, "at least 2") {
+		t.Errorf("expected arg count error, got %q", errMsg)
+	}
+	errMsg = evalFormulaErr(t, nil, "TRIMMEAN(1,2,-0.1)")
+	if !strings.Contains(errMsg, "must be between") {
+		t.Errorf("expected percent range error, got %q", errMsg)
+	}
+}
