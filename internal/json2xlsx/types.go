@@ -117,6 +117,37 @@ type FreezePane struct {
 	Col int `json:"col,omitempty"` // 固定する列数
 }
 
+// Sparkline はスパークライン設定．
+type Sparkline struct {
+	Location      string  `json:"location"`
+	Range         string  `json:"range"`
+	Type          string  `json:"type,omitempty"`
+	Weight        float64 `json:"weight,omitempty"`
+	DateAxis      bool    `json:"dateAxis,omitempty"`
+	Markers       bool    `json:"markers,omitempty"`
+	High          bool    `json:"high,omitempty"`
+	Low           bool    `json:"low,omitempty"`
+	First         bool    `json:"first,omitempty"`
+	Last          bool    `json:"last,omitempty"`
+	Negative      bool    `json:"negative,omitempty"`
+	Axis          bool    `json:"axis,omitempty"`
+	Hidden        bool    `json:"hidden,omitempty"`
+	Reverse       bool    `json:"reverse,omitempty"`
+	Style         int     `json:"style,omitempty"`
+	SeriesColor   string  `json:"seriesColor,omitempty"`
+	NegativeColor string  `json:"negativeColor,omitempty"`
+	MarkersColor  string  `json:"markersColor,omitempty"`
+	FirstColor    string  `json:"firstColor,omitempty"`
+	LastColor     string  `json:"lastColor,omitempty"`
+	HighColor     string  `json:"highColor,omitempty"`
+	LowColor      string  `json:"lowColor,omitempty"`
+	EmptyCells    string  `json:"emptyCells,omitempty"`
+	Max           int     `json:"max,omitempty"`
+	CustMax       int     `json:"customMax,omitempty"`
+	Min           int     `json:"min,omitempty"`
+	CustMin       int     `json:"customMin,omitempty"`
+}
+
 // AutoFilter はオートフィルタ設定（SheetJS 互換）．
 type AutoFilter struct {
 	Ref string `json:"ref"`
@@ -145,6 +176,7 @@ type Sheet struct {
 	Freeze             *FreezePane         `json:"freeze,omitempty"`
 	AutoFilter         interface{}         `json:"autoFilter,omitempty"`
 	Tables             []Table             `json:"tables,omitempty"`
+	Sparklines         []Sparkline         `json:"sparklines,omitempty"`
 	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
 }
 
@@ -267,6 +299,7 @@ type Workbook struct {
 	Freeze             *FreezePane         `json:"freeze,omitempty"`
 	AutoFilter         interface{}         `json:"autoFilter,omitempty"`
 	Tables             []Table             `json:"tables,omitempty"`
+	Sparklines         []Sparkline         `json:"sparklines,omitempty"`
 	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
 
 	Styles []Style `json:"styles,omitempty"`

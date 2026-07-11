@@ -1,0 +1,62 @@
+{
+  "name": "四半期売上",
+  "cells": {
+    "A1": {"t": "s", "v": "商品"},
+    "B1": {"t": "s", "v": "Q1"},
+    "C1": {"t": "s", "v": "Q2"},
+    "D1": {"t": "s", "v": "Q3"},
+    "E1": {"t": "s", "v": "Q4"},
+    "F1": {"t": "s", "v": "トレンド"},
+    "A2": {"t": "s", "v": "りんご"},
+    "B2": {"t": "n", "v": 120},
+    "C2": {"t": "n", "v": 150},
+    "D2": {"t": "n", "v": 90},
+    "E2": {"t": "n", "v": 200},
+    "A3": {"t": "s", "v": "みかん"},
+    "B3": {"t": "n", "v": 80},
+    "C3": {"t": "n", "v": 100},
+    "D3": {"t": "n", "v": 130},
+    "E3": {"t": "n", "v": 110},
+    "A4": {"t": "s", "v": "ぶどう"},
+    "B4": {"t": "n", "v": 200},
+    "C4": {"t": "n", "v": 180},
+    "D4": {"t": "n", "v": 220},
+    "E4": {"t": "n", "v": 250}
+  },
+  "autoFilter": "A1:F4",
+  "tables": [{
+    "range": "A1:F4",
+    "name": "SalesTable",
+    "style": "TableStyleMedium9",
+    "bandedRows": true
+  }],
+  "sparklines": [
+    {
+      "location": "F2",
+      "range": "四半期売上!B2:E2",
+      "type": "line",
+      "markers": true,
+      "high": true,
+      "low": true,
+      "seriesColor": "#4472C4",
+      "highColor": "#00B050",
+      "lowColor": "#FF0000"
+    },
+    {
+      "location": "F3",
+      "range": "四半期売上!B3:E3",
+      "type": "column",
+      "negative": true,
+      "first": true,
+      "last": true,
+      "seriesColor": "#ED7D31"
+    },
+    {
+      "location": "F4",
+      "range": "四半期売上!B4:E4",
+      "type": "win_loss",
+      "axis": true,
+      "seriesColor": "#70AD47"
+    }
+  ]
+}

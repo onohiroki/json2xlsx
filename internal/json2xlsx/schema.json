@@ -27,6 +27,7 @@
         "freeze":             { "$ref": "#/$defs/freeze" },
         "autoFilter":         { "$ref": "#/$defs/autoFilter" },
         "tables":             { "$ref": "#/$defs/tables" },
+        "sparklines":         { "$ref": "#/$defs/sparklines" },
         "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
         "styles":             { "$ref": "#/$defs/styles" }
       },
@@ -51,6 +52,7 @@
               "freeze":             { "$ref": "#/$defs/freeze" },
               "autoFilter":         { "$ref": "#/$defs/autoFilter" },
               "tables":             { "$ref": "#/$defs/tables" },
+              "sparklines":         { "$ref": "#/$defs/sparklines" },
               "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
             },
             "required": ["cells"],
@@ -314,6 +316,7 @@
         "freeze":             { "$ref": "#/$defs/freeze" },
         "autoFilter":         { "$ref": "#/$defs/autoFilter" },
         "tables":             { "$ref": "#/$defs/tables" },
+        "sparklines":         { "$ref": "#/$defs/sparklines" },
         "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
       },
       "required": ["cells"],
@@ -481,6 +484,48 @@
         "showPercent":   { "type": "boolean" },
         "showLeaderLn":  { "type": "boolean" }
       },
+      "additionalProperties": false
+    },
+
+    "sparklines": {
+      "type": "array",
+      "description": "スパークライン一覧",
+      "items": { "$ref": "#/$defs/sparkline" }
+    },
+
+    "sparkline": {
+      "type": "object",
+      "description": "スパークライン",
+      "properties": {
+        "location":       { "type": "string", "description": "配置先セル (例: A2)" },
+        "range":          { "type": "string", "description": "データ範囲 (例: Sheet1!B2:E2)" },
+        "type":           { "type": "string", "enum": ["line", "column", "win_loss"], "description": "スパークライン種別" },
+        "weight":         { "type": "number", "description": "線の太さ" },
+        "dateAxis":       { "type": "boolean", "description": "日付軸を使用" },
+        "markers":        { "type": "boolean", "description": "マーカー表示" },
+        "high":           { "type": "boolean", "description": "最大値強調" },
+        "low":            { "type": "boolean", "description": "最小値強調" },
+        "first":          { "type": "boolean", "description": "最初の値強調" },
+        "last":           { "type": "boolean", "description": "最後の値強調" },
+        "negative":       { "type": "boolean", "description": "負の値強調" },
+        "axis":           { "type": "boolean", "description": "軸表示" },
+        "hidden":         { "type": "boolean", "description": "非表示の行/列のデータを表示" },
+        "reverse":        { "type": "boolean", "description": "プロット方向を反転" },
+        "style":          { "type": "integer", "minimum": 0, "maximum": 35, "description": "組み込みスタイル (0-35)" },
+        "seriesColor":    { "$ref": "#/$defs/colorValue", "description": "線/棒の色" },
+        "negativeColor":  { "$ref": "#/$defs/colorValue", "description": "負の値の色" },
+        "markersColor":   { "$ref": "#/$defs/colorValue", "description": "マーカーの色" },
+        "firstColor":     { "$ref": "#/$defs/colorValue", "description": "最初の値の色" },
+        "lastColor":      { "$ref": "#/$defs/colorValue", "description": "最後の値の色" },
+        "highColor":      { "$ref": "#/$defs/colorValue", "description": "最大値の色" },
+        "lowColor":       { "$ref": "#/$defs/colorValue", "description": "最小値の色" },
+        "emptyCells":     { "type": "string", "enum": ["zero", "gap", "span"], "description": "空セルの扱い" },
+        "max":            { "type": "integer", "description": "軸の最大値のカスタマイズ方法" },
+        "customMax":      { "type": "integer", "description": "軸の最大値" },
+        "min":            { "type": "integer", "description": "軸の最小値のカスタマイズ方法" },
+        "customMin":      { "type": "integer", "description": "軸の最小値" }
+      },
+      "required": ["location", "range"],
       "additionalProperties": false
     },
 

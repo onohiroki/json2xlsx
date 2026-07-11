@@ -203,6 +203,13 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 	}
 
+	for _, sl := range sh.Sparklines {
+		opts := toExcelizeSparkline(sl)
+		if err := f.AddSparkline(name, opts); err != nil {
+			return fmt.Errorf("add sparkline %q -> %q: %w", sl.Range, sl.Location, err)
+		}
+	}
+
 	for _, cf := range sh.ConditionalFormats {
 		opts, err := buildConditionalFormatOpts(f, cf.Rules)
 		if err != nil {

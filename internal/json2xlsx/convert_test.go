@@ -1754,6 +1754,134 @@ func TestTable_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestSparkline_Basic(t *testing.T) {
+	// 単純な line スパークライン
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "s", "v": "Sparkline"},
+			"B1": {"t": "n", "v": 1},
+			"C1": {"t": "n", "v": 3},
+			"D1": {"t": "n", "v": 2},
+			"E1": {"t": "n", "v": 5}
+		},
+		"sparklines": [{
+			"location": "A1",
+			"range": "S1!B1:E1",
+			"markers": true,
+			"high": true,
+			"low": true
+		}]
+	}`
+	// Sparklines are not readable back via excelize API, just verify no error
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("OpenReader: %v", err)
+	}
+	defer f.Close()
+
+	// Verify cells are still intact
+	got, _ := f.GetCellValue("S1", "A1")
+	if got != "Sparkline" {
+		t.Errorf("A1 = %q, want Sparkline", got)
+	}
+}
+
+func TestSparkline_Column(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A2": {"t": "s", "v": "Col"},
+			"B2": {"t": "n", "v": 1},
+			"C2": {"t": "n", "v": 4},
+			"D2": {"t": "n", "v": 2}
+		},
+		"sparklines": [{
+			"location": "A2",
+			"range": "S1!B2:D2",
+			"type": "column",
+			"negative": true,
+			"first": true,
+			"last": true
+		}]
+	}`
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+}
+
+func TestSparkline_WinLoss(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A3": {"t": "s", "v": "W/L"},
+			"B3": {"t": "n", "v": 1},
+			"C3": {"t": "n", "v": -1},
+			"D3": {"t": "n", "v": 1},
+			"E3": {"t": "n", "v": 1}
+		},
+		"sparklines": [{
+			"location": "A3",
+			"range": "S1!B3:E3",
+			"type": "win_loss",
+			"axis": true,
+			"negative": true
+		}]
+	}`
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+}
+
+func TestSparkline_WithColor(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A4": {"t": "s", "v": "Colored"},
+			"B4": {"t": "n", "v": 1},
+			"C4": {"t": "n", "v": 3}
+		},
+		"sparklines": [{
+			"location": "A4",
+			"range": "S1!B4:C4",
+			"type": "line",
+			"seriesColor": "#4472C4",
+			"markersColor": "#FF0000",
+			"highColor": "#00FF00",
+			"weight": 2.5
+		}]
+	}`
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+}
+
+func TestSparkline_SingleSheetForm(t *testing.T) {
+	js := `{
+		"name": "Data",
+		"cells": {
+			"A1": {"t": "s", "v": "data"},
+			"B1": {"t": "n", "v": 10},
+			"C1": {"t": "n", "v": 20}
+		},
+		"sparklines": [{
+			"location": "A2",
+			"range": "Data!B1:C1"
+		}]
+	}`
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+}
+
 func keysOfMap(m map[string][]excelize.ConditionalFormatOptions) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

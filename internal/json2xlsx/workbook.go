@@ -45,6 +45,7 @@ func flattenWorkbook(wb *Workbook) (sheets []Sheet, styles []Style) {
 			Freeze:             wb.Freeze,
 			AutoFilter:         wb.AutoFilter,
 			Tables:             wb.Tables,
+			Sparklines:         wb.Sparklines,
 			ConditionalFormats: wb.ConditionalFormats,
 		}}
 	}
