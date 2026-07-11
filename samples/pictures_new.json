@@ -1,0 +1,40 @@
+{
+  "sheets": [
+    {
+      "name": "Pictures",
+      "cells": {
+        "A1": {"t":"s","v":"Image from path"},
+        "A2": {"t":"s","v":"Image from base64"},
+        "A3": {"t":"s","v":"Positioned + scaled"},
+        "A4": {"t":"s","v":"Has background"}
+      },
+      "pictures": [
+        {
+          "cell": "B1",
+          "path": "samples/new_image.png",
+          "altText": "New image from path",
+          "scaleX": 0.5,
+          "scaleY": 0.5
+        },
+        {
+          "cell": "B2",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAIAAAD2HxkiAAADXUlEQVR4nOzTUQnAABTDwA6ef8sbU5GfO0od5Lb32cys2v0HdEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQkyEEBMhxEQIMRFCTIQQEyHERAgxEUJMhBATIcRECDERQuwLAAD//7/XCAZWEHLUAAAAAElFTkSuQmCC",
+          "extension": "png",
+          "altText": "New image from base64"
+        },
+        {
+          "cell": "C3",
+          "path": "samples/new_image.png",
+          "offsetX": 100,
+          "offsetY": 50,
+          "scaleX": 1.5,
+          "scaleY": 1.5,
+          "positioning": "oneCell"
+        }
+      ],
+      "background": {
+        "path": "samples/new_image.png"
+      }
+    }
+  ]
+}
