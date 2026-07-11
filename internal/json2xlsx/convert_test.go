@@ -1281,3 +1281,307 @@ func TestToJSONEmbeddedChartRoundtrip(t *testing.T) {
 		t.Errorf("step C: Data!A1 = %q, want cat", val)
 	}
 }
+
+func TestConditionalFormat_CellType(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 1}, "A2": {"t": "n", "v": 10}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "cell",
+					"criteria": ">",
+					"value": "5",
+					"style": {
+						"fill": {"type": "pattern", "pattern": 1, "color": ["#FFC7CE"]},
+						"font": {"color": "#9C0006"}
+					}
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	if len(cfs) != 1 {
+		t.Fatalf("expected 1 conditional format, got %d", len(cfs))
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if len(opts) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(opts))
+	}
+	if opts[0].Type != "cell" {
+		t.Errorf("Type = %q, want cell", opts[0].Type)
+	}
+	if opts[0].Criteria != "greater than" {
+		t.Errorf("Criteria = %q, want greater than", opts[0].Criteria)
+	}
+	if opts[0].Value != "5" {
+		t.Errorf("Value = %q, want 5", opts[0].Value)
+	}
+}
+
+func TestConditionalFormat_Between(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 5}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "cell",
+					"criteria": "between",
+					"minValue": "3",
+					"maxValue": "7",
+					"style": {
+						"fill": {"type": "pattern", "pattern": 1, "color": ["#C6EFCE"]},
+						"font": {"color": "#006100"}
+					}
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Criteria != "between" {
+		t.Errorf("Criteria = %q, want between", opts[0].Criteria)
+	}
+	if opts[0].MinValue != "3" {
+		t.Errorf("MinValue = %q, want 3", opts[0].MinValue)
+	}
+	if opts[0].MaxValue != "7" {
+		t.Errorf("MaxValue = %q, want 7", opts[0].MaxValue)
+	}
+}
+
+func TestConditionalFormat_ColorScale(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 1}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "2_color_scale",
+					"criteria": "=",
+					"minType": "min",
+					"maxType": "max",
+					"minColor": "#F8696B",
+					"maxColor": "#63BE7B"
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Type != "2_color_scale" {
+		t.Errorf("Type = %q, want 2_color_scale", opts[0].Type)
+	}
+	if opts[0].MinType != "min" {
+		t.Errorf("MinType = %q, want min", opts[0].MinType)
+	}
+	if opts[0].MaxType != "max" {
+		t.Errorf("MaxType = %q, want max", opts[0].MaxType)
+	}
+}
+
+func TestConditionalFormat_DataBar(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 1}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "data_bar",
+					"criteria": "=",
+					"minType": "min",
+					"maxType": "max",
+					"barColor": "#638EC6"
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Type != "data_bar" {
+		t.Errorf("Type = %q, want data_bar", opts[0].Type)
+	}
+}
+
+func TestConditionalFormat_IconSet(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 1}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "icon_set",
+					"iconStyle": "3TrafficLights1"
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Type != "icon_set" {
+		t.Errorf("Type = %q, want icon_set (excelize read-back name)", opts[0].Type)
+	}
+	if opts[0].IconStyle != "3TrafficLights1" {
+		t.Errorf("IconStyle = %q, want 3TrafficLights1", opts[0].IconStyle)
+	}
+}
+
+func TestConditionalFormat_Formula(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 1}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "formula",
+					"criteria": "ISODD(A1)",
+					"style": {
+						"font": {"bold": true}
+					}
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Type != "formula" {
+		t.Errorf("Type = %q, want formula", opts[0].Type)
+	}
+}
+
+func TestConditionalFormat_Duplicate(t *testing.T) {
+	js := `{
+		"sheets": [{
+			"name": "S1",
+			"cells": {"A1": {"t": "n", "v": 1}, "A2": {"t": "n", "v": 1}},
+			"conditionalFormats": [{
+				"range": "A1:A10",
+				"rules": [{
+					"type": "duplicate",
+					"criteria": "=",
+					"style": {
+						"fill": {"type": "pattern", "pattern": 1, "color": ["#FFC7CE"]}
+					}
+				}]
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Type != "duplicate" {
+		t.Errorf("Type = %q, want duplicate", opts[0].Type)
+	}
+}
+
+func TestConditionalFormat_SingleSheetForm(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {"A1": {"t": "n", "v": 1}},
+		"conditionalFormats": [{
+			"range": "A1:A10",
+			"rules": [{
+				"type": "cell",
+				"criteria": ">",
+				"value": "5",
+				"style": {
+					"font": {"bold": true}
+				}
+			}]
+		}]
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	cfs, err := f.GetConditionalFormats("S1")
+	if err != nil {
+		t.Fatalf("GetConditionalFormats error: %v", err)
+	}
+	if len(cfs) != 1 {
+		t.Fatalf("expected 1 conditional format, got %d", len(cfs))
+	}
+	opts, ok := cfs["A1:A10"]
+	if !ok {
+		t.Fatalf("expected range A1:A10, got keys: %v", keysOfMap(cfs))
+	}
+	if opts[0].Type != "cell" {
+		t.Errorf("Type = %q, want cell", opts[0].Type)
+	}
+}
+
+func keysOfMap(m map[string][]excelize.ConditionalFormatOptions) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}

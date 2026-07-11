@@ -36,13 +36,14 @@ func flattenWorkbook(wb *Workbook) (sheets []Sheet, styles []Style) {
 		sheets = wb.Sheets
 	default:
 		sheets = []Sheet{{
-			Name:    wb.Name,
-			Cells:   wb.Cells,
-			Rows:    wb.Rows,
-			Cols:    wb.Cols,
-			RowDims: wb.RowDims,
-			Merges:  wb.Merges,
-			Freeze:  wb.Freeze,
+			Name:               wb.Name,
+			Cells:              wb.Cells,
+			Rows:               wb.Rows,
+			Cols:               wb.Cols,
+			RowDims:            wb.RowDims,
+			Merges:             wb.Merges,
+			Freeze:             wb.Freeze,
+			ConditionalFormats: wb.ConditionalFormats,
 		}}
 	}
 	return

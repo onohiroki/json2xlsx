@@ -24,8 +24,9 @@
         "cols":    { "$ref": "#/$defs/cols" },
         "rowDims": { "$ref": "#/$defs/rowDims" },
         "merges":  { "$ref": "#/$defs/merges" },
-        "freeze":  { "$ref": "#/$defs/freeze" },
-        "styles":  { "$ref": "#/$defs/styles" }
+        "freeze":             { "$ref": "#/$defs/freeze" },
+        "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+        "styles":             { "$ref": "#/$defs/styles" }
       },
       "required": ["cells"],
       "additionalProperties": false
@@ -44,8 +45,9 @@
               "rows":    { "$ref": "#/$defs/rows" },
               "cols":    { "$ref": "#/$defs/cols" },
               "rowDims": { "$ref": "#/$defs/rowDims" },
-              "merges":  { "$ref": "#/$defs/merges" },
-              "freeze":  { "$ref": "#/$defs/freeze" }
+              "merges":             { "$ref": "#/$defs/merges" },
+              "freeze":             { "$ref": "#/$defs/freeze" },
+              "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
             },
             "required": ["cells"],
             "additionalProperties": false
@@ -304,8 +306,9 @@
         "rows":    { "$ref": "#/$defs/rows" },
         "cols":    { "$ref": "#/$defs/cols" },
         "rowDims": { "$ref": "#/$defs/rowDims" },
-        "merges":  { "$ref": "#/$defs/merges" },
-        "freeze":  { "$ref": "#/$defs/freeze" }
+        "merges":             { "$ref": "#/$defs/merges" },
+        "freeze":             { "$ref": "#/$defs/freeze" },
+        "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
       },
       "required": ["cells"],
       "additionalProperties": false
@@ -471,6 +474,79 @@
         "showSerName":   { "type": "boolean" },
         "showPercent":   { "type": "boolean" },
         "showLeaderLn":  { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "conditionalFormats": {
+      "type": "array",
+      "description": "条件付き書式設定の配列",
+      "items": { "$ref": "#/$defs/conditionalFormat" }
+    },
+
+    "conditionalFormat": {
+      "type": "object",
+      "description": "条件付き書式グループ（範囲＋ルール群）",
+      "properties": {
+        "range": { "type": "string", "description": "適用範囲 (例: A1:A10)" },
+        "rules": {
+          "type": "array",
+          "description": "ルールの配列",
+          "items": { "$ref": "#/$defs/conditionalRule" },
+          "minItems": 1
+        }
+      },
+      "required": ["range", "rules"],
+      "additionalProperties": false
+    },
+
+    "conditionalRule": {
+      "type": "object",
+      "description": "条件付き書式ルール",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "ルール種別",
+          "enum": ["cell", "formula", "2_color_scale", "3_color_scale", "data_bar", "iconSet", "top", "bottom", "average", "duplicate", "unique", "blanks", "no_blanks", "errors", "no_errors", "text", "time_period"]
+        },
+        "criteria":     { "type": "string", "description": "評価基準（>, <, between, ==, containsText など）" },
+        "value":        { "type": "string", "description": "基準値" },
+        "minValue":     { "type": "string", "description": "下限値" },
+        "midValue":     { "type": "string", "description": "中間値（3_color_scale 用）" },
+        "maxValue":     { "type": "string", "description": "上限値" },
+        "style":        { "$ref": "#/$defs/conditionalStyle", "description": "条件成立時の書式" },
+        "minType":      { "type": "string", "enum": ["min", "num", "percent", "percentile", "formula", "max"], "description": "最小値の種類" },
+        "midType":      { "type": "string", "enum": ["num", "percent", "percentile", "formula"], "description": "中間値の種類" },
+        "maxType":      { "type": "string", "enum": ["num", "percent", "percentile", "formula", "max"], "description": "最大値の種類" },
+        "minColor":     { "$ref": "#/$defs/colorValue", "description": "色スケールの最小色" },
+        "midColor":     { "$ref": "#/$defs/colorValue", "description": "色スケールの中間色" },
+        "maxColor":     { "$ref": "#/$defs/colorValue", "description": "色スケールの最大色" },
+        "barColor":     { "$ref": "#/$defs/colorValue", "description": "データバーの色" },
+        "barBorderColor": { "$ref": "#/$defs/colorValue", "description": "データバーの枠線色" },
+        "barDirection": { "type": "string", "enum": ["context", "leftToRight", "rightToLeft"], "description": "データバーの方向" },
+        "barOnly":      { "type": "boolean", "description": "値非表示でバーのみ表示" },
+        "barSolid":     { "type": "boolean", "description": "ベタ塗りデータバー" },
+        "iconStyle":    { "type": "string", "description": "アイコンセット名 (3Arrows, 3TrafficLights1 など)" },
+        "reverseIcons": { "type": "boolean", "description": "アイコン順序反転" },
+        "iconsOnly":    { "type": "boolean", "description": "値非表示でアイコンのみ表示" },
+        "aboveAverage": { "type": "boolean", "description": "平均以上（true）/ 平均以下（false）" },
+        "percent":      { "type": "boolean", "description": "上位/下位 N% 指定" },
+        "stopIfTrue":   { "type": "boolean", "description": "条件成立時に後続ルールを評価しない" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+
+    "conditionalStyle": {
+      "type": "object",
+      "description": "条件付き書式用のインラインスタイル（dxf）",
+      "properties": {
+        "id":        { "type": "integer", "description": "省略可（インラインスタイルのため未使用）" },
+        "fill":      { "$ref": "#/$defs/fill" },
+        "border":    { "$ref": "#/$defs/border" },
+        "font":      { "$ref": "#/$defs/font" },
+        "alignment": { "$ref": "#/$defs/alignment" },
+        "numFmt":    { "type": "string", "description": "数値書式コード" }
       },
       "additionalProperties": false
     }

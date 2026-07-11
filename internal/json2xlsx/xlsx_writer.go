@@ -184,6 +184,16 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 	}
 
+	for _, cf := range sh.ConditionalFormats {
+		opts, err := buildConditionalFormatOpts(f, cf.Rules)
+		if err != nil {
+			return fmt.Errorf("conditional format %q: %w", cf.Range, err)
+		}
+		if err := f.SetConditionalFormat(name, cf.Range, opts); err != nil {
+			return fmt.Errorf("set conditional format %q: %w", cf.Range, err)
+		}
+	}
+
 	return nil
 }
 

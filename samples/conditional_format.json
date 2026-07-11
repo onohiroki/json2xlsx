@@ -1,0 +1,160 @@
+{
+  "name": "条件付き書式サンプル",
+  "freeze": {"row": 1},
+  "cells": {
+    "A1": {"t": "s", "v": "商品名", "s": 1},
+    "B1": {"t": "s", "v": "売上", "s": 1},
+    "C1": {"t": "s", "v": "前年比", "s": 1},
+    "D1": {"t": "s", "v": "評価", "s": 1},
+    "A2": {"t": "s", "v": "商品A"},
+    "B2": {"t": "n", "v": 120},
+    "C2": {"t": "n", "v": 1.15},
+    "D2": {"t": "s", "v": "◎"},
+    "A3": {"t": "s", "v": "商品B"},
+    "B3": {"t": "n", "v": 85},
+    "C3": {"t": "n", "v": 0.92},
+    "D3": {"t": "s", "v": "○"},
+    "A4": {"t": "s", "v": "商品C"},
+    "B4": {"t": "n", "v": 200},
+    "C4": {"t": "n", "v": 1.30},
+    "D4": {"t": "s", "v": "◎"},
+    "A5": {"t": "s", "v": "商品D"},
+    "B5": {"t": "n", "v": 45},
+    "C5": {"t": "n", "v": 0.65},
+    "D5": {"t": "s", "v": "△"},
+    "A6": {"t": "s", "v": "商品E"},
+    "B6": {"t": "n", "v": 150},
+    "C6": {"t": "n", "v": 1.05},
+    "D6": {"t": "s", "v": "○"},
+    "A7": {"t": "s", "v": "商品F"},
+    "B7": {"t": "n", "v": 30},
+    "C7": {"t": "n", "v": 0.50},
+    "D7": {"t": "s", "v": "×"},
+    "A8": {"t": "s", "v": "商品G"},
+    "B8": {"t": "n", "v": 95},
+    "C8": {"t": "n", "v": 1.10},
+    "D8": {"t": "s", "v": "○"}
+  },
+  "cols": [
+    {"col": "A", "width": 12},
+    {"col": "B", "width": 10},
+    {"col": "C", "width": 10},
+    {"col": "D", "width": 8}
+  ],
+  "styles": [
+    {
+      "id": 1,
+      "fill": {"type": "pattern", "pattern": 1, "color": ["#4472C4"]},
+      "font": {"bold": true, "color": "#FFFFFF"},
+      "alignment": {"horizontal": "center"}
+    }
+  ],
+  "conditionalFormats": [
+    {
+      "range": "B2:B8",
+      "rules": [
+        {
+          "type": "data_bar",
+          "criteria": "=",
+          "minType": "min",
+          "maxType": "max",
+          "barColor": "#5B9BD5"
+        }
+      ]
+    },
+    {
+      "range": "C2:C8",
+      "rules": [
+        {
+          "type": "2_color_scale",
+          "criteria": "=",
+          "minType": "min",
+          "maxType": "max",
+          "minColor": "#F8696B",
+          "maxColor": "#63BE7B"
+        }
+      ]
+    },
+    {
+      "range": "B2:B8",
+      "rules": [
+        {
+          "type": "cell",
+          "criteria": ">=",
+          "value": "100",
+          "style": {
+            "font": {"bold": true, "color": "#006100"},
+            "fill": {"type": "pattern", "pattern": 1, "color": ["#C6EFCE"]}
+          }
+        },
+        {
+          "type": "cell",
+          "criteria": "<",
+          "value": "50",
+          "style": {
+            "font": {"bold": true, "color": "#9C0006"},
+            "fill": {"type": "pattern", "pattern": 1, "color": ["#FFC7CE"]}
+          }
+        }
+      ]
+    },
+    {
+      "range": "C2:C8",
+      "rules": [
+        {
+          "type": "cell",
+          "criteria": ">=",
+          "value": "1.0",
+          "style": {
+            "font": {"color": "#006100"}
+          }
+        },
+        {
+          "type": "cell",
+          "criteria": "<",
+          "value": "0.7",
+          "style": {
+            "font": {"color": "#9C0006"}
+          }
+        }
+      ]
+    },
+    {
+      "range": "C2:C8",
+      "rules": [
+        {
+          "type": "iconSet",
+          "iconStyle": "3TrafficLights1"
+        }
+      ]
+    },
+    {
+      "range": "B2:B8",
+      "rules": [
+        {
+          "type": "top",
+          "criteria": "=",
+          "value": "1",
+          "style": {
+            "fill": {"type": "pattern", "pattern": 1, "color": ["#FFEB9C"]},
+            "font": {"bold": true}
+          }
+        }
+      ]
+    },
+    {
+      "range": "B2:B8",
+      "rules": [
+        {
+          "type": "bottom",
+          "criteria": "=",
+          "value": "1",
+          "style": {
+            "fill": {"type": "pattern", "pattern": 1, "color": ["#E2EFDA"]},
+            "font": {"bold": true}
+          }
+        }
+      ]
+    }
+  ]
+}

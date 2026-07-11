@@ -50,9 +50,43 @@ type Alignment struct {
 	WrapText   bool   `json:"wrapText,omitempty"`
 }
 
+// ConditionalRule は1つの条件付き書式ルール。
+type ConditionalRule struct {
+	Type           string  `json:"type"`
+	Criteria       string  `json:"criteria,omitempty"`
+	Value          string  `json:"value,omitempty"`
+	MinValue       string  `json:"minValue,omitempty"`
+	MidValue       string  `json:"midValue,omitempty"`
+	MaxValue       string  `json:"maxValue,omitempty"`
+	Style          *Style  `json:"style,omitempty"`
+	MinType        string  `json:"minType,omitempty"`
+	MidType        string  `json:"midType,omitempty"`
+	MaxType        string  `json:"maxType,omitempty"`
+	MinColor       string  `json:"minColor,omitempty"`
+	MidColor       string  `json:"midColor,omitempty"`
+	MaxColor       string  `json:"maxColor,omitempty"`
+	BarColor       string  `json:"barColor,omitempty"`
+	BarBorderColor string  `json:"barBorderColor,omitempty"`
+	BarDirection   string  `json:"barDirection,omitempty"`
+	BarOnly        bool    `json:"barOnly,omitempty"`
+	BarSolid       bool    `json:"barSolid,omitempty"`
+	IconStyle      string  `json:"iconStyle,omitempty"`
+	ReverseIcons   bool    `json:"reverseIcons,omitempty"`
+	IconsOnly      bool    `json:"iconsOnly,omitempty"`
+	AboveAverage   *bool   `json:"aboveAverage,omitempty"`
+	Percent        bool    `json:"percent,omitempty"`
+	StopIfTrue     bool    `json:"stopIfTrue,omitempty"`
+}
+
+// ConditionalFormat は1つの条件付き書式グループ（範囲＋ルール群）．
+type ConditionalFormat struct {
+	Range string            `json:"range"`
+	Rules []ConditionalRule `json:"rules"`
+}
+
 // Style はスタイル定義。id によりセルから参照される。
 type Style struct {
-	ID        int        `json:"id"`
+	ID        int        `json:"id,omitempty"`
 	Fill      *Fill      `json:"fill,omitempty"`
 	Border    []Border   `json:"border,omitempty"`
 	Font      *Font      `json:"font,omitempty"`
@@ -85,13 +119,14 @@ type FreezePane struct {
 
 // Sheet は 1 シート分の定義。
 type Sheet struct {
-	Name    string           `json:"name,omitempty"`
-	Cells   map[string]Cell  `json:"cells,omitempty"`
-	Rows    [][]interface{}  `json:"rows,omitempty"`   // AoA 形式
-	Cols    []ColInfo        `json:"cols,omitempty"`
-	RowDims []RowInfo        `json:"rowDims,omitempty"`
-	Merges  []Merge          `json:"merges,omitempty"`
-	Freeze  *FreezePane      `json:"freeze,omitempty"`
+	Name               string              `json:"name,omitempty"`
+	Cells              map[string]Cell     `json:"cells,omitempty"`
+	Rows               [][]interface{}     `json:"rows,omitempty"`   // AoA 形式
+	Cols               []ColInfo           `json:"cols,omitempty"`
+	RowDims            []RowInfo           `json:"rowDims,omitempty"`
+	Merges             []Merge             `json:"merges,omitempty"`
+	Freeze             *FreezePane         `json:"freeze,omitempty"`
+	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
 }
 
 // Chart はグラフオブジェクト。chart-json-spec.md の ChartObject に対応。
@@ -204,13 +239,14 @@ type Workbook struct {
 	Sheets []Sheet `json:"sheets,omitempty"`
 
 	// 単一シート (Sheet と同じフィールド)
-	Name    string          `json:"name,omitempty"`
-	Cells   map[string]Cell `json:"cells,omitempty"`
-	Rows    [][]interface{} `json:"rows,omitempty"`
-	Cols    []ColInfo       `json:"cols,omitempty"`
-	RowDims []RowInfo       `json:"rowDims,omitempty"`
-	Merges  []Merge         `json:"merges,omitempty"`
-	Freeze  *FreezePane     `json:"freeze,omitempty"`
+	Name               string              `json:"name,omitempty"`
+	Cells              map[string]Cell     `json:"cells,omitempty"`
+	Rows               [][]interface{}     `json:"rows,omitempty"`
+	Cols               []ColInfo           `json:"cols,omitempty"`
+	RowDims            []RowInfo           `json:"rowDims,omitempty"`
+	Merges             []Merge             `json:"merges,omitempty"`
+	Freeze             *FreezePane         `json:"freeze,omitempty"`
+	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
 
 	Styles []Style `json:"styles,omitempty"`
 }
