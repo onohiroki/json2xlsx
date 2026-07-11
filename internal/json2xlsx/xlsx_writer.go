@@ -184,6 +184,25 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 	}
 
+	for _, t := range sh.Tables {
+		xlTable := toExcelizeTable(t)
+		if err := f.AddTable(name, xlTable); err != nil {
+			return fmt.Errorf("add table %q: %w", t.Range, err)
+		}
+	}
+
+	autoFilterRef, err := parseAutoFilter(sh.AutoFilter)
+	if err != nil {
+		return fmt.Errorf("autoFilter: %w", err)
+	}
+	if autoFilterRef != "" {
+		if !isCoveredByTable(autoFilterRef, sh.Tables) {
+			if err := f.AutoFilter(name, autoFilterRef, nil); err != nil {
+				return fmt.Errorf("set autoFilter %q: %w", autoFilterRef, err)
+			}
+		}
+	}
+
 	for _, cf := range sh.ConditionalFormats {
 		opts, err := buildConditionalFormatOpts(f, cf.Rules)
 		if err != nil {

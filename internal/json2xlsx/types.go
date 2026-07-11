@@ -117,6 +117,23 @@ type FreezePane struct {
 	Col int `json:"col,omitempty"` // 固定する列数
 }
 
+// AutoFilter はオートフィルタ設定（SheetJS 互換）．
+type AutoFilter struct {
+	Ref string `json:"ref"`
+}
+
+// Table は構造化テーブル設定．
+type Table struct {
+	Range          string `json:"range"`
+	Name           string `json:"name,omitempty"`
+	StyleName      string `json:"style,omitempty"`
+	BandedRows     *bool  `json:"bandedRows,omitempty"`
+	BandedColumns  bool   `json:"bandedColumns,omitempty"`
+	FirstColumn    bool   `json:"firstColumn,omitempty"`
+	LastColumn     bool   `json:"lastColumn,omitempty"`
+	HeaderRow      *bool  `json:"headerRow,omitempty"`
+}
+
 // Sheet は 1 シート分の定義。
 type Sheet struct {
 	Name               string              `json:"name,omitempty"`
@@ -126,6 +143,8 @@ type Sheet struct {
 	RowDims            []RowInfo           `json:"rowDims,omitempty"`
 	Merges             []Merge             `json:"merges,omitempty"`
 	Freeze             *FreezePane         `json:"freeze,omitempty"`
+	AutoFilter         interface{}         `json:"autoFilter,omitempty"`
+	Tables             []Table             `json:"tables,omitempty"`
 	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
 }
 
@@ -246,6 +265,8 @@ type Workbook struct {
 	RowDims            []RowInfo           `json:"rowDims,omitempty"`
 	Merges             []Merge             `json:"merges,omitempty"`
 	Freeze             *FreezePane         `json:"freeze,omitempty"`
+	AutoFilter         interface{}         `json:"autoFilter,omitempty"`
+	Tables             []Table             `json:"tables,omitempty"`
 	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
 
 	Styles []Style `json:"styles,omitempty"`

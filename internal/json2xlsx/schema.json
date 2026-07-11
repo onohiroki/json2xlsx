@@ -25,6 +25,8 @@
         "rowDims": { "$ref": "#/$defs/rowDims" },
         "merges":  { "$ref": "#/$defs/merges" },
         "freeze":             { "$ref": "#/$defs/freeze" },
+        "autoFilter":         { "$ref": "#/$defs/autoFilter" },
+        "tables":             { "$ref": "#/$defs/tables" },
         "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
         "styles":             { "$ref": "#/$defs/styles" }
       },
@@ -47,6 +49,8 @@
               "rowDims": { "$ref": "#/$defs/rowDims" },
               "merges":             { "$ref": "#/$defs/merges" },
               "freeze":             { "$ref": "#/$defs/freeze" },
+              "autoFilter":         { "$ref": "#/$defs/autoFilter" },
+              "tables":             { "$ref": "#/$defs/tables" },
               "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
             },
             "required": ["cells"],
@@ -308,6 +312,8 @@
         "rowDims": { "$ref": "#/$defs/rowDims" },
         "merges":             { "$ref": "#/$defs/merges" },
         "freeze":             { "$ref": "#/$defs/freeze" },
+        "autoFilter":         { "$ref": "#/$defs/autoFilter" },
+        "tables":             { "$ref": "#/$defs/tables" },
         "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
       },
       "required": ["cells"],
@@ -475,6 +481,44 @@
         "showPercent":   { "type": "boolean" },
         "showLeaderLn":  { "type": "boolean" }
       },
+      "additionalProperties": false
+    },
+
+    "autoFilter": {
+      "oneOf": [
+        { "type": "string", "description": "範囲文字列 (例: A1:C10)" },
+        {
+          "type": "object",
+          "description": "SheetJS 互換オブジェクト形式",
+          "properties": {
+            "ref": { "type": "string", "description": "範囲 (例: A1:C10)" }
+          },
+          "required": ["ref"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "tables": {
+      "type": "array",
+      "description": "構造化テーブル一覧",
+      "items": { "$ref": "#/$defs/table" }
+    },
+
+    "table": {
+      "type": "object",
+      "description": "構造化テーブル",
+      "properties": {
+        "range":         { "type": "string", "description": "テーブル範囲 (例: A1:C10)" },
+        "name":          { "type": "string", "description": "テーブル名（省略時は自動生成）" },
+        "style":         { "type": "string", "description": "テーブルスタイル名 (TableStyleMedium2 など)" },
+        "bandedRows":    { "type": "boolean", "description": "交互行バンド" },
+        "bandedColumns": { "type": "boolean", "description": "交互列バンド" },
+        "firstColumn":   { "type": "boolean", "description": "先頭列強調" },
+        "lastColumn":    { "type": "boolean", "description": "最終列強調" },
+        "headerRow":     { "type": "boolean", "description": "ヘッダ行表示" }
+      },
+      "required": ["range"],
       "additionalProperties": false
     },
 
