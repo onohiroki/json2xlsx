@@ -1,14 +1,26 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"io"
-	"os"
-	"strings"
+    "flag"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "strings"
 
-	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
+    "github.com/onohiroki/json2xlsx/internal/json2xlsx"
 )
+
+// inputBaseDir returns the directory component of an input file path.
+// It is used to resolve relative image paths when converting JSON → XLSX.
+// If the caller passes an empty string (e.g., stdin), the returned
+// value is also an empty string so that callers can treat it as “no base”.
+func inputBaseDir(input string) string {
+    if input == "" {
+        return ""
+    }
+    return filepath.Dir(input)
+}
 
 var version = "dev"
 
@@ -32,7 +44,7 @@ func usageJa() {
 	fmt.Fprintln(os.Stderr, `json2xlsx - XLSX <-> JSON 相互変換 CLI
 
 Usage:
-  json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
+  json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
@@ -49,6 +61,7 @@ Usage:
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
   --date-display       to-json で日時セルを表示文字列で出力する
   --date-rfc3339       to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
+  --image-mode         to-json の画像出力モード: base64 (JSON に埋め込み) または file (外部ファイル)
   --mode               セル表示モード (f=数式優先, v=値優先, both=併記)．to-md デフォルト f, to-html デフォルト v
   --first-row-header   to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
   --grid               to-html で枠線未指定セルにグレーの細枠線を表示する
@@ -65,7 +78,7 @@ func usageEn() {
 	fmt.Fprintln(os.Stderr, `json2xlsx - XLSX <-> JSON CLI conversion tool
 
 Usage:
-  json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial]
+  json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
@@ -82,6 +95,7 @@ Options:
   --date-serial        Emit date cells as Excel serial values (default)
   --date-display       Emit date cells as display strings
   --date-rfc3339       Reinterpret date/time serial as RFC3339 (UTC)
+  --image-mode         Image output mode: base64 (embed in JSON) or file (write to disk)
   --mode               Cell display mode (f=formula, v=value, both=both). Default to-md=f, to-html=v
   --first-row-header   Treat first row as table header (suppress A/B/C and row numbers)
   --grid               Show light gray gridlines for empty cells in to-html
@@ -134,16 +148,24 @@ func runToJSON(args []string) {
 	fs.Usage = usage
 	var input, output string
 	var dateDisplay, dateRFC3339, dateSerial bool
+	var imageMode string
 	fs.StringVar(&input, "i", "", "input XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output JSON file (default: stdout)")
 	fs.BoolVar(&dateDisplay, "date-display", false, "emit date cells as display strings")
 	fs.BoolVar(&dateRFC3339, "date-rfc3339", false, "reinterpret date/time serial values as RFC3339 (UTC)")
 	fs.BoolVar(&dateSerial, "date-serial", false, "emit date cells as Excel serial values")
+	fs.StringVar(&imageMode, "image-mode", "base64", "image output mode: base64 (embed in JSON) or file (write to disk)")
 	_ = fs.Parse(args)
 
 	dateMode, err := resolveDateMode(dateDisplay, dateRFC3339, dateSerial)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+		os.Exit(2)
+	}
+
+	imageModeVal := json2xlsx.ImageMode(imageMode)
+	if imageModeVal != json2xlsx.ImageModeBase64 && imageModeVal != json2xlsx.ImageModeFile {
+		fmt.Fprintf(os.Stderr, "to-json: --image-mode must be 'base64' or 'file'\n")
 		os.Exit(2)
 	}
 
@@ -161,11 +183,24 @@ func runToJSON(args []string) {
 	}
 	defer closeW()
 
-	opts := json2xlsx.ToJSONOptions{DateMode: dateMode, WrapWithBook: true}
+	opts := json2xlsx.ToJSONOptions{
+		DateMode:    dateMode,
+		WrapWithBook: true,
+		ImageMode:   imageModeVal,
+		BaseDir:     outputBaseDir(output),
+	}
 	if err := json2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func outputBaseDir(output string) string {
+	if output == "" {
+		cwd, _ := os.Getwd()
+		return cwd
+	}
+	return filepath.Dir(output)
 }
 
 func resolveDateMode(dateDisplay, dateRFC3339, dateSerial bool) (json2xlsx.DateMode, error) {
@@ -214,7 +249,8 @@ func runToXLSX(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON, EvalFormulas: compute}); err != nil {
+	baseDir := inputBaseDir(input)
+	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON, EvalFormulas: compute, BaseDir: baseDir}); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}

@@ -15,7 +15,7 @@ import (
 
 var tStrAttrRe = regexp.MustCompile(` t="str"`)
 
-func convertWorkbook(wb *Workbook, out io.Writer) error {
+func convertWorkbook(wb *Workbook, out io.Writer, baseDir string) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
@@ -29,7 +29,7 @@ func convertWorkbook(wb *Workbook, out io.Writer) error {
 	}
 
 	var warnings int
-	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, &warnings); err != nil {
+	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, &warnings, baseDir); err != nil {
 		return err
 	}
 
@@ -76,7 +76,7 @@ func validateWorkbook(sheets []Sheet, wb *Workbook) error {
 	return nil
 }
 
-func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *int) error {
+func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string) error {
 	defaultName := f.GetSheetName(0)
 	firstAssigned := false
 
@@ -99,14 +99,14 @@ func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles
 			}
 		}
 
-		if err := writeSheet(f, name, sh, styleMap, styles, warnings); err != nil {
+		if err := writeSheet(f, name, sh, styleMap, styles, warnings, baseDir); err != nil {
 			return fmt.Errorf("write sheet %q: %w", name, err)
 		}
 	}
 	return nil
 }
 
-func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *int) error {
+func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string) error {
 	for r, row := range sh.Rows {
 		for c, v := range row {
 			axis, err := excelize.CoordinatesToCellName(c+1, r+1)
@@ -225,6 +225,18 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 		if err := f.SetConditionalFormat(name, cf.Range, opts); err != nil {
 			return fmt.Errorf("set conditional format %q: %w", cf.Range, err)
+		}
+	}
+
+	if len(sh.Pictures) > 0 {
+		if err := addPicturesToSheet(f, name, sh.Pictures, baseDir); err != nil {
+			return fmt.Errorf("pictures: %w", err)
+		}
+	}
+
+	if sh.Background != nil {
+		if err := setSheetBackgroundImage(f, name, sh.Background, baseDir); err != nil {
+			return fmt.Errorf("background: %w", err)
 		}
 	}
 

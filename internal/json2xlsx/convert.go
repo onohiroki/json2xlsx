@@ -24,6 +24,8 @@ type ConvertOptions struct {
 	// EvalFormulas が true の場合，t="f" かつ v のないセルの数式を評価し，
 	// 計算結果を v に補完する．
 	EvalFormulas bool
+	// BaseDir は画像パス解決の基準ディレクトリ．空の場合は CWD を使用．
+	BaseDir string
 }
 
 // Convert は JSON を読み込み，XLSX を out に書き出す．
@@ -43,7 +45,7 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
 
-	if err := convertWorkbook(wb, out); err != nil {
+	if err := convertWorkbook(wb, out, opts.BaseDir); err != nil {
 		if !opts.DataJSON {
 			if schemaErr := ValidateJSON(data); schemaErr != nil {
 				return fmt.Errorf("%v\n\n%v", err, schemaErr)

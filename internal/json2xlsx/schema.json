@@ -29,6 +29,8 @@
         "tables":             { "$ref": "#/$defs/tables" },
         "sparklines":         { "$ref": "#/$defs/sparklines" },
         "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+        "pictures":           { "$ref": "#/$defs/pictures" },
+        "background":         { "$ref": "#/$defs/background" },
         "styles":             { "$ref": "#/$defs/styles" }
       },
       "required": ["cells"],
@@ -53,7 +55,9 @@
               "autoFilter":         { "$ref": "#/$defs/autoFilter" },
               "tables":             { "$ref": "#/$defs/tables" },
               "sparklines":         { "$ref": "#/$defs/sparklines" },
-              "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
+              "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+              "pictures":           { "$ref": "#/$defs/pictures" },
+              "background":         { "$ref": "#/$defs/background" }
             },
             "required": ["cells"],
             "additionalProperties": false
@@ -317,7 +321,9 @@
         "autoFilter":         { "$ref": "#/$defs/autoFilter" },
         "tables":             { "$ref": "#/$defs/tables" },
         "sparklines":         { "$ref": "#/$defs/sparklines" },
-        "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" }
+        "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+        "pictures":           { "$ref": "#/$defs/pictures" },
+        "background":         { "$ref": "#/$defs/background" }
       },
       "required": ["cells"],
       "additionalProperties": false
@@ -636,6 +642,46 @@
         "font":      { "$ref": "#/$defs/font" },
         "alignment": { "$ref": "#/$defs/alignment" },
         "numFmt":    { "type": "string", "description": "数値書式コード" }
+      },
+      "additionalProperties": false
+    },
+
+    "pictures": {
+      "type": "array",
+      "description": "画像一覧",
+      "items": { "$ref": "#/$defs/picture" }
+    },
+
+    "picture": {
+      "type": "object",
+      "description": "ワークシートに配置する画像",
+      "properties": {
+        "cell":            { "type": "string", "description": "配置先セル (例: C2)" },
+        "path":            { "type": "string", "description": "画像ファイルのパス" },
+        "data":            { "type": "string", "description": "base64 エンコードされた画像データ" },
+        "extension":       { "type": "string", "description": "画像拡張子 (png, jpg, gif など)" },
+        "altText":         { "type": "string", "description": "代替テキスト" },
+        "printObject":     { "type": "boolean", "description": "印刷対象とする" },
+        "locked":          { "type": "boolean", "description": "ロック" },
+        "lockAspectRatio": { "type": "boolean", "description": "縦横比を固定" },
+        "offsetX":         { "type": "integer", "description": "セル左上からの X オフセット（EMU）" },
+        "offsetY":         { "type": "integer", "description": "セル左上からの Y オフセット（EMU）" },
+        "scaleX":          { "type": "number", "description": "横幅の倍率 (1.0=100%)" },
+        "scaleY":          { "type": "number", "description": "縦幅の倍率 (1.0=100%)" },
+        "hyperlink":       { "type": "string", "description": "画像に設定するハイパーリンク" },
+        "positioning":     { "type": "string", "enum": ["twoCell", "oneCell", "absolute"], "description": "配置動作 (twoCell=セルと移動/サイズ変更, oneCell=移動のみ, absolute=固定)" }
+      },
+      "required": ["cell"],
+      "additionalProperties": false
+    },
+
+    "background": {
+      "type": "object",
+      "description": "シート背景画像",
+      "properties": {
+        "path":      { "type": "string", "description": "画像ファイルのパス" },
+        "data":      { "type": "string", "description": "base64 エンコードされた画像データ" },
+        "extension": { "type": "string", "description": "画像拡張子 (png, jpg, gif など)" }
       },
       "additionalProperties": false
     }

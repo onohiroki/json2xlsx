@@ -19,6 +19,10 @@ type ToJSONOptions struct {
 	// WrapWithBook は book ラッパー形式 (version + book) で出力する。
 	// true の場合、chartsheet のグラフ情報も charts 配列に含める。
 	WrapWithBook bool
+	// ImageMode は画像の出力モード (base64 or file)。未指定時は base64。
+	ImageMode ImageMode
+	// BaseDir は画像ファイル出力時の基準ディレクトリ（ImageMode=file 時のみ使用）。
+	BaseDir string
 }
 
 // ToJSON は XLSX を読み込み、json2xlsx 互換 JSON (セルマップ形式) を out に書き出す。
@@ -30,6 +34,9 @@ func ToJSON(r io.Reader, out io.Writer) error {
 func ToJSONWithOptions(r io.Reader, out io.Writer, opts ToJSONOptions) error {
 	if opts.DateMode == "" {
 		opts.DateMode = DateModeSerial
+	}
+	if opts.ImageMode == "" {
+		opts.ImageMode = ImageModeBase64
 	}
 
 	data, err := io.ReadAll(r)
@@ -133,6 +140,8 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 		wb.Tables = sh.Tables
 		wb.Sparklines = sh.Sparklines
 		wb.ConditionalFormats = sh.ConditionalFormats
+		wb.Pictures = sh.Pictures
+		wb.Background = sh.Background
 	} else {
 		wb.Sheets = sheets
 	}
@@ -298,6 +307,16 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSON
 	// sparklines (拡張 Lst を解析)
 	if sls, err := extractSparklinesFromSheet(f, name); err == nil {
 		sh.Sparklines = sls
+	}
+
+	// pictures
+	if pics, err := extractPicturesFromSheet(f, name, opts.ImageMode, opts.BaseDir); err == nil {
+		sh.Pictures = pics
+	}
+
+	// background
+	if bg, err := extractSheetBackground(f, name, opts.ImageMode, opts.BaseDir); err == nil {
+		sh.Background = bg
 	}
 
 	return sh, nil

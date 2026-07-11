@@ -165,6 +165,31 @@ type Table struct {
 	HeaderRow      *bool  `json:"headerRow,omitempty"`
 }
 
+// Picture はワークシートに配置する画像。
+type Picture struct {
+	Cell           string  `json:"cell"`
+	Path           string  `json:"path,omitempty"`
+	Data           string  `json:"data,omitempty"`     // base64 エンコードされた画像データ
+	Extension      string  `json:"extension,omitempty"` // 拡張子 (png, jpg, gif...)
+	AltText        string  `json:"altText,omitempty"`
+	PrintObject    *bool   `json:"printObject,omitempty"`
+	Locked         *bool   `json:"locked,omitempty"`
+	LockAspectRatio *bool `json:"lockAspectRatio,omitempty"`
+	OffsetX        int     `json:"offsetX,omitempty"`
+	OffsetY        int     `json:"offsetY,omitempty"`
+	ScaleX         float64 `json:"scaleX,omitempty"`
+	ScaleY         float64 `json:"scaleY,omitempty"`
+	Hyperlink      string  `json:"hyperlink,omitempty"`
+	Positioning    string  `json:"positioning,omitempty"`
+}
+
+// SheetBackground はワークシートの背景画像。
+type SheetBackground struct {
+	Path      string `json:"path,omitempty"`
+	Data      string `json:"data,omitempty"`
+	Extension string `json:"extension,omitempty"`
+}
+
 // Sheet は 1 シート分の定義。
 type Sheet struct {
 	Name               string              `json:"name,omitempty"`
@@ -178,6 +203,8 @@ type Sheet struct {
 	Tables             []Table             `json:"tables,omitempty"`
 	Sparklines         []Sparkline         `json:"sparklines,omitempty"`
 	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
+	Pictures           []Picture           `json:"pictures,omitempty"`
+	Background         *SheetBackground    `json:"background,omitempty"`
 }
 
 // Chart はグラフオブジェクト。chart-json-spec.md の ChartObject に対応。
@@ -301,6 +328,8 @@ type Workbook struct {
 	Tables             []Table             `json:"tables,omitempty"`
 	Sparklines         []Sparkline         `json:"sparklines,omitempty"`
 	ConditionalFormats []ConditionalFormat `json:"conditionalFormats,omitempty"`
+	Pictures           []Picture           `json:"pictures,omitempty"`
+	Background         *SheetBackground    `json:"background,omitempty"`
 
 	Styles []Style `json:"styles,omitempty"`
 }
@@ -310,3 +339,11 @@ type Link struct {
 	Target  string `json:"target"`
 	Tooltip string `json:"tooltip,omitempty"`
 }
+
+// ImageMode は画像出力モード（XLSX→JSON 変換時の画像データの表現方法）。
+type ImageMode string
+
+const (
+	ImageModeBase64 ImageMode = "base64"
+	ImageModeFile   ImageMode = "file"
+)
