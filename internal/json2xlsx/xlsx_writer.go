@@ -203,8 +203,16 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		}
 	}
 
-	for _, sl := range sh.Sparklines {
+	for i, sl := range sh.Sparklines {
 		opts := toExcelizeSparkline(sl)
+		// excelize は sparklineGroupPresets をポインタで共有しており，
+		// 同じ preset (style) を複数のスパークラインで使うと
+		// Sparklines が append され混入する．
+		// ワークアラウンド: Style 未指定 (=0) の場合は一意のスタイル (1-35) を
+		// 割り当てて presets 競合を回避する．
+		if opts.Style == 0 {
+			opts.Style = (i % 35) + 1
+		}
 		if err := f.AddSparkline(name, opts); err != nil {
 			return fmt.Errorf("add sparkline %q -> %q: %w", sl.Range, sl.Location, err)
 		}
