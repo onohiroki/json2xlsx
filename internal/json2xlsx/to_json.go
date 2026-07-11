@@ -129,6 +129,10 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 		wb.RowDims = sh.RowDims
 		wb.Merges = sh.Merges
 		wb.Freeze = sh.Freeze
+		wb.AutoFilter = sh.AutoFilter
+		wb.Tables = sh.Tables
+		wb.Sparklines = sh.Sparklines
+		wb.ConditionalFormats = sh.ConditionalFormats
 	} else {
 		wb.Sheets = sheets
 	}
@@ -245,6 +249,57 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSON
 		}
 	}
 
+	// tables
+	if tbls, err := f.GetTables(name); err == nil {
+		for _, t := range tbls {
+			tbl := Table{
+				Range:         t.Range,
+				Name:          t.Name,
+				StyleName:     t.StyleName,
+				BandedColumns: t.ShowColumnStripes,
+				FirstColumn:   t.ShowFirstColumn,
+				LastColumn:    t.ShowLastColumn,
+			}
+			if t.ShowHeaderRow != nil {
+				tbl.HeaderRow = t.ShowHeaderRow
+			}
+			if t.ShowRowStripes != nil {
+				tbl.BandedRows = t.ShowRowStripes
+			}
+			sh.Tables = append(sh.Tables, tbl)
+		}
+	}
+
+	// dxf (微分書式) を styles.xml から解析 (条件付き書式の style 解決用)
+	dxfs, _ := parseDxfs(f)
+
+	// conditional formatting
+	if cfs, err := f.GetConditionalFormats(name); err == nil {
+		for sqref, rules := range cfs {
+			cf := ConditionalFormat{Range: sqref}
+			for _, r := range rules {
+				rule := condFmtOptToRule(r)
+				if r.Format >= 0 && r.Format < len(dxfs) && condFmtTypeUsesDxf(r.Type) {
+					if s := dxfToStyle(&dxfs[r.Format]); s != nil {
+						rule.Style = s
+					}
+				}
+				cf.Rules = append(cf.Rules, rule)
+			}
+			sh.ConditionalFormats = append(sh.ConditionalFormats, cf)
+		}
+	}
+
+	// autoFilter (ワークシート XML を直接解析)
+	if ref, err := extractAutoFilterFromSheet(f, name); err == nil && ref != "" {
+		sh.AutoFilter = ref
+	}
+
+	// sparklines (拡張 Lst を解析)
+	if sls, err := extractSparklinesFromSheet(f, name); err == nil {
+		sh.Sparklines = sls
+	}
+
 	return sh, nil
 }
 
@@ -279,6 +334,11 @@ func extractCell(f *excelize.File, sheet, axis string, sc *styleCollector, opts 
 		}
 		cell.S = jsonID
 		isDateFmt = dateFmt
+	}
+
+	// ハイパーリンク
+	if ok, linkTarget, err := f.GetCellHyperLink(sheet, axis); err == nil && ok {
+		cell.L = linkTarget
 	}
 
 	// 型と値
