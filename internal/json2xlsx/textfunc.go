@@ -161,3 +161,64 @@ func evalFuncTrim(ctx *evalContext, args []expr) (formulaValue, error) {
 	}
 	return strVal(b.String()), nil
 }
+
+func evalFuncFind(ctx *evalContext, args []expr) (formulaValue, error) {
+	if len(args) < 2 || len(args) > 3 {
+		return formulaValue{}, fmt.Errorf("FIND requires 2 or 3 arguments")
+	}
+	findText, err := args[0].eval(ctx)
+	if err != nil {
+		return formulaValue{}, err
+	}
+	withinText, err := args[1].eval(ctx)
+	if err != nil {
+		return formulaValue{}, err
+	}
+	startNum := 1.0
+	if len(args) == 3 {
+		startNum, err = ctx.evalArgNum(args[2])
+		if err != nil {
+			return formulaValue{}, err
+		}
+	}
+	findStr := findText.asString()
+	withinStr := withinText.asString()
+	runes := []rune(withinStr)
+	findRunes := []rune(findStr)
+	start := int(startNum) - 1
+	if start < 0 {
+		return formulaValue{}, fmt.Errorf("FIND start_num out of range")
+	}
+	if start >= len(runes) {
+		return formulaValue{}, fmt.Errorf("FIND start_num out of range")
+	}
+	suffixRunes := runes[start:]
+	for i := 0; i <= len(suffixRunes)-len(findRunes); i++ {
+		match := true
+		for j := 0; j < len(findRunes); j++ {
+			if suffixRunes[i+j] != findRunes[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return numVal(float64(start + i + 1)), nil
+		}
+	}
+	return formulaValue{}, fmt.Errorf("FIND text not found")
+}
+
+func evalFuncText(ctx *evalContext, args []expr) (formulaValue, error) {
+	if len(args) != 2 {
+		return formulaValue{}, fmt.Errorf("TEXT requires 2 arguments")
+	}
+	val, err := args[0].eval(ctx)
+	if err != nil {
+		return formulaValue{}, err
+	}
+	fmtVal, err := args[1].eval(ctx)
+	if err != nil {
+		return formulaValue{}, err
+	}
+	return strVal(formatValue(val, fmtVal.asString())), nil
+}

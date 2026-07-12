@@ -199,6 +199,8 @@ The built-in formula engine evaluates formulas cell-by-cell. Below is the full l
 | `UPPER(str)` | Convert to uppercase |
 | `LOWER(str)` | Convert to lowercase |
 | `TRIM(str)` | Remove leading/trailing spaces; collapse internal whitespace |
+| `FIND(find, within, [start])` | Case-sensitive search; returns 1-based position |
+| `TEXT(value, format)` | Format number as text using Excel-style format codes (`0.00`, `#,##0`, `yyyy/mm/dd`, etc.) |
 
 **Limitations:**
 

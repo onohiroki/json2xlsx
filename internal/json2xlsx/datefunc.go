@@ -18,6 +18,14 @@ func excelSerialToTime(serial float64) time.Time {
 	return epoch.Add(time.Duration(days) * 24 * time.Hour)
 }
 
+// excelSerialToDateTime はシリアル値から time.Time への変換．小数部（時刻）も保持する．
+func excelSerialToDateTime(serial float64) time.Time {
+	epoch := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
+	days := math.Floor(serial)
+	frac := serial - days
+	return epoch.Add(time.Duration(days)*24*time.Hour + time.Duration(frac*86400*1e9))
+}
+
 func evalFuncToday(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 0 {
 		return 0, fmt.Errorf("TODAY requires no arguments")

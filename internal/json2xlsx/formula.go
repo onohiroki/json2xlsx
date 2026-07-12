@@ -168,6 +168,7 @@ var knownFuncs = map[string]bool{
 	"CONCAT": true, "CONCATENATE": true,
 	"LEFT": true, "RIGHT": true, "MID": true,
 	"LEN": true, "UPPER": true, "LOWER": true, "TRIM": true,
+	"FIND": true, "TEXT": true,
 }
 
 func (t *tokenizer) next() token {
@@ -698,6 +699,10 @@ func (e *funcCallExpr) eval(ctx *evalContext) (formulaValue, error) {
 		return evalFuncLower(ctx, e.args)
 	case "TRIM":
 		return evalFuncTrim(ctx, e.args)
+	case "FIND":
+		return evalFuncFind(ctx, e.args)
+	case "TEXT":
+		return evalFuncText(ctx, e.args)
 	case "TRUNC":
 		return wrapNum(evalFuncTrunc(ctx, e.args))
 	case "SIGN":

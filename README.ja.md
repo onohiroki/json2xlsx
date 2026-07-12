@@ -203,6 +203,8 @@ json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 | `UPPER(str)` | 大文字に変換 |
 | `LOWER(str)` | 小文字に変換 |
 | `TRIM(str)` | 前後の空白を除去し，内部の連続空白を 1 つの半角スペースに |
+| `FIND(find, within, [start])` | 大文字小文字を区別して検索 (1 始点) |
+| `TEXT(value, format)` | 数値を書式コードに従って文字列に変換 (`0.00`, `#,##0`, `yyyy/mm/dd` 等) |
 
 **制限:**
 
