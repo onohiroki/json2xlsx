@@ -564,6 +564,25 @@ func TestGuessCellMapFromData(t *testing.T) {
 	})
 }
 
+func TestToCSV_WorkbookDateInput(t *testing.T) {
+	in := `{
+		"name": "S",
+		"cells": {
+			"A1": {"t": "d", "v": 45678, "z": "yyyy-mm-dd"},
+			"A2": {"t": "d", "v": "2025-01-21T00:00:00Z", "z": "yyyy-mm-dd"},
+			"B1": {"t": "n", "v": 42}
+		}
+	}`
+	got, err := runToCSV(t, in)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	want := "2025-01-21T00:00:00,42\n2025-01-21T00:00:00Z,\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 func TestToCSV_XLSXInput(t *testing.T) {
 	// Create a temporary XLSX file
 	f := excelize.NewFile()

@@ -287,7 +287,13 @@ func setCell(f *excelize.File, sheet, axis string, c Cell, styleMap map[int]int,
 			}
 		}
 	case "d":
-		if err := f.SetCellValue(sheet, axis, c.V); err != nil {
+		val := c.V
+		if s, ok := c.V.(string); ok {
+			if t, err := parseDateString(s); err == nil {
+				val = t
+			}
+		}
+		if err := f.SetCellValue(sheet, axis, val); err != nil {
 			return err
 		}
 	default:

@@ -85,7 +85,12 @@ func cellGridToCSVRows(cg CellGrid, hasWarning *bool) [][]string {
 		for c := 1; c <= cg.MaxCol; c++ {
 			cell := cg.Rows[r][c]
 			if cell.V != nil {
-				row[c-1] = scalarToString(cell.V)
+				if cell.T == "d" {
+					var w bool
+					row[c-1] = CellDisplayValue(cell, MarkdownModeFormula, &w)
+				} else {
+					row[c-1] = scalarToString(cell.V)
+				}
 			} else if cell.F != "" {
 				if hasWarning != nil {
 					*hasWarning = true

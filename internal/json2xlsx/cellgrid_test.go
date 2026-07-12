@@ -108,6 +108,31 @@ func TestBuildCellGrid_InvalidAxis(t *testing.T) {
 	}
 }
 
+func TestCellGridToCSVRows_DateCell(t *testing.T) {
+	cg, ok := BuildCellGrid(Sheet{Cells: map[string]Cell{
+		"A1": {T: "d", V: float64(45678)},
+		"A2": {T: "d", V: "2025-01-21T00:00:00Z"},
+		"B1": {T: "n", V: float64(42)},
+	}})
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	var warn bool
+	grid := cellGridToCSVRows(cg, &warn)
+	if warn {
+		t.Error("expected no warning")
+	}
+	if grid[0][0] != "2025-01-21T00:00:00" {
+		t.Errorf("A1 (date serial) = %q, want 2025-01-21T00:00:00", grid[0][0])
+	}
+	if grid[1][0] != "2025-01-21T00:00:00Z" {
+		t.Errorf("A2 (date string) = %q, want 2025-01-21T00:00:00Z", grid[1][0])
+	}
+	if grid[0][1] != "42" {
+		t.Errorf("B1 (number) = %q, want 42", grid[0][1])
+	}
+}
+
 func TestBuildCellGrid_ColNames(t *testing.T) {
 	cg, ok := BuildCellGrid(Sheet{Cells: map[string]Cell{
 		"A1":  {},

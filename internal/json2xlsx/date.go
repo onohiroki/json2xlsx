@@ -6,7 +6,9 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/araddon/dateparse"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -108,6 +110,24 @@ func formatTimeOnly(serial float64, z string) string {
 		return fmt.Sprintf("%02d:%02d", totalMin, sec)
 	}
 	return fmt.Sprintf("%02d:%02d", totalMin, sec)
+}
+
+// parseDateString は文字列を /time.Time にパースする．
+// RFC3339 → ISO8601(with/without Z) → ISO8601 date-only → dateparse の順に試行する．
+func parseDateString(s string) (time.Time, error) {
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05.999999999",
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return dateparse.ParseAny(s)
 }
 
 // normalizeDateCells は z に日付/時刻書式コードを持つセルの T を "d" に書き換える．

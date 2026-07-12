@@ -229,3 +229,60 @@ func TestNormalizeDateCells_NilCells(t *testing.T) {
 	wb := &Workbook{}
 	normalizeDateCells(wb)
 }
+
+func TestParseDateString_RFC3339(t *testing.T) {
+	tm, err := parseDateString("2025-01-21T00:00:00Z")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tm.Year() != 2025 || tm.Month() != 1 || tm.Day() != 21 {
+		t.Errorf("expected 2025-01-21, got %s", tm.Format("2006-01-02"))
+	}
+}
+
+func TestParseDateString_ISO8601(t *testing.T) {
+	tm, err := parseDateString("2025-01-21T00:00:00")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tm.Year() != 2025 || tm.Month() != 1 || tm.Day() != 21 {
+		t.Errorf("expected 2025-01-21, got %s", tm.Format("2006-01-02"))
+	}
+}
+
+func TestParseDateString_DateOnly(t *testing.T) {
+	tm, err := parseDateString("2025-01-21")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tm.Year() != 2025 || tm.Month() != 1 || tm.Day() != 21 {
+		t.Errorf("expected 2025-01-21, got %s", tm.Format("2006-01-02"))
+	}
+}
+
+func TestParseDateString_RFC3339Nano(t *testing.T) {
+	tm, err := parseDateString("2025-01-21T12:34:56.123456789Z")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tm.Year() != 2025 || tm.Month() != 1 || tm.Day() != 21 {
+		t.Errorf("expected 2025-01-21, got %s", tm.Format("2006-01-02"))
+	}
+}
+
+func TestParseDateString_DisplayFallback(t *testing.T) {
+	tm, err := parseDateString("1/21/2025")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tm.Year() != 2025 || tm.Month() != 1 || tm.Day() != 21 {
+		t.Errorf("expected 2025-01-21, got %s", tm.Format("2006-01-02"))
+	}
+}
+
+func TestParseDateString_Invalid(t *testing.T) {
+	_, err := parseDateString("not-a-date")
+	if err == nil {
+		t.Fatal("expected error for invalid date string")
+	}
+}

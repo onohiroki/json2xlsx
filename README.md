@@ -82,7 +82,9 @@ If `-i` is omitted, standard input is used; if `-o` is omitted, standard output 
 cat input.xlsx | json2xlsx to-json > output.json
 ```
 
-Date/time cells (`t: "d"`) default to outputting Excel's internal serial value as a number in `v`. Use `--date-display` to output the display string instead, or `--date-rfc3339` to output RFC3339 (UTC) strings. The `--date-serial` flag is a compatibility alias that behaves identically to the default. Time-only values (`9:05`) are treated as time without a date.
+Date/time cells (`t: "d"`) default to outputting Excel's internal serial value as a number in `v`. Use `--date-rfc3339` to output RFC3339 (UTC) strings for round-trippable human-readable dates. The `--date-serial` flag is a compatibility alias that behaves identically to the default. Time-only values (`9:05`) are treated as time without a date.
+
+`--date-display` is **deprecated** — it outputs Excel's display string, which does not reliably round-trip through `to-xlsx` because date display formats vary by locale. Use `--date-rfc3339` for round-trippable output, or use `to-md`/`to-html` for human-readable display.
 
 **Image output mode** — `--image-mode` controls how embedded images in the XLSX are exported:
 - `base64` (default): images are embedded directly in the JSON output as base64-encoded strings in the `data` field.
@@ -305,6 +307,8 @@ Options:
 - `--sheet-index`: extract a sheet by 1-based index (for multi-sheet XLSX or Workbook JSON).
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 - `--compute`: evaluate formulas before output.
+
+Date cells (`t: "d"`) are automatically converted to readable strings (serial values → RFC3339-like, string values → pass-through).
 
 ## Input JSON concepts
 

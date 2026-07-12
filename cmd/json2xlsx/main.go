@@ -74,7 +74,7 @@ Usage:
   --sheet              to-csv で入力 XLSX または JSON から抽出するシート名
   --sheet-index        to-csv で入力 XLSX または JSON から抽出するシート番号 (1から開始)
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
-  --date-display       to-json で日時セルを表示文字列で出力する
+  --date-display       to-json で日時セルを表示文字列で出力する (非推奨，--date-rfc3339 を推奨)
   --date-rfc3339       to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
   --image-mode         to-json の画像出力モード: base64 (JSON に埋め込み) または file (外部ファイル)
   --mode               セル表示モード (f=数式優先, v=値優先, both=併記)．to-md デフォルト f, to-html デフォルト v

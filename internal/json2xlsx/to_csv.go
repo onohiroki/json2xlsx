@@ -255,6 +255,7 @@ func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex
 		return nil, fmt.Errorf("parse workbook json: %w", err)
 	}
 	normalizeWorkbook(&wb)
+	normalizeDateCells(&wb)
 	var formulaWarnings []string
 	if compute {
 		formulaWarnings = EvalWorkbookFormulas(&wb)

@@ -238,6 +238,46 @@ func TestToJSON_DateCells_RFC3339Option(t *testing.T) {
 	}
 }
 
+func TestToJSON_RoundTripDateSerial(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "d", "v": 45678, "z": "yyyy-mm-dd"}
+		}
+	}`
+	wb := roundTrip(t, js)
+	if wb.Cells == nil {
+		t.Fatalf("Cells nil")
+	}
+	c := wb.Cells["A1"]
+	if c.T != "d" {
+		t.Errorf("A1.T = %q, want d", c.T)
+	}
+	if c.V != float64(45678) {
+		t.Errorf("A1.V = %v, want 45678", c.V)
+	}
+}
+
+func TestToJSON_RoundTripDateRFC3339(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "d", "v": "2025-01-21T00:00:00Z", "z": "yyyy-mm-dd"}
+		}
+	}`
+	wb := roundTripWithOptions(t, js, ToJSONOptions{DateMode: DateModeRFC3339})
+	if wb.Cells == nil {
+		t.Fatalf("Cells nil")
+	}
+	c := wb.Cells["A1"]
+	if c.T != "d" {
+		t.Errorf("A1.T = %q, want d", c.T)
+	}
+	if c.V != "2025-01-21T00:00:00Z" {
+		t.Errorf("A1.V = %q, want 2025-01-21T00:00:00Z", c.V)
+	}
+}
+
 func TestToJSON_FreezePanes_ReadDirect(t *testing.T) {
 	f := excelize.NewFile()
 	defer f.Close()
