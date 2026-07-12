@@ -11,11 +11,11 @@ It is intended to be used together with the `sheetjs-json-writer` skill (include
 The goal of this project is to separate the following two stages:
 
 1. The AI emits tables and aggregate results as SheetJS-style JSON.
-2. `json2xlsx` reads that JSON and converts it to `.xlsx`.[5][6]
+2. `json2xlsx` reads that JSON and converts it to `.xlsx`.[5]
 
 While the AI primarily outputs SheetJS-style JSON, `json2xlsx` also accepts 2D array JSON input for convenience when interacting with other tools.
 
-This separation keeps the Go tool lightweight, easy to test, and suitable for OSS distribution.[7][8]
+This separation keeps the Go tool lightweight, easy to test, and suitable for OSS distribution.
 
 ### Why use `json2xlsx` — eliminate nondeterminism from AI-generated code
 
@@ -39,8 +39,8 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 - Lightweight CLI that runs on Go 1.22+.[2]
 - Main dependencies are `excelize` (XLSX read/write) and `jsonschema/v6` (JSON validation).[1]
 - Accepts JSON in both SheetJS-style Cell Objects and simple 2D array formats.[4][3]
-- Supports formulas, newlines, borders, colors, number formats, links, freeze panes, etc. (Note: 2D array format does not support formulas or styles).[6][9][10]
-- Because the AI generation part is separated, it can be combined with any LLM.[11][12]
+- Supports formulas, newlines, borders, colors, number formats, links, freeze panes, etc. (Note: 2D array format does not support formulas or styles).
+- Because the AI generation part is separated, it can be combined with any LLM.
 - **Chart generation** — bar, column, line, area, pie, doughnut, scatter, radar charts with customizable titles, legends, axes, and data labels.
 - **Picture / image support** — embed images in cells from file paths or base64 data; includes sheet background images.
 - **Japanese-friendly** — series names containing Japanese characters (e.g., `予算`, `実績`) are automatically preserved in Excel legends.
@@ -514,11 +514,11 @@ See `samples/pictures.json` and `samples/pictures_new.json` for complete example
 | Feature | Initial support | Notes |
 |------|----------|------|
 | Basic table generation | Yes | placement of strings and numbers [1] |
-| Formulas | Yes | assumes cell-reference formulas [6] |
-| Newlines in cells | Yes | treat `\n` as newline [10][13] |
-| Borders | Yes | thin / medium, etc. [9] |
-| Background color | Yes | use Fill [14] |
-| Number formats | Yes | equivalent to `z` / `numFmt` [15] |
+| Formulas | Yes | assumes cell-reference formulas |
+| Newlines in cells | Yes | treat `\n` as newline |
+| Borders | Yes | thin / medium, etc. |
+| Background color | Yes | use Fill |
+| Number formats | Yes | equivalent to `z` / `numFmt` [6] |
 | Hyperlinks | Yes | specified via `L` field |
 | Merged cells | Yes | specified with `merges` array |
 | Charts | Yes | bar, column, line, area, pie, doughnut, scatter, radar |
@@ -634,7 +634,7 @@ The `sheetjs-json-writer` skill included in the `skills/` directory is a SKILL.m
 - Output only JSON.
 - Do not add Markdown explanations.
 - Use fields like `t`, `v`, `f`, `s` correctly.
-- Emit formulas, newlines, and styles in a defined format.[4][6][3]
+- Emit formulas, newlines, and styles in a defined format.[4][3]
 
 This allows `json2xlsx` to remain simple under the assumption that "correctly formatted JSON will be provided".
 
@@ -656,6 +656,7 @@ The licenses of major dependencies are as follows:
 - SheetJS API reference[3]
 - SheetJS Cell Objects[4]
 - SheetJS license[5]
+- SheetJS Number Formats[6]
 
 Sources
 [1] excelize package - github.com/xuri/excelize/v2 https://pkg.go.dev/github.com/xuri/excelize/v2
@@ -663,13 +664,4 @@ Sources
 [3] API Reference https://docs.sheetjs.com/docs/api/
 [4] Cell Objects https://docs.sheetjs.com/docs/csf/cell/
 [5] License https://docs.sheetjs.com/docs/miscellany/license/
-[6] How do I save data using `json_to_sheet` to save formulas? https://github.com/SheetJS/sheetjs/issues/2017
-[7] はじめに · Excelize ドキュメンテーション - Ri Xu Online https://xuri.me/excelize/ja/
-[8] openai-go/LICENSE at main https://github.com/openai/openai-go/blob/main/LICENSE
-[9] Cell · Excelize Document - Ri Xu Online https://xuri.me/excelize/en/cell.html
-[10] セル · Excelize ドキュメンテーション - Ri Xu Online https://xuri.me/excelize/ja/cell.html
-[11] How to write better prompts for GitHub Copilot https://github.blog/developer-skills/github/how-to-write-better-prompts-for-github-copilot/
-[12] Best practices for using GitHub Copilot https://docs.github.com/en/copilot/get-started/best-practices
-[13] How can i wraptext to the new row in excelize https://stackoverflow.com/questions/74632921/how-can-i-wraptext-to-the-new-row-in-excelize
-[14] Style · Excelize Document - Ri Xu Online https://xuri.me/excelize/en/style.html
-[15] Number Formats https://docs.sheetjs.com/docs/csf/features/nf/
+[6] Number Formats https://docs.sheetjs.com/docs/csf/features/nf/
