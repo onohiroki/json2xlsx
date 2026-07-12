@@ -42,6 +42,7 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 - Supports formulas, newlines, borders, colors, number formats, links, freeze panes, etc. (Note: 2D array format does not support formulas or styles).[6][9][10]
 - Because the AI generation part is separated, it can be combined with any LLM.[11][12]
 - **Chart generation** — bar, column, line, area, pie, doughnut, scatter, radar charts with customizable titles, legends, axes, and data labels.
+- **Picture / image support** — embed images in cells from file paths or base64 data; includes sheet background images.
 - **Japanese-friendly** — series names containing Japanese characters (e.g., `予算`, `実績`) are automatically preserved in Excel legends.
 
 ## Installation
@@ -72,6 +73,7 @@ Read an XLSX and output JSON in a format acceptable to `json2xlsx` (cell map for
 json2xlsx to-json -i input.xlsx -o output.json
 json2xlsx to-json -i input.xlsx -o output.json --date-display
 json2xlsx to-json -i input.xlsx -o output.json --date-rfc3339
+json2xlsx to-json -i input.xlsx -o output.json --image-mode file
 ```
 
 If `-i` is omitted, standard input is used; if `-o` is omitted, standard output is used.
@@ -81,6 +83,10 @@ cat input.xlsx | json2xlsx to-json > output.json
 ```
 
 Date/time cells (`t: "d"`) default to outputting Excel's internal serial value as a number in `v`. Use `--date-display` to output the display string instead, or `--date-rfc3339` to output RFC3339 (UTC) strings. The `--date-serial` flag is a compatibility alias that behaves identically to the default. Time-only values (`9:05`) are treated as time without a date.
+
+**Image output mode** — `--image-mode` controls how embedded images in the XLSX are exported:
+- `base64` (default): images are embedded directly in the JSON output as base64-encoded strings in the `data` field.
+- `file`: images are written to separate files on disk (named `image_1.png`, `image_2.jpg`, etc.) alongside the JSON output. The `path` field in the JSON will reference the file.
 
 ### `to-xlsx` — JSON → XLSX (default)
 
@@ -436,6 +442,73 @@ Charts are supported in the `book` wrapper format via the `charts` array. Each c
 
 See `samples/chart_bar.json`, `samples/chart_scatter.json`, `samples/chart_timeseries.json` for more examples.
 
+## Pictures
+
+Images can be embedded in sheets via the `pictures` array in a Sheet object. Each picture can reference a file on disk or be provided as base64-encoded data. A sheet-level background image is set via the `background` field.
+
+### Picture object fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cell` | string | Anchor cell (e.g. `"B1"`) |
+| `path` | string | Image file path (relative or absolute) |
+| `data` | string | Base64-encoded image data (alternative to `path`) |
+| `extension` | string | File extension (`png`, `jpg`, `gif`) — required when using `data` |
+| `altText` | string | Alternative text |
+| `offsetX` | int | Horizontal offset from the anchor cell in EMU |
+| `offsetY` | int | Vertical offset from the anchor cell in EMU |
+| `scaleX` | float | Horizontal scale factor |
+| `scaleY` | float | Vertical scale factor |
+| `positioning` | string | `"oneCell"` (move and size with cells) or `"absolute"` |
+| `hyperlink` | string | Hyperlink target URL |
+| `printObject` | bool | Whether to print the picture |
+| `locked` | bool | Whether the picture is locked |
+| `lockAspectRatio` | bool | Whether to lock the aspect ratio |
+
+### Background object fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `path` | string | Image file path |
+| `data` | string | Base64-encoded image data (alternative to `path`) |
+| `extension` | string | File extension — required when using `data` |
+
+### Example
+
+```json
+{
+  "sheets": [
+    {
+      "name": "Sheet1",
+      "cells": {
+        "A1": { "t": "s", "v": "Image from path" },
+        "A2": { "t": "s", "v": "Image from base64" }
+      },
+      "pictures": [
+        {
+          "cell": "B1",
+          "path": "images/sample.png",
+          "altText": "Sample image",
+          "scaleX": 0.5,
+          "scaleY": 0.5
+        },
+        {
+          "cell": "B2",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAF0lEQVR4nGL5z4APMOGVHbHSgAAAAP//RM4BFjLZ0j4AAAAASUVORK5CYII=",
+          "extension": "png",
+          "altText": "Image from base64"
+        }
+      ],
+      "background": {
+        "path": "images/background.png"
+      }
+    }
+  ]
+}
+```
+
+See `samples/pictures.json` and `samples/pictures_new.json` for complete examples.
+
 ## Planned features
 
 | Feature | Initial support | Notes |
@@ -449,6 +522,7 @@ See `samples/chart_bar.json`, `samples/chart_scatter.json`, `samples/chart_times
 | Hyperlinks | Yes | specified via `L` field |
 | Merged cells | Yes | specified with `merges` array |
 | Charts | Yes | bar, column, line, area, pie, doughnut, scatter, radar |
+| Pictures / images | Yes | file path or base64, sheet background |
 | Freeze panes | Yes | freeze rows/columns via `freeze` field |
 | Rich text | No | out of initial scope [4] |
 
@@ -527,6 +601,29 @@ type RowInfo struct {
 type FreezePane struct {
     Row int `json:"row,omitempty"`
     Col int `json:"col,omitempty"`
+}
+
+type Picture struct {
+    Cell            string  `json:"cell"`
+    Path            string  `json:"path,omitempty"`
+    Data            string  `json:"data,omitempty"`
+    Extension       string  `json:"extension,omitempty"`
+    AltText         string  `json:"altText,omitempty"`
+    PrintObject     *bool   `json:"printObject,omitempty"`
+    Locked          *bool   `json:"locked,omitempty"`
+    LockAspectRatio *bool   `json:"lockAspectRatio,omitempty"`
+    OffsetX         int     `json:"offsetX,omitempty"`
+    OffsetY         int     `json:"offsetY,omitempty"`
+    ScaleX          float64 `json:"scaleX,omitempty"`
+    ScaleY          float64 `json:"scaleY,omitempty"`
+    Hyperlink       string  `json:"hyperlink,omitempty"`
+    Positioning     string  `json:"positioning,omitempty"`
+}
+
+type SheetBackground struct {
+    Path      string `json:"path,omitempty"`
+    Data      string `json:"data,omitempty"`
+    Extension string `json:"extension,omitempty"`
 }
 ```
 
