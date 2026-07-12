@@ -14,11 +14,15 @@ import (
 func evalFormula(t *testing.T, cells map[string]Cell, formula string) float64 {
 	t.Helper()
 	ctx := newEvalContext(cells)
-	val, err := ctx.evaluate("_test", formula)
+	fv, err := ctx.evaluate("_test", formula)
 	if err != nil {
 		t.Fatalf("eval %q: %v", formula, err)
 	}
-	return val
+	n, nerr := fv.asNumber()
+	if nerr != nil {
+		t.Fatalf("eval %q: result is not numeric: %v", formula, nerr)
+	}
+	return n
 }
 
 // evalFormulaErr is a test helper: evaluates a formula that is expected to fail.
@@ -1576,11 +1580,15 @@ func TestEval_CountifWrongArgCount(t *testing.T) {
 func evalFormulaAt(t *testing.T, cells map[string]Cell, ref, formula string) float64 {
 	t.Helper()
 	ctx := newEvalContext(cells)
-	val, err := ctx.evaluate(ref, formula)
+	fv, err := ctx.evaluate(ref, formula)
 	if err != nil {
 		t.Fatalf("eval %q at %s: %v", formula, ref, err)
 	}
-	return val
+	n, nerr := fv.asNumber()
+	if nerr != nil {
+		t.Fatalf("eval %q at %s: result is not numeric: %v", formula, ref, nerr)
+	}
+	return n
 }
 
 func TestEval_Row(t *testing.T) {
@@ -1650,6 +1658,120 @@ func TestEval_RowColumnErrors(t *testing.T) {
 				t.Errorf("eval %q error = %q, want containing %q", tt.formula, errMsg, tt.contain)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: 文字列リテラル・& 演算子・文字列比較
+// ---------------------------------------------------------------------------
+
+// evalFormulaStr は文字列結果を返す数式のテストヘルパー．
+func evalFormulaStr(t *testing.T, cells map[string]Cell, formula string) string {
+	t.Helper()
+	ctx := newEvalContext(cells)
+	fv, err := ctx.evaluate("_test", formula)
+	if err != nil {
+		t.Fatalf("eval %q: %v", formula, err)
+	}
+	return fv.asString()
+}
+
+func TestEval_StringLiteral(t *testing.T) {
+	got := evalFormulaStr(t, nil, `"hello"`)
+	if got != "hello" {
+		t.Errorf("got %q, want %q", got, "hello")
+	}
+}
+
+func TestEval_StringLiteralEscapedQuote(t *testing.T) {
+	// "" inside string literal is an escaped quote
+	got := evalFormulaStr(t, nil, `"say ""hi"""`)
+	if got != `say "hi"` {
+		t.Errorf("got %q, want %q", got, `say "hi"`)
+	}
+}
+
+func TestEval_StringConcat(t *testing.T) {
+	got := evalFormulaStr(t, nil, `"foo"&"bar"`)
+	if got != "foobar" {
+		t.Errorf("got %q, want %q", got, "foobar")
+	}
+}
+
+func TestEval_StringConcatCellRef(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "円"},
+	}
+	got := evalFormulaStr(t, cells, `"100"&A1`)
+	if got != "100円" {
+		t.Errorf("got %q, want %q", got, "100円")
+	}
+}
+
+func TestEval_StringConcatNumericCell(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 42.0},
+	}
+	got := evalFormulaStr(t, cells, `A1&"円"`)
+	if got != "42円" {
+		t.Errorf("got %q, want %q", got, "42円")
+	}
+}
+
+func TestEval_StringCompareEQ(t *testing.T) {
+	// 文字列比較は大文字小文字を区別しない（Excel 準拠）
+	got := evalFormula(t, nil, `"abc"="ABC"`)
+	if got != 1 {
+		t.Errorf("got %v, want 1 (case-insensitive equal)", got)
+	}
+}
+
+func TestEval_StringCompareNE(t *testing.T) {
+	got := evalFormula(t, nil, `"abc"<>"def"`)
+	if got != 1 {
+		t.Errorf("got %v, want 1", got)
+	}
+}
+
+func TestEval_StringCompareLT(t *testing.T) {
+	got := evalFormula(t, nil, `"apple"<"banana"`)
+	if got != 1 {
+		t.Errorf("got %v, want 1", got)
+	}
+}
+
+func TestEval_MixedCompareNumLtStr(t *testing.T) {
+	// Excel 規則：数値 < 文字列
+	got := evalFormula(t, nil, `1<"a"`)
+	if got != 1 {
+		t.Errorf("got %v, want 1 (number < string)", got)
+	}
+}
+
+func TestEval_IFWithStringComparison(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "合格"},
+	}
+	got := evalFormula(t, cells, `IF(A1="合格",1,0)`)
+	if got != 1 {
+		t.Errorf("got %v, want 1", got)
+	}
+}
+
+func TestEval_StringResultWriteback(t *testing.T) {
+	js := "{\"name\":\"Sheet1\",\"cells\":{\"A1\":{\"t\":\"s\",\"v\":\"Hello\"},\"A2\":{\"t\":\"s\",\"v\":\"World\"},\"A3\":{\"t\":\"f\",\"f\":\"A1&\\\" \\\"&A2\"}}}"
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{EvalFormulas: true}); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("OpenReader: %v", err)
+	}
+	defer f.Close()
+	val, _ := f.GetCellValue("Sheet1", "A3")
+	if val != "Hello World" {
+		t.Errorf("A3 = %q, want %q", val, "Hello World")
 	}
 }
 

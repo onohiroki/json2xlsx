@@ -109,9 +109,13 @@ json2xlsx to-xlsx -i input.json -o output.xlsx --compute
 
 The built-in formula engine evaluates formulas cell-by-cell. Below is the full list of supported features.
 
+**String literals:** `"Hello"` (double-quoted; `""` inside a literal represents a single quote)
+
+**Concatenation operator:** `&`
+
 **Arithmetic operators:** `+`, `-`, `*`, `/`
 
-**Comparison operators:** `<`, `>`, `=`, `<=`, `>=`, `<>` (not equal). Comparison results are `1` (true) or `0` (false).
+**Comparison operators:** `<`, `>`, `=`, `<=`, `>=`, `<>` (not equal). Comparison results are `1` (true) or `0` (false). Strings are compared case-insensitively. Mixed types follow the Excel order: numbers < strings.
 
 **Supported functions:**
 
@@ -186,10 +190,18 @@ The built-in formula engine evaluates formulas cell-by-cell. Below is the full l
 | `CHOOSE(index, val1, val2, ...)` | Select by 1-based index |
 | `TODAY()` | Current date as serial number |
 | `NOW()` | Current date and time as serial number |
+| `CONCAT(str1, str2, ...)` | Concatenate strings |
+| `CONCATENATE(str1, str2, ...)` | Alias for CONCAT |
+| `LEFT(str, n)` | First `n` characters (rune-based, Japanese-safe) |
+| `RIGHT(str, n)` | Last `n` characters (rune-based, Japanese-safe) |
+| `MID(str, start, n)` | `n` characters starting at `start` (1-based, rune-based) |
+| `LEN(str)` | Length in characters (rune-based, Japanese-safe) |
+| `UPPER(str)` | Convert to uppercase |
+| `LOWER(str)` | Convert to lowercase |
+| `TRIM(str)` | Remove leading/trailing spaces; collapse internal whitespace |
 
 **Limitations:**
 
-- Only numeric values are supported. Text functions (e.g. `CONCAT`, `LEFT`, `FIND`) and string comparisons in criteria are **not** available.
 - Range references (e.g. `A1:A10`) are valid only inside function arguments; standalone ranges produce an error.
 - Cell references use A1-style only (no R1C1). Column letters are limited to 3 characters (`A`–`ZZZ`).
 - Cross-sheet references are **not** supported.

@@ -34,11 +34,13 @@ func evalFuncAverageif(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
-		if cellVal == criteriaVal {
+		if matchCriteria(cellVal, criteriaVal) {
 			avgVal, err := ctx.getCellValue(avgRefs[i])
 			if err == nil {
-				total += avgVal
-				count++
+				if n, nerr := avgVal.asNumber(); nerr == nil {
+					total += n
+					count++
+				}
 			}
 		}
 	}
@@ -59,7 +61,7 @@ func evalFuncSumifs(ctx *evalContext, args []expr) (float64, error) {
 	numPairs := (len(args) - 1) / 2
 	type criteria struct {
 		refs []string
-		val  float64
+		val  formulaValue
 	}
 	criteriaList := make([]criteria, numPairs)
 	for i := 0; i < numPairs; i++ {
@@ -86,7 +88,7 @@ func evalFuncSumifs(ctx *evalContext, args []expr) (float64, error) {
 		match := true
 		for _, c := range criteriaList {
 			cellVal, err := ctx.getCellValue(c.refs[row])
-			if err != nil || cellVal != c.val {
+			if err != nil || !matchCriteria(cellVal, c.val) {
 				match = false
 				break
 			}
@@ -94,7 +96,9 @@ func evalFuncSumifs(ctx *evalContext, args []expr) (float64, error) {
 		if match {
 			sumVal, err := ctx.getCellValue(sumRefs[row])
 			if err == nil {
-				total += sumVal
+				if n, nerr := sumVal.asNumber(); nerr == nil {
+					total += n
+				}
 			}
 		}
 	}
@@ -108,7 +112,7 @@ func evalFuncCountifs(ctx *evalContext, args []expr) (float64, error) {
 	numPairs := len(args) / 2
 	type criteria struct {
 		refs []string
-		val  float64
+		val  formulaValue
 	}
 	criteriaList := make([]criteria, numPairs)
 	for i := 0; i < numPairs; i++ {
@@ -135,7 +139,7 @@ func evalFuncCountifs(ctx *evalContext, args []expr) (float64, error) {
 		match := true
 		for _, c := range criteriaList {
 			cellVal, err := ctx.getCellValue(c.refs[row])
-			if err != nil || cellVal != c.val {
+			if err != nil || !matchCriteria(cellVal, c.val) {
 				match = false
 				break
 			}
@@ -158,7 +162,7 @@ func evalFuncMinifs(ctx *evalContext, args []expr) (float64, error) {
 	numPairs := (len(args) - 1) / 2
 	type criteria struct {
 		refs []string
-		val  float64
+		val  formulaValue
 	}
 	criteriaList := make([]criteria, numPairs)
 	for i := 0; i < numPairs; i++ {
@@ -185,17 +189,18 @@ func evalFuncMinifs(ctx *evalContext, args []expr) (float64, error) {
 		match := true
 		for _, c := range criteriaList {
 			cellVal, err := ctx.getCellValue(c.refs[row])
-			if err != nil || cellVal != c.val {
+			if err != nil || !matchCriteria(cellVal, c.val) {
 				match = false
 				break
 			}
 		}
 		if match {
-			val, err := ctx.getCellValue(minRefs[row])
+			fv, err := ctx.getCellValue(minRefs[row])
 			if err == nil {
-				if minVal == nil || val < *minVal {
-					v := val
-					minVal = &v
+				if v, nerr := fv.asNumber(); nerr == nil {
+					if minVal == nil || v < *minVal {
+						minVal = &v
+					}
 				}
 			}
 		}
@@ -217,7 +222,7 @@ func evalFuncMaxifs(ctx *evalContext, args []expr) (float64, error) {
 	numPairs := (len(args) - 1) / 2
 	type criteria struct {
 		refs []string
-		val  float64
+		val  formulaValue
 	}
 	criteriaList := make([]criteria, numPairs)
 	for i := 0; i < numPairs; i++ {
@@ -244,17 +249,18 @@ func evalFuncMaxifs(ctx *evalContext, args []expr) (float64, error) {
 		match := true
 		for _, c := range criteriaList {
 			cellVal, err := ctx.getCellValue(c.refs[row])
-			if err != nil || cellVal != c.val {
+			if err != nil || !matchCriteria(cellVal, c.val) {
 				match = false
 				break
 			}
 		}
 		if match {
-			val, err := ctx.getCellValue(maxRefs[row])
+			fv, err := ctx.getCellValue(maxRefs[row])
 			if err == nil {
-				if maxVal == nil || val > *maxVal {
-					v := val
-					maxVal = &v
+				if v, nerr := fv.asNumber(); nerr == nil {
+					if maxVal == nil || v > *maxVal {
+						maxVal = &v
+					}
 				}
 			}
 		}
@@ -276,7 +282,7 @@ func evalFuncAverageifs(ctx *evalContext, args []expr) (float64, error) {
 	numPairs := (len(args) - 1) / 2
 	type criteria struct {
 		refs []string
-		val  float64
+		val  formulaValue
 	}
 	criteriaList := make([]criteria, numPairs)
 	for i := 0; i < numPairs; i++ {
@@ -304,7 +310,7 @@ func evalFuncAverageifs(ctx *evalContext, args []expr) (float64, error) {
 		match := true
 		for _, c := range criteriaList {
 			cellVal, err := ctx.getCellValue(c.refs[row])
-			if err != nil || cellVal != c.val {
+			if err != nil || !matchCriteria(cellVal, c.val) {
 				match = false
 				break
 			}
@@ -312,8 +318,10 @@ func evalFuncAverageifs(ctx *evalContext, args []expr) (float64, error) {
 		if match {
 			avgVal, err := ctx.getCellValue(avgRefs[row])
 			if err == nil {
-				total += avgVal
-				count++
+				if n, nerr := avgVal.asNumber(); nerr == nil {
+					total += n
+					count++
+				}
 			}
 		}
 	}

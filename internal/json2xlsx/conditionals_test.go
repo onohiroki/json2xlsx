@@ -240,6 +240,144 @@ func TestEval_MaxifsWrongArgCount(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Step 3: 条件関数の文字列条件対応
+// ---------------------------------------------------------------------------
+
+func TestEval_SumifStringCriteria(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 10.0},
+		"A2": {T: "n", V: 20.0},
+		"A3": {T: "n", V: 10.0},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, `SUMIF(A1:A3,"10",B1:B3)`)
+	// Rows 1 and 3 match (10 == 10): 100 + 300 = 400
+	if got != 400 {
+		t.Errorf("SUMIF string criteria = %v, want 400", got)
+	}
+}
+
+func TestEval_SumifStringCriteriaExact(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "apple"},
+		"A2": {T: "s", V: "banana"},
+		"A3": {T: "s", V: "apple"},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, `SUMIF(A1:A3,"apple",B1:B3)`)
+	// Rows 1 and 3 match: 100 + 300 = 400
+	if got != 400 {
+		t.Errorf("SUMIF string exact = %v, want 400", got)
+	}
+}
+
+func TestEval_SumifOperatorGT(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 5.0},
+		"A2": {T: "n", V: 15.0},
+		"A3": {T: "n", V: 25.0},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, `SUMIF(A1:A3,">10",B1:B3)`)
+	// Rows 2 and 3 match: 200 + 300 = 500
+	if got != 500 {
+		t.Errorf("SUMIF >10 = %v, want 500", got)
+	}
+}
+
+func TestEval_SumifOperatorNE(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "OK"},
+		"A2": {T: "s", V: "NG"},
+		"A3": {T: "s", V: "OK"},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, `SUMIF(A1:A3,"<>NG",B1:B3)`)
+	// Rows 1 and 3 match (not "NG"): 100 + 300 = 400
+	if got != 400 {
+		t.Errorf("SUMIF <>NG = %v, want 400", got)
+	}
+}
+
+func TestEval_CountifStringCriteria(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "apple"},
+		"A2": {T: "s", V: "banana"},
+		"A3": {T: "s", V: "apple"},
+	}
+	got := evalFormula(t, cells, `COUNTIF(A1:A3,"apple")`)
+	if got != 2 {
+		t.Errorf("COUNTIF string = %v, want 2", got)
+	}
+}
+
+func TestEval_CountifOperatorLE(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 5.0},
+		"A2": {T: "n", V: 10.0},
+		"A3": {T: "n", V: 15.0},
+	}
+	got := evalFormula(t, cells, `COUNTIF(A1:A3,"<=10")`)
+	if got != 2 {
+		t.Errorf("COUNTIF <=10 = %v, want 2", got)
+	}
+}
+
+func TestEval_SumifsStringCriteria(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 100.0},
+		"A2": {T: "n", V: 200.0},
+		"A3": {T: "n", V: 300.0},
+		"B1": {T: "s", V: "x"},
+		"B2": {T: "s", V: "y"},
+		"B3": {T: "s", V: "x"},
+	}
+	got := evalFormula(t, cells, `SUMIFS(A1:A3,B1:B3,"x")`)
+	// Rows 1 and 3 match: 100 + 300 = 400
+	if got != 400 {
+		t.Errorf("SUMIFS string = %v, want 400", got)
+	}
+}
+
+func TestEval_CountifsStringCriteria(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "red"},
+		"A2": {T: "s", V: "blue"},
+		"A3": {T: "s", V: "red"},
+		"B1": {T: "n", V: 1.0},
+		"B2": {T: "n", V: 2.0},
+		"B3": {T: "n", V: 1.0},
+	}
+	got := evalFormula(t, cells, `COUNTIFS(A1:A3,"red",B1:B3,1)`)
+	if got != 2 {
+		t.Errorf("COUNTIFS string = %v, want 2", got)
+	}
+}
+
+func TestEval_AverageifStringCriteria(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "a"},
+		"A2": {T: "s", V: "b"},
+		"A3": {T: "s", V: "a"},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, `AVERAGEIF(A1:A3,"a",B1:B3)`)
+	if got != 200 {
+		t.Errorf("AVERAGEIF string = %v, want 200", got)
+	}
+}
+
 func TestEval_AverageifsNoMatch(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 100.0},

@@ -80,7 +80,7 @@ func evalFuncQuartileInc(ctx *evalContext, args []expr) (float64, error) {
 	if len(all) == 0 {
 		return 0, fmt.Errorf("QUARTILE.INC of empty set")
 	}
-	quart, err := args[len(args)-1].eval(ctx)
+	quart, err := ctx.evalArgNum(args[len(args)-1])
 	if err != nil {
 		return 0, err
 	}
@@ -105,7 +105,7 @@ func evalFuncPercentileInc(ctx *evalContext, args []expr) (float64, error) {
 	if len(all) == 0 {
 		return 0, fmt.Errorf("PERCENTILE.INC of empty set")
 	}
-	k, err := args[len(args)-1].eval(ctx)
+	k, err := ctx.evalArgNum(args[len(args)-1])
 	if err != nil {
 		return 0, err
 	}
@@ -174,7 +174,7 @@ func evalFuncTrimmean(ctx *evalContext, args []expr) (float64, error) {
 	if len(all) == 0 {
 		return 0, fmt.Errorf("TRIMMEAN of empty set")
 	}
-	percent, err := args[len(args)-1].eval(ctx)
+	percent, err := ctx.evalArgNum(args[len(args)-1])
 	if err != nil {
 		return 0, err
 	}
@@ -239,7 +239,7 @@ func evalFuncSubtotal(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 2 {
 		return 0, fmt.Errorf("SUBTOTAL requires at least 2 arguments")
 	}
-	funcNumVal, err := args[0].eval(ctx)
+	funcNumVal, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}

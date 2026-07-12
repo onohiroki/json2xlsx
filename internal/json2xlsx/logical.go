@@ -2,13 +2,13 @@ package json2xlsx
 
 import "fmt"
 
-func evalFuncIf(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncIf(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) != 3 {
-		return 0, fmt.Errorf("IF requires exactly 3 arguments")
+		return formulaValue{}, fmt.Errorf("IF requires exactly 3 arguments")
 	}
-	cond, err := args[0].eval(ctx)
+	cond, err := ctx.evalArgNum(args[0])
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	if cond != 0 {
 		return args[1].eval(ctx)
@@ -18,7 +18,7 @@ func evalFuncIf(ctx *evalContext, args []expr) (float64, error) {
 
 func evalFuncAnd(ctx *evalContext, args []expr) (float64, error) {
 	for _, arg := range args {
-		v, err := arg.eval(ctx)
+		v, err := ctx.evalArgNum(arg)
 		if err != nil {
 			return 0, err
 		}
@@ -31,7 +31,7 @@ func evalFuncAnd(ctx *evalContext, args []expr) (float64, error) {
 
 func evalFuncOr(ctx *evalContext, args []expr) (float64, error) {
 	for _, arg := range args {
-		v, err := arg.eval(ctx)
+		v, err := ctx.evalArgNum(arg)
 		if err != nil {
 			return 0, err
 		}
@@ -46,7 +46,7 @@ func evalFuncNot(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("NOT requires exactly 1 argument")
 	}
-	v, err := args[0].eval(ctx)
+	v, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -56,41 +56,41 @@ func evalFuncNot(ctx *evalContext, args []expr) (float64, error) {
 	return 0, nil
 }
 
-func evalFuncSwitch(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncSwitch(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 3 {
-		return 0, fmt.Errorf("SWITCH requires at least 3 arguments")
+		return formulaValue{}, fmt.Errorf("SWITCH requires at least 3 arguments")
 	}
-	expr, err := args[0].eval(ctx)
+	exprVal, err := args[0].eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	for i := 1; i < len(args)-1; i += 2 {
 		val, err := args[i].eval(ctx)
 		if err != nil {
-			return 0, err
+			return formulaValue{}, err
 		}
-		if val == expr {
+		if compareValues(exprVal, val) == 0 {
 			return args[i+1].eval(ctx)
 		}
 	}
 	if len(args)%2 == 0 {
 		return args[len(args)-1].eval(ctx)
 	}
-	return 0, fmt.Errorf("SWITCH #N/A")
+	return formulaValue{}, fmt.Errorf("SWITCH #N/A")
 }
 
-func evalFuncIfs(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncIfs(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 2 || len(args)%2 != 0 {
-		return 0, fmt.Errorf("IFS requires an even number of arguments (condition, value pairs)")
+		return formulaValue{}, fmt.Errorf("IFS requires an even number of arguments (condition, value pairs)")
 	}
 	for i := 0; i < len(args); i += 2 {
-		cond, err := args[i].eval(ctx)
+		cond, err := ctx.evalArgNum(args[i])
 		if err != nil {
-			return 0, err
+			return formulaValue{}, err
 		}
 		if cond != 0 {
 			return args[i+1].eval(ctx)
 		}
 	}
-	return 0, fmt.Errorf("IFS #N/A")
+	return formulaValue{}, fmt.Errorf("IFS #N/A")
 }

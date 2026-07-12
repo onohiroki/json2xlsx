@@ -276,6 +276,57 @@ func TestEval_SwitchWrongArgCount(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Step 3: IF/SWITCH/IFS の文字列透過対応
+// ---------------------------------------------------------------------------
+
+func TestEval_IfReturnsString(t *testing.T) {
+	got := evalFormulaStr(t, nil, `IF(1,"合格","不合格")`)
+	if got != "合格" {
+		t.Errorf("IF string = %q, want 合格", got)
+	}
+	got = evalFormulaStr(t, nil, `IF(0,"合格","不合格")`)
+	if got != "不合格" {
+		t.Errorf("IF string false = %q, want 不合格", got)
+	}
+}
+
+func TestEval_IfReturnsStringWithCellRef(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "OK"},
+		"A2": {T: "s", V: "NG"},
+		"B1": {T: "n", V: 1.0},
+	}
+	got := evalFormulaStr(t, cells, `IF(B1,A1,A2)`)
+	if got != "OK" {
+		t.Errorf("IF string cell ref = %q, want OK", got)
+	}
+}
+
+func TestEval_SwitchStringValues(t *testing.T) {
+	got := evalFormulaStr(t, nil, `SWITCH("b","a","A","b","B","c","C")`)
+	if got != "B" {
+		t.Errorf("SWITCH string = %q, want B", got)
+	}
+}
+
+func TestEval_SwitchStringDefault(t *testing.T) {
+	got := evalFormulaStr(t, nil, `SWITCH("x","a","A","b","B","default")`)
+	if got != "default" {
+		t.Errorf("SWITCH default string = %q, want default", got)
+	}
+}
+
+func TestEval_IfsStringResult(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 85.0},
+	}
+	got := evalFormulaStr(t, cells, `IFS(A1>=90,"A",A1>=80,"B",A1>=60,"C")`)
+	if got != "B" {
+		t.Errorf("IFS string result = %q, want B", got)
+	}
+}
+
 func TestEval_IfWithNestedFunc(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 10.0},

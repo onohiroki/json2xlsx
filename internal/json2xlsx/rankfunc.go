@@ -9,7 +9,7 @@ func evalFuncRank(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return 0, fmt.Errorf("RANK requires 2 or 3 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -22,18 +22,20 @@ func evalFuncRank(ctx *evalContext, args []expr) (float64, error) {
 	}
 	var values []float64
 	for _, ref := range refs {
-		v, err := ctx.getCellValue(ref)
+		fv, err := ctx.getCellValue(ref)
 		if err != nil {
 			continue
 		}
-		values = append(values, v)
+		if n, nerr := fv.asNumber(); nerr == nil {
+			values = append(values, n)
+		}
 	}
 	if len(values) == 0 {
 		return 0, fmt.Errorf("RANK no values in reference")
 	}
 	order := 0.0
 	if len(args) == 3 {
-		order, err = args[2].eval(ctx)
+		order, err = ctx.evalArgNum(args[2])
 		if err != nil {
 			return 0, err
 		}
@@ -71,7 +73,7 @@ func evalFuncLarge(ctx *evalContext, args []expr) (float64, error) {
 	if len(all) == 0 {
 		return 0, fmt.Errorf("LARGE of empty set")
 	}
-	kRaw, err := args[1].eval(ctx)
+	kRaw, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -96,7 +98,7 @@ func evalFuncSmall(ctx *evalContext, args []expr) (float64, error) {
 	if len(all) == 0 {
 		return 0, fmt.Errorf("SMALL of empty set")
 	}
-	kRaw, err := args[1].eval(ctx)
+	kRaw, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}

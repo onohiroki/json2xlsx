@@ -340,6 +340,141 @@ func TestEval_Hlookup(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Step 3: 検索関数の文字列キー・文字列返却対応
+// ---------------------------------------------------------------------------
+
+func TestEval_VlookupStringKey(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "apple"},
+		"A2": {T: "s", V: "banana"},
+		"A3": {T: "s", V: "orange"},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+		"B3": {T: "n", V: 300.0},
+	}
+	got := evalFormula(t, cells, `VLOOKUP("banana",A1:B3,2)`)
+	if got != 200 {
+		t.Errorf("VLOOKUP string key = %v, want 200", got)
+	}
+}
+
+func TestEval_VlookupStringResult(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0},
+		"A2": {T: "n", V: 2.0},
+		"B1": {T: "s", V: "合格"},
+		"B2": {T: "s", V: "不合格"},
+	}
+	got := evalFormulaStr(t, cells, `VLOOKUP(1,A1:B2,2)`)
+	if got != "合格" {
+		t.Errorf("VLOOKUP string result = %q, want 合格", got)
+	}
+}
+
+func TestEval_VlookupStringKeyCaseInsensitive(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "Hello"},
+		"B1": {T: "n", V: 42.0},
+	}
+	got := evalFormula(t, cells, `VLOOKUP("hello",A1:B1,2)`)
+	if got != 42 {
+		t.Errorf("VLOOKUP case-insensitive = %v, want 42", got)
+	}
+}
+
+func TestEval_XlookupStringKey(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "apple"},
+		"A2": {T: "s", V: "banana"},
+		"B1": {T: "n", V: 100.0},
+		"B2": {T: "n", V: 200.0},
+	}
+	got := evalFormula(t, cells, `XLOOKUP("banana",A1:A2,B1:B2)`)
+	if got != 200 {
+		t.Errorf("XLOOKUP string key = %v, want 200", got)
+	}
+}
+
+func TestEval_XlookupStringResult(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "n", V: 1.0},
+		"A2": {T: "n", V: 2.0},
+		"B1": {T: "s", V: "Alice"},
+		"B2": {T: "s", V: "Bob"},
+	}
+	got := evalFormulaStr(t, cells, `XLOOKUP(1,A1:A2,B1:B2)`)
+	if got != "Alice" {
+		t.Errorf("XLOOKUP string result = %q, want Alice", got)
+	}
+}
+
+func TestEval_XlookupStringNotFound(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "apple"},
+		"B1": {T: "n", V: 100.0},
+	}
+	got := evalFormulaStr(t, cells, `XLOOKUP("orange",A1:A1,B1:B1,"missing")`)
+	if got != "missing" {
+		t.Errorf("XLOOKUP not found string default = %q, want missing", got)
+	}
+}
+
+func TestEval_IndexStringResult(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "東京"},
+		"A2": {T: "s", V: "大阪"},
+		"A3": {T: "s", V: "名古屋"},
+	}
+	got := evalFormulaStr(t, cells, "INDEX(A1:A3,2)")
+	if got != "大阪" {
+		t.Errorf("INDEX string result = %q, want 大阪", got)
+	}
+}
+
+func TestEval_ChooseStringResult(t *testing.T) {
+	got := evalFormulaStr(t, nil, `CHOOSE(2,"A","B","C")`)
+	if got != "B" {
+		t.Errorf("CHOOSE string = %q, want B", got)
+	}
+}
+
+func TestEval_MatchStringKey(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "dog"},
+		"A2": {T: "s", V: "cat"},
+		"A3": {T: "s", V: "bird"},
+	}
+	got := evalFormula(t, cells, `MATCH("cat",A1:A3,0)`)
+	if got != 2 {
+		t.Errorf("MATCH string key = %v, want 2", got)
+	}
+}
+
+func TestEval_MatchStringKeyCaseInsensitive(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "Dog"},
+		"A2": {T: "s", V: "Cat"},
+	}
+	got := evalFormula(t, cells, `MATCH("dog",A1:A2,0)`)
+	if got != 1 {
+		t.Errorf("MATCH case-insensitive = %v, want 1", got)
+	}
+}
+
+func TestEval_HlookupStringKey(t *testing.T) {
+	cells := map[string]Cell{
+		"A1": {T: "s", V: "name"},
+		"B1": {T: "s", V: "age"},
+		"A2": {T: "s", V: "Alice"},
+		"B2": {T: "n", V: 30.0},
+	}
+	got := evalFormulaStr(t, cells, `HLOOKUP("name",A1:B2,2)`)
+	if got != "Alice" {
+		t.Errorf("HLOOKUP string key/result = %q, want Alice", got)
+	}
+}
+
 func TestEval_HlookupErrors(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 1.0},

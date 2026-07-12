@@ -22,7 +22,7 @@ func evalFuncIsnumber(ctx *evalContext, args []expr) (float64, error) {
 			return 0, nil
 		}
 	}
-	_, err := args[0].eval(ctx)
+	_, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, nil
 	}
@@ -83,7 +83,7 @@ func evalFuncIserror(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ISERROR requires exactly 1 argument")
 	}
-	_, err := args[0].eval(ctx)
+	_, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 1, nil
 	}
@@ -94,7 +94,7 @@ func evalFuncIsna(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ISNA requires exactly 1 argument")
 	}
-	_, err := args[0].eval(ctx)
+	_, err := ctx.evalArgNum(args[0])
 	if err != nil && strings.Contains(err.Error(), "#N/A") {
 		return 1, nil
 	}

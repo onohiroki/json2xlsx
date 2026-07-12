@@ -22,19 +22,71 @@ func EvalWorkbookFormulas(wb *Workbook) []string {
 		ctx := newEvalContext(sh.Cells)
 		for axis, cell := range sh.Cells {
 			if cell.T == "f" && cell.V == nil && cell.F != "" {
-				val, err := ctx.evaluate(axis, cell.F)
+				fv, err := ctx.evaluate(axis, cell.F)
 				if err != nil {
 					warnings = append(warnings, fmt.Sprintf("warning: %s=%s: %v", axis, cell.F, err))
 					continue
 				}
 				c := sh.Cells[axis]
-				c.V = val
-				c.T = "f"
+				if fv.kind == valueString {
+					c.V = fv.str
+					c.T = "s"
+					c.F = ""
+				} else {
+					c.V = fv.num
+					c.T = "f"
+				}
 				sh.Cells[axis] = c
 			}
 		}
 	}
 	return warnings
+}
+
+// ---------------------------------------------------------------------------
+// formulaValue — tagged union for numeric and string results
+// ---------------------------------------------------------------------------
+
+type valueKind int
+
+const (
+	valueNumber valueKind = iota
+	valueString
+)
+
+type formulaValue struct {
+	kind valueKind
+	num  float64
+	str  string
+}
+
+func numVal(f float64) formulaValue {
+	return formulaValue{kind: valueNumber, num: f}
+}
+
+func strVal(s string) formulaValue {
+	return formulaValue{kind: valueString, str: s}
+}
+
+func (v formulaValue) asNumber() (float64, error) {
+	if v.kind == valueNumber {
+		return v.num, nil
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(v.str), 64)
+	if err != nil {
+		return 0, fmt.Errorf("cannot convert %q to number", v.str)
+	}
+	return f, nil
+}
+
+func (v formulaValue) asString() string {
+	if v.kind == valueString {
+		return v.str
+	}
+	if v.num == math.Trunc(v.num) && !math.IsInf(v.num, 0) {
+		return strconv.FormatInt(int64(v.num), 10)
+	}
+	return strconv.FormatFloat(v.num, 'f', -1, 64)
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +113,8 @@ const (
 	tokenGT
 	tokenLE
 	tokenGE
+	tokenAmp
+	tokenString
 	tokenEOF
 	tokenIllegal
 )
@@ -111,6 +165,9 @@ var knownFuncs = map[string]bool{
 	"MODE": true, "MODE.SNGL": true, "SUBTOTAL": true,
 	"ISNUMBER": true, "ISBLANK": true, "ISTEXT": true, "ISNONTEXT": true, "ISERROR": true, "ISNA": true,
 	"ROW": true, "COLUMN": true,
+	"CONCAT": true, "CONCATENATE": true,
+	"LEFT": true, "RIGHT": true, "MID": true,
+	"LEN": true, "UPPER": true, "LOWER": true, "TRIM": true,
 }
 
 func (t *tokenizer) next() token {
@@ -166,6 +223,11 @@ func (t *tokenizer) next() token {
 	case ch == '=':
 		t.pos++
 		return token{typ: tokenEQ, lit: "="}
+	case ch == '&':
+		t.pos++
+		return token{typ: tokenAmp, lit: "&"}
+	case ch == '"':
+		return t.readString()
 	case ch == '.' || (ch >= '0' && ch <= '9'):
 		return t.readNumber()
 	default:
@@ -194,6 +256,27 @@ func (t *tokenizer) readNumber() token {
 		}
 	}
 	return token{typ: tokenNumber, lit: t.input[start:t.pos]}
+}
+
+func (t *tokenizer) readString() token {
+	t.pos++ // opening quote
+	var buf strings.Builder
+	for t.pos < len(t.input) {
+		ch := t.input[t.pos]
+		if ch == '"' {
+			t.pos++
+			// "" is an escaped quote
+			if t.pos < len(t.input) && t.input[t.pos] == '"' {
+				buf.WriteByte('"')
+				t.pos++
+				continue
+			}
+			break
+		}
+		buf.WriteByte(ch)
+		t.pos++
+	}
+	return token{typ: tokenString, lit: buf.String()}
 }
 
 func (t *tokenizer) readIdent() token {
@@ -248,22 +331,30 @@ func looksLikeCellRef(s string) bool {
 // ---------------------------------------------------------------------------
 
 type expr interface {
-	eval(ctx *evalContext) (float64, error)
+	eval(ctx *evalContext) (formulaValue, error)
 }
 
 type numberExpr struct {
 	val float64
 }
 
-func (e *numberExpr) eval(ctx *evalContext) (float64, error) {
-	return e.val, nil
+func (e *numberExpr) eval(ctx *evalContext) (formulaValue, error) {
+	return numVal(e.val), nil
+}
+
+type stringExpr struct {
+	val string
+}
+
+func (e *stringExpr) eval(ctx *evalContext) (formulaValue, error) {
+	return strVal(e.val), nil
 }
 
 type cellRefExpr struct {
 	ref string
 }
 
-func (e *cellRefExpr) eval(ctx *evalContext) (float64, error) {
+func (e *cellRefExpr) eval(ctx *evalContext) (formulaValue, error) {
 	return ctx.getCellValue(normalizeCellRef(e.ref))
 }
 
@@ -271,8 +362,8 @@ type rangeExpr struct {
 	start, end string
 }
 
-func (e *rangeExpr) eval(ctx *evalContext) (float64, error) {
-	return 0, fmt.Errorf("range %s:%s cannot be used outside a function", e.start, e.end)
+func (e *rangeExpr) eval(ctx *evalContext) (formulaValue, error) {
+	return formulaValue{}, fmt.Errorf("range %s:%s cannot be used outside a function", e.start, e.end)
 }
 
 type binaryExpr struct {
@@ -287,41 +378,52 @@ func boolToFloat(b bool) float64 {
 	return 0
 }
 
-func (e *binaryExpr) eval(ctx *evalContext) (float64, error) {
+func (e *binaryExpr) eval(ctx *evalContext) (formulaValue, error) {
 	left, err := e.left.eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	right, err := e.right.eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
+	}
+	lNum, lErr := left.asNumber()
+	rNum, rErr := right.asNumber()
+	// 算術演算子では文字列を 0 に暗黙変換（Excel 準拠：文字列セル参照は 0 扱い）
+	if lErr != nil {
+		lNum = 0
+	}
+	if rErr != nil {
+		rNum = 0
 	}
 	switch e.op {
 	case tokenPlus:
-		return left + right, nil
+		return numVal(lNum + rNum), nil
 	case tokenMinus:
-		return left - right, nil
+		return numVal(lNum - rNum), nil
 	case tokenStar:
-		return left * right, nil
+		return numVal(lNum * rNum), nil
 	case tokenSlash:
-		if right == 0 {
-			return 0, fmt.Errorf("division by zero")
+		if rNum == 0 {
+			return formulaValue{}, fmt.Errorf("division by zero")
 		}
-		return left / right, nil
+		return numVal(lNum / rNum), nil
+	case tokenAmp:
+		return strVal(left.asString() + right.asString()), nil
 	case tokenEQ:
-		return boolToFloat(left == right), nil
+		return numVal(boolToFloat(compareValues(left, right) == 0)), nil
 	case tokenNE:
-		return boolToFloat(left != right), nil
+		return numVal(boolToFloat(compareValues(left, right) != 0)), nil
 	case tokenLT:
-		return boolToFloat(left < right), nil
+		return numVal(boolToFloat(compareValues(left, right) < 0)), nil
 	case tokenGT:
-		return boolToFloat(left > right), nil
+		return numVal(boolToFloat(compareValues(left, right) > 0)), nil
 	case tokenLE:
-		return boolToFloat(left <= right), nil
+		return numVal(boolToFloat(compareValues(left, right) <= 0)), nil
 	case tokenGE:
-		return boolToFloat(left >= right), nil
+		return numVal(boolToFloat(compareValues(left, right) >= 0)), nil
 	}
-	return 0, fmt.Errorf("internal: unknown binary operator %d", e.op)
+	return formulaValue{}, fmt.Errorf("internal: unknown binary operator %d", e.op)
 }
 
 type unaryExpr struct {
@@ -329,13 +431,110 @@ type unaryExpr struct {
 	op      tokenType
 }
 
-func (e *unaryExpr) eval(ctx *evalContext) (float64, error) {
+// compareValues compares two formulaValues following Excel rules:
+// numbers < strings; numbers compared numerically; strings compared
+// case-insensitively.
+func compareValues(a, b formulaValue) int {
+	if a.kind == valueNumber && b.kind == valueNumber {
+		switch {
+		case a.num < b.num:
+			return -1
+		case a.num > b.num:
+			return 1
+		default:
+			return 0
+		}
+	}
+	if a.kind == valueNumber && b.kind == valueString {
+		return -1
+	}
+	if a.kind == valueString && b.kind == valueNumber {
+		return 1
+	}
+	return strings.Compare(strings.ToUpper(a.str), strings.ToUpper(b.str))
+}
+
+// compareOp applies a comparison operator token to two formulaValues.
+func compareOp(a, b formulaValue, op tokenType) bool {
+	cmp := compareValues(a, b)
+	switch op {
+	case tokenEQ:
+		return cmp == 0
+	case tokenNE:
+		return cmp != 0
+	case tokenLT:
+		return cmp < 0
+	case tokenGT:
+		return cmp > 0
+	case tokenLE:
+		return cmp <= 0
+	case tokenGE:
+		return cmp >= 0
+	default:
+		return false
+	}
+}
+
+// matchCriteria checks whether a cell value satisfies the given criteria.
+// For string criteria with a comparison operator prefix (e.g., ">10", "<>NG"),
+// the operator is parsed and applied against the extracted value (numeric if
+// the remainder parses as a number, otherwise string). Plain values use exact
+// match via compareValues.
+func matchCriteria(cellVal, criteria formulaValue) bool {
+	if criteria.kind == valueString {
+		s := criteria.str
+		if len(s) >= 2 {
+			var op tokenType
+			var remainder string
+			switch {
+			case strings.HasPrefix(s, "<>"):
+				op = tokenNE
+				remainder = s[2:]
+			case strings.HasPrefix(s, "<="):
+				op = tokenLE
+				remainder = s[2:]
+			case strings.HasPrefix(s, ">="):
+				op = tokenGE
+				remainder = s[2:]
+			case strings.HasPrefix(s, "="):
+				op = tokenEQ
+				remainder = s[1:]
+			case strings.HasPrefix(s, "<"):
+				op = tokenLT
+				remainder = s[1:]
+			case strings.HasPrefix(s, ">"):
+				op = tokenGT
+				remainder = s[1:]
+			}
+					if op != 0 && remainder != "" {
+				var criteriaVal formulaValue
+				if n, err := strconv.ParseFloat(remainder, 64); err == nil {
+					criteriaVal = numVal(n)
+				} else {
+					criteriaVal = strVal(remainder)
+				}
+				return compareOp(cellVal, criteriaVal, op)
+			}
+		}
+		// Excel: a plain string criteria that parses as a number is treated as numeric
+		if n, err := strconv.ParseFloat(s, 64); err == nil {
+			return compareValues(cellVal, numVal(n)) == 0
+		}
+	}
+	return compareValues(cellVal, criteria) == 0
+}
+
+func (e *unaryExpr) eval(ctx *evalContext) (formulaValue, error) {
 	val, err := e.operand.eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	if e.op == tokenMinus {
-		return -val, nil
+		n, nerr := val.asNumber()
+		if nerr != nil {
+			return formulaValue{}, nerr
+		}
+		return numVal(-n), nil
 	}
 	return val, nil
 }
@@ -345,120 +544,128 @@ type funcCallExpr struct {
 	args []expr
 }
 
-func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
+// wrapNum wraps a (float64, error) result from a numeric evalFunc into (formulaValue, error).
+func wrapNum(f float64, err error) (formulaValue, error) {
+	if err != nil {
+		return formulaValue{}, err
+	}
+	return numVal(f), nil
+}
+
+func (e *funcCallExpr) eval(ctx *evalContext) (formulaValue, error) {
 	switch e.name {
 	case "SUM":
-		return evalFuncSum(ctx, e.args)
+		return wrapNum(evalFuncSum(ctx, e.args))
 	case "AVERAGE":
-		return evalFuncAverage(ctx, e.args)
+		return wrapNum(evalFuncAverage(ctx, e.args))
 	case "COUNT":
-		return evalFuncCount(ctx, e.args)
+		return wrapNum(evalFuncCount(ctx, e.args))
 	case "MIN":
-		return evalFuncMin(ctx, e.args)
+		return wrapNum(evalFuncMin(ctx, e.args))
 	case "MAX":
-		return evalFuncMax(ctx, e.args)
+		return wrapNum(evalFuncMax(ctx, e.args))
 	case "ABS":
-		return evalFuncAbs(ctx, e.args)
+		return wrapNum(evalFuncAbs(ctx, e.args))
 	case "ROUND":
-		return evalFuncRound(ctx, e.args)
+		return wrapNum(evalFuncRound(ctx, e.args))
 	case "IF":
 		return evalFuncIf(ctx, e.args)
 	case "AND":
-		return evalFuncAnd(ctx, e.args)
+		return wrapNum(evalFuncAnd(ctx, e.args))
 	case "OR":
-		return evalFuncOr(ctx, e.args)
+		return wrapNum(evalFuncOr(ctx, e.args))
 	case "NOT":
-		return evalFuncNot(ctx, e.args)
+		return wrapNum(evalFuncNot(ctx, e.args))
 	case "PRODUCT":
-		return evalFuncProduct(ctx, e.args)
+		return wrapNum(evalFuncProduct(ctx, e.args))
 	case "ROUNDUP":
-		return evalFuncRoundup(ctx, e.args)
+		return wrapNum(evalFuncRoundup(ctx, e.args))
 	case "ROUNDDOWN":
-		return evalFuncRounddown(ctx, e.args)
+		return wrapNum(evalFuncRounddown(ctx, e.args))
 	case "SUMPRODUCT":
-		return evalFuncSumproduct(ctx, e.args)
+		return wrapNum(evalFuncSumproduct(ctx, e.args))
 	case "MEDIAN":
-		return evalFuncMedian(ctx, e.args)
+		return wrapNum(evalFuncMedian(ctx, e.args))
 	case "QUARTILE", "QUARTILE.INC":
-		return evalFuncQuartileInc(ctx, e.args)
+		return wrapNum(evalFuncQuartileInc(ctx, e.args))
 	case "PERCENTILE", "PERCENTILE.INC":
-		return evalFuncPercentileInc(ctx, e.args)
+		return wrapNum(evalFuncPercentileInc(ctx, e.args))
 	case "STDEV", "STDEV.S":
-		return evalFuncStdevS(ctx, e.args)
+		return wrapNum(evalFuncStdevS(ctx, e.args))
 	case "STDEV.P":
-		return evalFuncStdevP(ctx, e.args)
+		return wrapNum(evalFuncStdevP(ctx, e.args))
 	case "SUMIF":
-		return evalFuncSumif(ctx, e.args)
+		return wrapNum(evalFuncSumif(ctx, e.args))
 	case "COUNTIF":
-		return evalFuncCountif(ctx, e.args)
+		return wrapNum(evalFuncCountif(ctx, e.args))
 	case "FLOOR":
-		return evalFuncFloor(ctx, e.args)
+		return wrapNum(evalFuncFloor(ctx, e.args))
 	case "CEILING":
-		return evalFuncCeiling(ctx, e.args)
+		return wrapNum(evalFuncCeiling(ctx, e.args))
 	case "MOD":
-		return evalFuncMod(ctx, e.args)
+		return wrapNum(evalFuncMod(ctx, e.args))
 	case "POWER":
-		return evalFuncPower(ctx, e.args)
+		return wrapNum(evalFuncPower(ctx, e.args))
 	case "SQRT":
-		return evalFuncSqrt(ctx, e.args)
+		return wrapNum(evalFuncSqrt(ctx, e.args))
 	case "INT":
-		return evalFuncInt(ctx, e.args)
+		return wrapNum(evalFuncInt(ctx, e.args))
 	case "COUNTA":
-		return evalFuncCounta(ctx, e.args)
+		return wrapNum(evalFuncCounta(ctx, e.args))
 	case "VAR", "VAR.S":
-		return evalFuncVarS(ctx, e.args)
+		return wrapNum(evalFuncVarS(ctx, e.args))
 	case "VAR.P":
-		return evalFuncVarP(ctx, e.args)
+		return wrapNum(evalFuncVarP(ctx, e.args))
 	case "GEOMEAN":
-		return evalFuncGeomean(ctx, e.args)
+		return wrapNum(evalFuncGeomean(ctx, e.args))
 	case "HARMEAN":
-		return evalFuncHarmean(ctx, e.args)
+		return wrapNum(evalFuncHarmean(ctx, e.args))
 	case "TRIMMEAN":
-		return evalFuncTrimmean(ctx, e.args)
+		return wrapNum(evalFuncTrimmean(ctx, e.args))
 	case "RANK", "RANK.EQ":
-		return evalFuncRank(ctx, e.args)
+		return wrapNum(evalFuncRank(ctx, e.args))
 	case "LARGE":
-		return evalFuncLarge(ctx, e.args)
+		return wrapNum(evalFuncLarge(ctx, e.args))
 	case "SMALL":
-		return evalFuncSmall(ctx, e.args)
+		return wrapNum(evalFuncSmall(ctx, e.args))
 	case "TODAY":
-		return evalFuncToday(ctx, e.args)
+		return wrapNum(evalFuncToday(ctx, e.args))
 	case "NOW":
-		return evalFuncNow(ctx, e.args)
+		return wrapNum(evalFuncNow(ctx, e.args))
 	case "YEAR":
-		return evalFuncYear(ctx, e.args)
+		return wrapNum(evalFuncYear(ctx, e.args))
 	case "MONTH":
-		return evalFuncMonth(ctx, e.args)
+		return wrapNum(evalFuncMonth(ctx, e.args))
 	case "DAY":
-		return evalFuncDay(ctx, e.args)
+		return wrapNum(evalFuncDay(ctx, e.args))
 	case "DAYS":
-		return evalFuncDays(ctx, e.args)
+		return wrapNum(evalFuncDays(ctx, e.args))
 	case "DATE":
-		return evalFuncDate(ctx, e.args)
+		return wrapNum(evalFuncDate(ctx, e.args))
 	case "EDATE":
-		return evalFuncEdate(ctx, e.args)
+		return wrapNum(evalFuncEdate(ctx, e.args))
 	case "EOMONTH":
-		return evalFuncEomonth(ctx, e.args)
+		return wrapNum(evalFuncEomonth(ctx, e.args))
 	case "WEEKDAY":
-		return evalFuncWeekday(ctx, e.args)
+		return wrapNum(evalFuncWeekday(ctx, e.args))
 	case "WEEKNUM":
-		return evalFuncWeeknum(ctx, e.args)
+		return wrapNum(evalFuncWeeknum(ctx, e.args))
 	case "NETWORKDAYS":
-		return evalFuncNetworkdays(ctx, e.args)
+		return wrapNum(evalFuncNetworkdays(ctx, e.args))
 	case "WORKDAY":
-		return evalFuncWorkday(ctx, e.args)
+		return wrapNum(evalFuncWorkday(ctx, e.args))
 	case "AVERAGEIF":
-		return evalFuncAverageif(ctx, e.args)
+		return wrapNum(evalFuncAverageif(ctx, e.args))
 	case "SUMIFS":
-		return evalFuncSumifs(ctx, e.args)
+		return wrapNum(evalFuncSumifs(ctx, e.args))
 	case "COUNTIFS":
-		return evalFuncCountifs(ctx, e.args)
+		return wrapNum(evalFuncCountifs(ctx, e.args))
 	case "AVERAGEIFS":
-		return evalFuncAverageifs(ctx, e.args)
+		return wrapNum(evalFuncAverageifs(ctx, e.args))
 	case "MINIFS":
-		return evalFuncMinifs(ctx, e.args)
+		return wrapNum(evalFuncMinifs(ctx, e.args))
 	case "MAXIFS":
-		return evalFuncMaxifs(ctx, e.args)
+		return wrapNum(evalFuncMaxifs(ctx, e.args))
 	case "IFS":
 		return evalFuncIfs(ctx, e.args)
 	case "SWITCH":
@@ -472,93 +679,109 @@ func (e *funcCallExpr) eval(ctx *evalContext) (float64, error) {
 	case "INDEX":
 		return evalFuncIndex(ctx, e.args)
 	case "MATCH":
-		return evalFuncMatch(ctx, e.args)
+		return wrapNum(evalFuncMatch(ctx, e.args))
 	case "CHOOSE":
 		return evalFuncChoose(ctx, e.args)
+	case "CONCAT", "CONCATENATE":
+		return evalFuncConcat(ctx, e.args)
+	case "LEFT":
+		return evalFuncLeft(ctx, e.args)
+	case "RIGHT":
+		return evalFuncRight(ctx, e.args)
+	case "MID":
+		return evalFuncMid(ctx, e.args)
+	case "LEN":
+		return evalFuncLen(ctx, e.args)
+	case "UPPER":
+		return evalFuncUpper(ctx, e.args)
+	case "LOWER":
+		return evalFuncLower(ctx, e.args)
+	case "TRIM":
+		return evalFuncTrim(ctx, e.args)
 	case "TRUNC":
-		return evalFuncTrunc(ctx, e.args)
+		return wrapNum(evalFuncTrunc(ctx, e.args))
 	case "SIGN":
-		return evalFuncSign(ctx, e.args)
+		return wrapNum(evalFuncSign(ctx, e.args))
 	case "PI":
-		return evalFuncPi(ctx, e.args)
+		return wrapNum(evalFuncPi(ctx, e.args))
 	case "RAND":
-		return evalFuncRand(ctx, e.args)
+		return wrapNum(evalFuncRand(ctx, e.args))
 	case "SIN":
-		return evalFuncSin(ctx, e.args)
+		return wrapNum(evalFuncSin(ctx, e.args))
 	case "COS":
-		return evalFuncCos(ctx, e.args)
+		return wrapNum(evalFuncCos(ctx, e.args))
 	case "TAN":
-		return evalFuncTan(ctx, e.args)
+		return wrapNum(evalFuncTan(ctx, e.args))
 	case "LN":
-		return evalFuncLn(ctx, e.args)
+		return wrapNum(evalFuncLn(ctx, e.args))
 	case "LOG10":
-		return evalFuncLog10(ctx, e.args)
+		return wrapNum(evalFuncLog10(ctx, e.args))
 	case "EXP":
-		return evalFuncExp(ctx, e.args)
+		return wrapNum(evalFuncExp(ctx, e.args))
 	case "ASIN":
-		return evalFuncAsin(ctx, e.args)
+		return wrapNum(evalFuncAsin(ctx, e.args))
 	case "ACOS":
-		return evalFuncAcos(ctx, e.args)
+		return wrapNum(evalFuncAcos(ctx, e.args))
 	case "ATAN":
-		return evalFuncAtan(ctx, e.args)
+		return wrapNum(evalFuncAtan(ctx, e.args))
 	case "DEGREES":
-		return evalFuncDegrees(ctx, e.args)
+		return wrapNum(evalFuncDegrees(ctx, e.args))
 	case "RADIANS":
-		return evalFuncRadians(ctx, e.args)
+		return wrapNum(evalFuncRadians(ctx, e.args))
 	case "ATAN2":
-		return evalFuncAtan2(ctx, e.args)
+		return wrapNum(evalFuncAtan2(ctx, e.args))
 	case "SINH":
-		return evalFuncSinh(ctx, e.args)
+		return wrapNum(evalFuncSinh(ctx, e.args))
 	case "COSH":
-		return evalFuncCosh(ctx, e.args)
+		return wrapNum(evalFuncCosh(ctx, e.args))
 	case "TANH":
-		return evalFuncTanh(ctx, e.args)
+		return wrapNum(evalFuncTanh(ctx, e.args))
 	case "ASINH":
-		return evalFuncAsinh(ctx, e.args)
+		return wrapNum(evalFuncAsinh(ctx, e.args))
 	case "ACOSH":
-		return evalFuncAcosh(ctx, e.args)
+		return wrapNum(evalFuncAcosh(ctx, e.args))
 	case "ATANH":
-		return evalFuncAtanh(ctx, e.args)
+		return wrapNum(evalFuncAtanh(ctx, e.args))
 	case "LOG":
-		return evalFuncLog(ctx, e.args)
+		return wrapNum(evalFuncLog(ctx, e.args))
 	case "FACT":
-		return evalFuncFact(ctx, e.args)
+		return wrapNum(evalFuncFact(ctx, e.args))
 	case "SUMSQ":
-		return evalFuncSumsq(ctx, e.args)
+		return wrapNum(evalFuncSumsq(ctx, e.args))
 	case "EVEN":
-		return evalFuncEven(ctx, e.args)
+		return wrapNum(evalFuncEven(ctx, e.args))
 	case "ODD":
-		return evalFuncOdd(ctx, e.args)
+		return wrapNum(evalFuncOdd(ctx, e.args))
 	case "MROUND":
-		return evalFuncMround(ctx, e.args)
+		return wrapNum(evalFuncMround(ctx, e.args))
 	case "DELTA":
-		return evalFuncDelta(ctx, e.args)
+		return wrapNum(evalFuncDelta(ctx, e.args))
 	case "GESTEP":
-		return evalFuncGestep(ctx, e.args)
+		return wrapNum(evalFuncGestep(ctx, e.args))
 	case "HLOOKUP":
 		return evalFuncHlookup(ctx, e.args)
 	case "MODE", "MODE.SNGL":
-		return evalFuncMode(ctx, e.args)
+		return wrapNum(evalFuncMode(ctx, e.args))
 	case "SUBTOTAL":
-		return evalFuncSubtotal(ctx, e.args)
+		return wrapNum(evalFuncSubtotal(ctx, e.args))
 	case "ISNUMBER":
-		return evalFuncIsnumber(ctx, e.args)
+		return wrapNum(evalFuncIsnumber(ctx, e.args))
 	case "ISBLANK":
-		return evalFuncIsblank(ctx, e.args)
+		return wrapNum(evalFuncIsblank(ctx, e.args))
 	case "ISTEXT":
-		return evalFuncIstext(ctx, e.args)
+		return wrapNum(evalFuncIstext(ctx, e.args))
 	case "ISNONTEXT":
-		return evalFuncIsnontext(ctx, e.args)
+		return wrapNum(evalFuncIsnontext(ctx, e.args))
 	case "ISERROR":
-		return evalFuncIserror(ctx, e.args)
+		return wrapNum(evalFuncIserror(ctx, e.args))
 	case "ISNA":
-		return evalFuncIsna(ctx, e.args)
+		return wrapNum(evalFuncIsna(ctx, e.args))
 	case "ROW":
-		return evalFuncRow(ctx, e.args)
+		return wrapNum(evalFuncRow(ctx, e.args))
 	case "COLUMN":
-		return evalFuncColumn(ctx, e.args)
+		return wrapNum(evalFuncColumn(ctx, e.args))
 	}
-	return 0, fmt.Errorf("unknown function: %s", e.name)
+	return formulaValue{}, fmt.Errorf("unknown function: %s", e.name)
 }
 
 // ---------------------------------------------------------------------------
@@ -626,7 +849,7 @@ func (p *parser) parseComparison() expr {
 
 func (p *parser) parseAddition() expr {
 	left := p.parseTerm()
-	for p.peek().typ == tokenPlus || p.peek().typ == tokenMinus {
+	for p.peek().typ == tokenPlus || p.peek().typ == tokenMinus || p.peek().typ == tokenAmp {
 		op := p.next().typ
 		right := p.parseTerm()
 		left = &binaryExpr{left: left, right: right, op: op}
@@ -670,6 +893,9 @@ func (p *parser) parsePrimary() expr {
 			return &numberExpr{val: 0}
 		}
 		return &numberExpr{val: val}
+
+	case tokenString:
+		return &stringExpr{val: tok.lit}
 
 	case tokenCellRef:
 		return &cellRefExpr{ref: tok.lit}
@@ -747,7 +973,7 @@ func (p *parser) error(format string, args ...interface{}) {
 type evalContext struct {
 	cells      map[string]Cell
 	visiting   map[string]bool
-	cache      map[string]float64
+	cache      map[string]formulaValue
 	formulaRef string
 }
 
@@ -755,16 +981,16 @@ func newEvalContext(cells map[string]Cell) *evalContext {
 	return &evalContext{
 		cells:    cells,
 		visiting: make(map[string]bool),
-		cache:    make(map[string]float64),
+		cache:    make(map[string]formulaValue),
 	}
 }
 
-func (ctx *evalContext) evaluate(originAxis, formula string) (float64, error) {
+func (ctx *evalContext) evaluate(originAxis, formula string) (formulaValue, error) {
 	if cached, ok := ctx.cache[originAxis]; ok {
 		return cached, nil
 	}
 	if ctx.visiting[originAxis] {
-		return 0, fmt.Errorf("circular reference detected")
+		return formulaValue{}, fmt.Errorf("circular reference detected")
 	}
 	ctx.visiting[originAxis] = true
 	defer delete(ctx.visiting, originAxis)
@@ -773,25 +999,28 @@ func (ctx *evalContext) evaluate(originAxis, formula string) (float64, error) {
 	p := newParser(formula)
 	ast, err := p.parse()
 	if err != nil {
-		return 0, fmt.Errorf("parse error: %w", err)
+		return formulaValue{}, fmt.Errorf("parse error: %w", err)
 	}
 	val, err := ast.eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	ctx.cache[originAxis] = val
 	return val, nil
 }
 
-// getCellValue returns the numeric value of a cell by reference.
-// If the cell has a formula without a cached value, it is evaluated recursively.
-func (ctx *evalContext) getCellValue(ref string) (float64, error) {
+// getCellValue returns the value of a cell by reference as a formulaValue.
+// String cells are returned as strVal; numeric/formula cells as numVal.
+func (ctx *evalContext) getCellValue(ref string) (formulaValue, error) {
 	cell, ok := ctx.cells[ref]
 	if !ok {
-		return 0, nil
+		return numVal(0), nil
 	}
 	if cell.V != nil {
-		return toFloat64(cell.V), nil
+		if s, isStr := cell.V.(string); isStr {
+			return strVal(s), nil
+		}
+		return numVal(toFloat64(cell.V)), nil
 	}
 	if cell.T == "f" && cell.F != "" {
 		if cached, ok := ctx.cache[ref]; ok {
@@ -799,7 +1028,7 @@ func (ctx *evalContext) getCellValue(ref string) (float64, error) {
 		}
 		return ctx.evaluate(ref, cell.F)
 	}
-	return 0, nil
+	return numVal(0), nil
 }
 
 func (ctx *evalContext) collectRange(start, end string) []float64 {
@@ -815,23 +1044,38 @@ func (ctx *evalContext) collectRange(start, end string) []float64 {
 				continue
 			}
 		}
-		v, err := ctx.getCellValue(ref)
+		fv, err := ctx.getCellValue(ref)
 		if err == nil {
-			vals = append(vals, v)
+			if n, nerr := fv.asNumber(); nerr == nil {
+				vals = append(vals, n)
+			}
 		}
 	}
 	return vals
+}
+
+// evalArgNum evaluates a single expression and returns its numeric value.
+func (ctx *evalContext) evalArgNum(arg expr) (float64, error) {
+	fv, err := arg.eval(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return fv.asNumber()
 }
 
 func (ctx *evalContext) evalArg(arg expr) ([]float64, error) {
 	if r, ok := arg.(*rangeExpr); ok {
 		return ctx.collectRange(r.start, r.end), nil
 	}
-	val, err := arg.eval(ctx)
+	fv, err := arg.eval(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return []float64{val}, nil
+	n, nerr := fv.asNumber()
+	if nerr != nil {
+		return nil, nerr
+	}
+	return []float64{n}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -955,7 +1199,7 @@ func evalFuncAbs(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ABS requires exactly 1 argument")
 	}
-	val, err := args[0].eval(ctx)
+	val, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -966,11 +1210,11 @@ func evalFuncRound(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("ROUND requires exactly 2 arguments")
 	}
-	val, err := args[0].eval(ctx)
+	val, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	digitsRaw, err := args[1].eval(ctx)
+	digitsRaw, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -1000,11 +1244,11 @@ func evalFuncRoundup(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("ROUNDUP requires exactly 2 arguments")
 	}
-	val, err := args[0].eval(ctx)
+	val, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	digitsRaw, err := args[1].eval(ctx)
+	digitsRaw, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -1020,11 +1264,11 @@ func evalFuncRounddown(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("ROUNDDOWN requires exactly 2 arguments")
 	}
-	val, err := args[0].eval(ctx)
+	val, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	digitsRaw, err := args[1].eval(ctx)
+	digitsRaw, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -1157,10 +1401,12 @@ func evalFuncSumif(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
-		if cellVal == criteriaVal {
+ 		if matchCriteria(cellVal, criteriaVal) {
 			sumVal, err := ctx.getCellValue(sumRefs[i])
 			if err == nil {
-				total += sumVal
+				if n, nerr := sumVal.asNumber(); nerr == nil {
+					total += n
+				}
 			}
 		}
 	}
@@ -1185,7 +1431,7 @@ func evalFuncCountif(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
-		if cellVal == criteriaVal {
+ 		if matchCriteria(cellVal, criteriaVal) {
 			count++
 		}
 	}

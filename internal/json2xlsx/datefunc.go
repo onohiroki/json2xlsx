@@ -36,7 +36,7 @@ func evalFuncYear(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("YEAR requires exactly 1 argument")
 	}
-	v, err := args[0].eval(ctx)
+	v, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -48,7 +48,7 @@ func evalFuncMonth(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("MONTH requires exactly 1 argument")
 	}
-	v, err := args[0].eval(ctx)
+	v, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -60,7 +60,7 @@ func evalFuncDay(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("DAY requires exactly 1 argument")
 	}
-	v, err := args[0].eval(ctx)
+	v, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -72,13 +72,13 @@ func evalFuncWeekday(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("WEEKDAY requires 1 or 2 arguments")
 	}
-	v, err := args[0].eval(ctx)
+	v, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
 	returnType := 1.0
 	if len(args) == 2 {
-		returnType, err = args[1].eval(ctx)
+		returnType, err = ctx.evalArgNum(args[1])
 		if err != nil {
 			return 0, err
 		}
@@ -101,15 +101,15 @@ func evalFuncDate(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 3 {
 		return 0, fmt.Errorf("DATE requires exactly 3 arguments")
 	}
-	year, err := args[0].eval(ctx)
+	year, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	month, err := args[1].eval(ctx)
+	month, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
-	day, err := args[2].eval(ctx)
+	day, err := ctx.evalArgNum(args[2])
 	if err != nil {
 		return 0, err
 	}
@@ -121,11 +121,11 @@ func evalFuncEdate(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("EDATE requires exactly 2 arguments")
 	}
-	start, err := args[0].eval(ctx)
+	start, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	months, err := args[1].eval(ctx)
+	months, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -144,11 +144,11 @@ func evalFuncEomonth(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("EOMONTH requires exactly 2 arguments")
 	}
-	start, err := args[0].eval(ctx)
+	start, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	months, err := args[1].eval(ctx)
+	months, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -199,11 +199,11 @@ func evalFuncDays(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("DAYS requires exactly 2 arguments")
 	}
-	end, err := args[0].eval(ctx)
+	end, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	start, err := args[1].eval(ctx)
+	start, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -214,11 +214,11 @@ func evalFuncNetworkdays(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 2 {
 		return 0, fmt.Errorf("NETWORKDAYS requires at least 2 arguments")
 	}
-	start, err := args[0].eval(ctx)
+	start, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	end, err := args[1].eval(ctx)
+	end, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -251,11 +251,11 @@ func evalFuncWorkday(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 2 {
 		return 0, fmt.Errorf("WORKDAY requires at least 2 arguments")
 	}
-	start, err := args[0].eval(ctx)
+	start, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	days, err := args[1].eval(ctx)
+	days, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -285,13 +285,13 @@ func evalFuncWeeknum(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("WEEKNUM requires 1 or 2 arguments")
 	}
-	v, err := args[0].eval(ctx)
+	v, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
 	returnType := 1.0
 	if len(args) == 2 {
-		returnType, err = args[1].eval(ctx)
+		returnType, err = ctx.evalArgNum(args[1])
 		if err != nil {
 			return 0, err
 		}

@@ -10,11 +10,11 @@ func evalFuncFloor(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("FLOOR requires exactly 2 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	sig, err := args[1].eval(ctx)
+	sig, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -31,11 +31,11 @@ func evalFuncCeiling(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("CEILING requires exactly 2 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	sig, err := args[1].eval(ctx)
+	sig, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -52,11 +52,11 @@ func evalFuncMod(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("MOD requires exactly 2 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	d, err := args[1].eval(ctx)
+	d, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -70,11 +70,11 @@ func evalFuncPower(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("POWER requires exactly 2 arguments")
 	}
-	b, err := args[0].eval(ctx)
+	b, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	e, err := args[1].eval(ctx)
+	e, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -85,7 +85,7 @@ func evalFuncSqrt(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("SQRT requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -99,7 +99,7 @@ func evalFuncInt(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("INT requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -110,13 +110,13 @@ func evalFuncTrunc(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("TRUNC requires 1 or 2 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
 	digits := 0
 	if len(args) == 2 {
-		d, err := args[1].eval(ctx)
+		d, err := ctx.evalArgNum(args[1])
 		if err != nil {
 			return 0, err
 		}
@@ -130,7 +130,7 @@ func evalFuncSign(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("SIGN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -161,7 +161,7 @@ func evalFuncSin(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("SIN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -172,7 +172,7 @@ func evalFuncCos(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("COS requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -183,7 +183,7 @@ func evalFuncTan(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("TAN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -194,7 +194,7 @@ func evalFuncLn(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("LN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -208,7 +208,7 @@ func evalFuncLog10(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("LOG10 requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -222,7 +222,7 @@ func evalFuncExp(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("EXP requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -233,7 +233,7 @@ func evalFuncAsin(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ASIN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -247,7 +247,7 @@ func evalFuncAcos(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ACOS requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -261,7 +261,7 @@ func evalFuncAtan(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ATAN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -272,7 +272,7 @@ func evalFuncDegrees(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("DEGREES requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -283,7 +283,7 @@ func evalFuncRadians(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("RADIANS requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -294,11 +294,11 @@ func evalFuncAtan2(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("ATAN2 requires exactly 2 arguments")
 	}
-	x, err := args[0].eval(ctx)
+	x, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	y, err := args[1].eval(ctx)
+	y, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -309,7 +309,7 @@ func evalFuncSinh(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("SINH requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -320,7 +320,7 @@ func evalFuncCosh(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("COSH requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -331,7 +331,7 @@ func evalFuncTanh(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("TANH requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -342,7 +342,7 @@ func evalFuncAsinh(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ASINH requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -353,7 +353,7 @@ func evalFuncAcosh(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ACOSH requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -367,7 +367,7 @@ func evalFuncAtanh(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ATANH requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -381,7 +381,7 @@ func evalFuncLog(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("LOG requires 1 or 2 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -391,7 +391,7 @@ func evalFuncLog(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) == 1 {
 		return math.Log(n), nil
 	}
-	base, err := args[1].eval(ctx)
+	base, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -405,7 +405,7 @@ func evalFuncFact(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("FACT requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -469,7 +469,7 @@ func evalFuncEven(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("EVEN requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -486,7 +486,7 @@ func evalFuncOdd(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("ODD requires exactly 1 argument")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -511,11 +511,11 @@ func evalFuncMround(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) != 2 {
 		return 0, fmt.Errorf("MROUND requires exactly 2 arguments")
 	}
-	n, err := args[0].eval(ctx)
+	n, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
-	m, err := args[1].eval(ctx)
+	m, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -537,7 +537,7 @@ func evalFuncDelta(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("DELTA requires 1 or 2 arguments")
 	}
-	v1, err := args[0].eval(ctx)
+	v1, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -547,7 +547,7 @@ func evalFuncDelta(ctx *evalContext, args []expr) (float64, error) {
 		}
 		return 0, nil
 	}
-	v2, err := args[1].eval(ctx)
+	v2, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}
@@ -561,7 +561,7 @@ func evalFuncGestep(ctx *evalContext, args []expr) (float64, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return 0, fmt.Errorf("GESTEP requires 1 or 2 arguments")
 	}
-	v1, err := args[0].eval(ctx)
+	v1, err := ctx.evalArgNum(args[0])
 	if err != nil {
 		return 0, err
 	}
@@ -571,7 +571,7 @@ func evalFuncGestep(ctx *evalContext, args []expr) (float64, error) {
 		}
 		return 0, nil
 	}
-	v2, err := args[1].eval(ctx)
+	v2, err := ctx.evalArgNum(args[1])
 	if err != nil {
 		return 0, err
 	}

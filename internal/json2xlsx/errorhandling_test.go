@@ -47,6 +47,31 @@ func TestEval_IferrorWrongArgCount(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Step 3: IFERROR の文字列透過対応
+// ---------------------------------------------------------------------------
+
+func TestEval_IferrorStringResult(t *testing.T) {
+	got := evalFormulaStr(t, nil, `IFERROR(1/0,"エラー発生")`)
+	if got != "エラー発生" {
+		t.Errorf("IFERROR string fallback = %q, want エラー発生", got)
+	}
+}
+
+func TestEval_IferrorPassesString(t *testing.T) {
+	got := evalFormulaStr(t, nil, `IFERROR("正常",999)`)
+	if got != "正常" {
+		t.Errorf("IFERROR pass string = %q, want 正常", got)
+	}
+}
+
+func TestEval_IferrorNestedString(t *testing.T) {
+	got := evalFormulaStr(t, nil, `IFERROR(IFERROR(1/0,"inner error"),"outer")`)
+	if got != "inner error" {
+		t.Errorf("IFERROR nested string = %q, want inner error", got)
+	}
+}
+
 func TestEval_IferrorWithCellRef(t *testing.T) {
 	cells := map[string]Cell{
 		"A1": {T: "n", V: 42.0},

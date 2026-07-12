@@ -2,28 +2,28 @@ package json2xlsx
 
 import "fmt"
 
-func evalFuncChoose(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncChoose(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 2 {
-		return 0, fmt.Errorf("CHOOSE requires at least 2 arguments")
+		return formulaValue{}, fmt.Errorf("CHOOSE requires at least 2 arguments")
 	}
-	idxVal, err := args[0].eval(ctx)
+	idxVal, err := ctx.evalArgNum(args[0])
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	idx := int(idxVal)
 	if idx < 1 || idx >= len(args) {
-		return 0, fmt.Errorf("CHOOSE index out of range")
+		return formulaValue{}, fmt.Errorf("CHOOSE index out of range")
 	}
 	return args[idx].eval(ctx)
 }
 
-func evalFuncVlookup(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncVlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 3 || len(args) > 4 {
-		return 0, fmt.Errorf("VLOOKUP requires 3 or 4 arguments")
+		return formulaValue{}, fmt.Errorf("VLOOKUP requires 3 or 4 arguments")
 	}
 	lookupVal, err := args[0].eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	var start, end string
 	switch a := args[1].(type) {
@@ -32,7 +32,7 @@ func evalFuncVlookup(ctx *evalContext, args []expr) (float64, error) {
 	case *cellRefExpr:
 		start, end = a.ref, a.ref
 	default:
-		return 0, fmt.Errorf("VLOOKUP second argument must be a cell reference or range")
+		return formulaValue{}, fmt.Errorf("VLOOKUP second argument must be a cell reference or range")
 	}
 	c1, r1 := parseCellRef(start)
 	c2, r2 := parseCellRef(end)
@@ -46,21 +46,21 @@ func evalFuncVlookup(ctx *evalContext, args []expr) (float64, error) {
 	}
 	numCols := maxCol - minCol + 1
 	numRows := maxRow - minRow + 1
-	colIdxVal, err := args[2].eval(ctx)
+	colIdxVal, err := ctx.evalArgNum(args[2])
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	colIdx := int(colIdxVal)
 	if colIdx < 1 || colIdx > numCols {
-		return 0, fmt.Errorf("VLOOKUP column index out of range")
+		return formulaValue{}, fmt.Errorf("VLOOKUP column index out of range")
 	}
 	if len(args) == 4 {
-		approx, err := args[3].eval(ctx)
+		approx, err := ctx.evalArgNum(args[3])
 		if err != nil {
-			return 0, err
+			return formulaValue{}, err
 		}
 		if approx != 0 {
-			return 0, fmt.Errorf("VLOOKUP approximate match not yet supported")
+			return formulaValue{}, fmt.Errorf("VLOOKUP approximate match not yet supported")
 		}
 	}
 	refs := expandRange(start, end)
@@ -69,20 +69,24 @@ func evalFuncVlookup(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
-		if cellVal == lookupVal {
-			return ctx.getCellValue(refs[(colIdx-1)*numRows+r])
+		if compareValues(cellVal, lookupVal) == 0 {
+			fv, err := ctx.getCellValue(refs[(colIdx-1)*numRows+r])
+			if err != nil {
+				return formulaValue{}, err
+			}
+			return fv, nil
 		}
 	}
-	return 0, fmt.Errorf("VLOOKUP value not found")
+	return formulaValue{}, fmt.Errorf("VLOOKUP value not found")
 }
 
-func evalFuncHlookup(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncHlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 3 || len(args) > 4 {
-		return 0, fmt.Errorf("HLOOKUP requires 3 or 4 arguments")
+		return formulaValue{}, fmt.Errorf("HLOOKUP requires 3 or 4 arguments")
 	}
 	lookupVal, err := args[0].eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	var start, end string
 	switch a := args[1].(type) {
@@ -91,7 +95,7 @@ func evalFuncHlookup(ctx *evalContext, args []expr) (float64, error) {
 	case *cellRefExpr:
 		start, end = a.ref, a.ref
 	default:
-		return 0, fmt.Errorf("HLOOKUP second argument must be a cell reference or range")
+		return formulaValue{}, fmt.Errorf("HLOOKUP second argument must be a cell reference or range")
 	}
 	c1, r1 := parseCellRef(start)
 	c2, r2 := parseCellRef(end)
@@ -104,21 +108,21 @@ func evalFuncHlookup(ctx *evalContext, args []expr) (float64, error) {
 		minRow, maxRow = r2, r1
 	}
 	numRows := maxRow - minRow + 1
-	rowIdxVal, err := args[2].eval(ctx)
+	rowIdxVal, err := ctx.evalArgNum(args[2])
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	rowIdx := int(rowIdxVal)
 	if rowIdx < 1 || rowIdx > numRows {
-		return 0, fmt.Errorf("HLOOKUP row index out of range")
+		return formulaValue{}, fmt.Errorf("HLOOKUP row index out of range")
 	}
 	if len(args) == 4 {
-		approx, err := args[3].eval(ctx)
+		approx, err := ctx.evalArgNum(args[3])
 		if err != nil {
-			return 0, err
+			return formulaValue{}, err
 		}
 		if approx != 0 {
-			return 0, fmt.Errorf("HLOOKUP approximate match not yet supported")
+			return formulaValue{}, fmt.Errorf("HLOOKUP approximate match not yet supported")
 		}
 	}
 	refs := expandRange(start, end)
@@ -128,11 +132,15 @@ func evalFuncHlookup(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
-		if cellVal == lookupVal {
-			return ctx.getCellValue(refs[c*numRows+(rowIdx-1)])
+		if compareValues(cellVal, lookupVal) == 0 {
+			fv, err := ctx.getCellValue(refs[c*numRows+(rowIdx-1)])
+			if err != nil {
+				return formulaValue{}, err
+			}
+			return fv, nil
 		}
 	}
-	return 0, fmt.Errorf("HLOOKUP value not found")
+	return formulaValue{}, fmt.Errorf("HLOOKUP value not found")
 }
 
 func evalFuncMatch(ctx *evalContext, args []expr) (float64, error) {
@@ -149,7 +157,7 @@ func evalFuncMatch(ctx *evalContext, args []expr) (float64, error) {
 	}
 	matchType := 0
 	if len(args) == 3 {
-		matchTypeVal, err := args[2].eval(ctx)
+		matchTypeVal, err := ctx.evalArgNum(args[2])
 		if err != nil {
 			return 0, err
 		}
@@ -162,7 +170,7 @@ func evalFuncMatch(ctx *evalContext, args []expr) (float64, error) {
 			if err != nil {
 				continue
 			}
-			if cellVal == lookupVal {
+			if compareValues(cellVal, lookupVal) == 0 {
 				return float64(i + 1), nil
 			}
 		}
@@ -174,9 +182,9 @@ func evalFuncMatch(ctx *evalContext, args []expr) (float64, error) {
 	}
 }
 
-func evalFuncIndex(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncIndex(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 2 || len(args) > 3 {
-		return 0, fmt.Errorf("INDEX requires 2 or 3 arguments")
+		return formulaValue{}, fmt.Errorf("INDEX requires 2 or 3 arguments")
 	}
 	var start, end string
 	switch a := args[0].(type) {
@@ -185,18 +193,18 @@ func evalFuncIndex(ctx *evalContext, args []expr) (float64, error) {
 	case *cellRefExpr:
 		start, end = a.ref, a.ref
 	default:
-		return 0, fmt.Errorf("INDEX first argument must be a cell reference or range")
+		return formulaValue{}, fmt.Errorf("INDEX first argument must be a cell reference or range")
 	}
-	rowNumVal, err := args[1].eval(ctx)
+	rowNumVal, err := ctx.evalArgNum(args[1])
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	rowNum := int(rowNumVal)
 	colNum := 1
 	if len(args) == 3 {
-		colNumVal, err := args[2].eval(ctx)
+		colNumVal, err := ctx.evalArgNum(args[2])
 		if err != nil {
-			return 0, err
+			return formulaValue{}, err
 		}
 		colNum = int(colNumVal)
 	}
@@ -213,45 +221,53 @@ func evalFuncIndex(ctx *evalContext, args []expr) (float64, error) {
 	numCols := maxCol - minCol + 1
 	numRows := maxRow - minRow + 1
 	if rowNum < 1 || rowNum > numRows {
-		return 0, fmt.Errorf("INDEX row out of range")
+		return formulaValue{}, fmt.Errorf("INDEX row out of range")
 	}
 	if colNum < 1 || colNum > numCols {
-		return 0, fmt.Errorf("INDEX column out of range")
+		return formulaValue{}, fmt.Errorf("INDEX column out of range")
 	}
 	refs := expandRange(start, end)
-	return ctx.getCellValue(refs[(colNum-1)*numRows+(rowNum-1)])
+	fv, err := ctx.getCellValue(refs[(colNum-1)*numRows+(rowNum-1)])
+	if err != nil {
+		return formulaValue{}, err
+	}
+	return fv, nil
 }
 
-func evalFuncXlookup(ctx *evalContext, args []expr) (float64, error) {
+func evalFuncXlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 3 || len(args) > 6 {
-		return 0, fmt.Errorf("XLOOKUP requires 3 to 6 arguments")
+		return formulaValue{}, fmt.Errorf("XLOOKUP requires 3 to 6 arguments")
 	}
 	lookupVal, err := args[0].eval(ctx)
 	if err != nil {
-		return 0, err
+		return formulaValue{}, err
 	}
 	lookupRefs, err := rangeOrCellRefs(ctx, args[1])
 	if err != nil {
-		return 0, fmt.Errorf("XLOOKUP second argument: %w", err)
+		return formulaValue{}, fmt.Errorf("XLOOKUP second argument: %w", err)
 	}
 	returnRefs, err := rangeOrCellRefs(ctx, args[2])
 	if err != nil {
-		return 0, fmt.Errorf("XLOOKUP third argument: %w", err)
+		return formulaValue{}, fmt.Errorf("XLOOKUP third argument: %w", err)
 	}
 	if len(lookupRefs) != len(returnRefs) {
-		return 0, fmt.Errorf("XLOOKUP lookup and return arrays must be the same size")
+		return formulaValue{}, fmt.Errorf("XLOOKUP lookup and return arrays must be the same size")
 	}
 	for i, ref := range lookupRefs {
 		cellVal, err := ctx.getCellValue(ref)
 		if err != nil {
 			continue
 		}
-		if cellVal == lookupVal {
-			return ctx.getCellValue(returnRefs[i])
+		if compareValues(cellVal, lookupVal) == 0 {
+			fv, err := ctx.getCellValue(returnRefs[i])
+			if err != nil {
+				return formulaValue{}, err
+			}
+			return fv, nil
 		}
 	}
 	if len(args) >= 4 {
 		return args[3].eval(ctx)
 	}
-	return 0, fmt.Errorf("XLOOKUP value not found")
+	return formulaValue{}, fmt.Errorf("XLOOKUP value not found")
 }
