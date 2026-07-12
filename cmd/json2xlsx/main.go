@@ -6,6 +6,7 @@ import (
     "io"
     "os"
     "path/filepath"
+    "runtime/debug"
     "strings"
 
     "github.com/onohiroki/json2xlsx/internal/json2xlsx"
@@ -23,6 +24,20 @@ func inputBaseDir(input string) string {
 }
 
 var version = "dev"
+
+func getVersion() string {
+    if version != "dev" {
+        return version
+    }
+    info, ok := debug.ReadBuildInfo()
+    if !ok {
+        return "dev"
+    }
+    if info.Main.Version != "" && info.Main.Version != "(devel)" {
+        return info.Main.Version
+    }
+    return "dev"
+}
 
 // Note: Japanese text in this file uses "，" and "．" as punctuation
 // (not "、" and "。"). Keep this consistent when editing help messages.
@@ -117,11 +132,11 @@ func main() {
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
-			fmt.Fprintln(os.Stderr, "json2xlsx", version)
+			fmt.Fprintln(os.Stderr, "json2xlsx", getVersion())
 			usage()
 			return
 		case "-version", "--version", "version":
-			fmt.Fprintln(os.Stderr, "json2xlsx", version)
+			fmt.Fprintln(os.Stderr, "json2xlsx", getVersion())
 			return
 		}
 	}
