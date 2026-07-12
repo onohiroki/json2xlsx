@@ -227,6 +227,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記．
 - `--first-row-header`: 最初の行をテーブルヘッダとして扱う．A/B/C 列名 + 行番号を抑制する．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
+- `--compute`: 出力前に数式を評価する．
 
 ロングオプションは `--name` 形式で表記しています．短い `-i` / `-o` はそのまま `-` 1 文字で指定します．`-mode` のようにハイフン 1 つでも受け付けますが，ドキュメント上の表記は `--` に統一しています．
 
@@ -305,6 +306,7 @@ cat input.json | json2xlsx to-csv > output.csv
 
 - `--sheet`: シート名で特定のシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
 - `--sheet-index`: 1 始まりのインデックスでシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
+- `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 - `--compute`: 出力前に数式を評価する．
 
 ## 入力JSONの考え方

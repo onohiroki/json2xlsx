@@ -224,6 +224,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--mode both`: when both `v` and a formula exist, display both like `84<br />=B1*2`.
 - `--first-row-header`: treat the first row as the table header. Suppress A/B/C column names and row numbers.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
+- `--compute`: evaluate formulas before output.
 
 Long options are shown in `--name` form. Short `-i` / `-o` remain single-dash. Single-dash variants (e.g. `-mode`) may also be accepted, but the docs use `--` for consistency.
 
@@ -302,6 +303,7 @@ Options:
 
 - `--sheet`: extract a specific sheet by name (for multi-sheet XLSX or Workbook JSON).
 - `--sheet-index`: extract a sheet by 1-based index (for multi-sheet XLSX or Workbook JSON).
+- `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 - `--compute`: evaluate formulas before output.
 
 ## Input JSON concepts
