@@ -363,6 +363,19 @@ func TestArrayOfMap_MissingKeys_DataJSON(t *testing.T) {
 	}
 }
 
+func convertAndOpenWithOpts(t *testing.T, jsonStr string, opts ConvertOptions) *excelize.File {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(jsonStr), &buf, opts); err != nil {
+		t.Fatalf("Convert error: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("OpenReader: %v", err)
+	}
+	return f
+}
+
 func convertAndOpen(t *testing.T, jsonStr string, dataJSON bool) *excelize.File {
 	t.Helper()
 	var buf bytes.Buffer
@@ -1879,6 +1892,151 @@ func TestSparkline_SingleSheetForm(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Convert(strings.NewReader(js), &buf, ConvertOptions{}); err != nil {
 		t.Fatalf("Convert error: %v", err)
+	}
+}
+
+func TestAutoFit_ColumnWidthCells(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "s", "v": "Short"},
+			"B1": {"t": "s", "v": "A longer cell value here"},
+			"A2": {"t": "n", "v": 123}
+		}
+	}`
+	f := convertAndOpenWithOpts(t, js, ConvertOptions{AutoFit: true})
+	defer f.Close()
+
+	wA, _ := f.GetColWidth("S1", "A")
+	if wA < 5 || wA > 10 {
+		t.Errorf("col A width = %v, expected around 7-9 (content: 'Short', '123')", wA)
+	}
+	wB, _ := f.GetColWidth("S1", "B")
+	if wB < 18 || wB > 30 {
+		t.Errorf("col B width = %v, expected around 23-26 (content: 'A longer cell value here')", wB)
+	}
+}
+
+func TestAutoFit_ColumnWidthRows(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"rows": [
+			["Short", "A longer cell value here"],
+			[123, "hello"]
+		]
+	}`
+	f := convertAndOpenWithOpts(t, js, ConvertOptions{AutoFit: true})
+	defer f.Close()
+
+	wA, _ := f.GetColWidth("S1", "A")
+	if wA < 4 || wA > 10 {
+		t.Errorf("col A width = %v, expected around 5-8 (content: 'Short', 123)", wA)
+	}
+	wB, _ := f.GetColWidth("S1", "B")
+	if wB < 18 || wB > 30 {
+		t.Errorf("col B width = %v, expected around 23-26 (content: 'A longer cell value here')", wB)
+	}
+}
+
+func TestAutoFit_ExplicitColOverrides(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "s", "v": "Very long content here that should not affect width"},
+			"B1": {"t": "s", "v": "Short"}
+		},
+		"cols": [{"col": "A", "width": 5}]
+	}`
+	f := convertAndOpenWithOpts(t, js, ConvertOptions{AutoFit: true})
+	defer f.Close()
+
+	wA, _ := f.GetColWidth("S1", "A")
+	if wA != 5 {
+		t.Errorf("col A explicit width = %v, want 5", wA)
+	}
+	wB, _ := f.GetColWidth("S1", "B")
+	if wB < 4 || wB > 10 {
+		t.Errorf("col B auto-fitted width = %v, expected around 5-8 (content: 'Short')", wB)
+	}
+}
+
+func TestAutoFit_WrapTextOnNewline(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "s", "v": "Hello"},
+			"B1": {"t": "s", "v": "line1\nline2\nline3"}
+		}
+	}`
+	f := convertAndOpenWithOpts(t, js, ConvertOptions{AutoFit: true})
+	defer f.Close()
+
+	styleID, err := f.GetCellStyle("S1", "A1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	styleA, err := f.GetStyle(styleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if styleA.Alignment != nil && styleA.Alignment.WrapText {
+		t.Error("A1 should NOT have WrapText (no newline)")
+	}
+
+	styleID, err = f.GetCellStyle("S1", "B1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	styleB, err := f.GetStyle(styleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if styleB.Alignment == nil || !styleB.Alignment.WrapText {
+		t.Error("B1 should have WrapText (contains newline)")
+	}
+}
+
+func TestAutoFit_WrapTextOnNewline_WithExistingStyle(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "s", "v": "line1\nline2", "s": 1}
+		},
+		"styles": [{"id": 1, "font": {"bold": true}}]
+	}`
+	f := convertAndOpenWithOpts(t, js, ConvertOptions{AutoFit: true})
+	defer f.Close()
+
+	styleID, err := f.GetCellStyle("S1", "A1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	style, err := f.GetStyle(styleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if style.Alignment == nil || !style.Alignment.WrapText {
+		t.Error("A1 should have WrapText (contains newline)")
+	}
+	if style.Font == nil || !style.Font.Bold {
+		t.Error("A1 should preserve bold from base style")
+	}
+}
+
+func TestAutoFit_NoAutoFitWithoutFlag(t *testing.T) {
+	js := `{
+		"name": "S1",
+		"cells": {
+			"A1": {"t": "s", "v": "A long cell value that should not affect width without --autofit"}
+		}
+	}`
+	f := convertAndOpen(t, js, false)
+	defer f.Close()
+
+	wA, _ := f.GetColWidth("S1", "A")
+	// Without autofit, the width should be the excelize default (9.14 or whatever)
+	if wA > 20 {
+		t.Errorf("col A width = %v, expected default (~9) without --autofit", wA)
 	}
 }
 

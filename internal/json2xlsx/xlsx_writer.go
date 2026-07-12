@@ -10,12 +10,13 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/xuri/excelize/v2"
 )
 
 var tStrAttrRe = regexp.MustCompile(` t="str"`)
 
-func convertWorkbook(wb *Workbook, out io.Writer, baseDir string) error {
+func convertWorkbook(wb *Workbook, out io.Writer, baseDir string, autoFit bool) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
@@ -29,7 +30,7 @@ func convertWorkbook(wb *Workbook, out io.Writer, baseDir string) error {
 	}
 
 	var warnings int
-	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, &warnings, baseDir); err != nil {
+	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, &warnings, baseDir, autoFit); err != nil {
 		return err
 	}
 
@@ -76,7 +77,7 @@ func validateWorkbook(sheets []Sheet, wb *Workbook) error {
 	return nil
 }
 
-func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string) error {
+func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string, autoFit bool) error {
 	defaultName := f.GetSheetName(0)
 	firstAssigned := false
 
@@ -99,14 +100,14 @@ func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles
 			}
 		}
 
-		if err := writeSheet(f, name, sh, styleMap, styles, warnings, baseDir); err != nil {
+		if err := writeSheet(f, name, sh, styleMap, styles, warnings, baseDir, autoFit); err != nil {
 			return fmt.Errorf("write sheet %q: %w", name, err)
 		}
 	}
 	return nil
 }
 
-func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string) error {
+func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string, autoFit bool) error {
 	for r, row := range sh.Rows {
 		for c, v := range row {
 			axis, err := excelize.CoordinatesToCellName(c+1, r+1)
@@ -128,6 +129,18 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 			} else {
 				return fmt.Errorf("set cell %s: %w", axis, err)
 			}
+		}
+	}
+
+	if autoFit {
+		if err := autoFitColumnWidths(f, name, sh); err != nil {
+			return err
+		}
+	}
+
+	if autoFit {
+		if err := applyWrapTextStyles(f, name, sh, styles, styleMap); err != nil {
+			return err
 		}
 	}
 
@@ -405,6 +418,191 @@ func mergeStyleWithNumFmt(f *excelize.File, styles []Style, styleID int, numFmt 
 		}
 	}
 	return f.NewStyle(&excelize.Style{CustomNumFmt: &numFmt})
+}
+
+// autoFitColumnWidths はシートの全セルを走査し，列ごとの最大表示幅に合わせて列幅を設定する．
+func autoFitColumnWidths(f *excelize.File, sheet string, sh Sheet) error {
+	colWidths := make(map[int]float64)
+	for axis, cell := range sh.Cells {
+		col, _, err := excelize.CellNameToCoordinates(axis)
+		if err != nil {
+			return err
+		}
+		col--
+		w := measureCellDisplayWidth(cell.V)
+		if w > colWidths[col] {
+			colWidths[col] = w
+		}
+	}
+	for _, row := range sh.Rows {
+		for c, v := range row {
+			w := measureCellDisplayWidth(v)
+			if w > colWidths[c] {
+				colWidths[c] = w
+			}
+		}
+	}
+
+	explicitCols := make(map[string]bool)
+	for _, c := range sh.Cols {
+		explicitCols[c.Col] = true
+	}
+
+	for colIdx, maxChars := range colWidths {
+		if maxChars <= 0 {
+			continue
+		}
+		colName, err := excelize.ColumnNumberToName(colIdx + 1)
+		if err != nil {
+			return err
+		}
+		if explicitCols[colName] {
+			continue
+		}
+		width := maxChars*1.1 + 2
+		if width < 3 {
+			width = 3
+		}
+		if width > 255 {
+			width = 255
+		}
+		if err := f.SetColWidth(sheet, colName, colName, width); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// measureCellDisplayWidth はセル値の表示幅（最長行の文字幅）を返す．
+func measureCellDisplayWidth(v interface{}) float64 {
+	if v == nil {
+		return 0
+	}
+	s := fmt.Sprintf("%v", v)
+	if s == "" {
+		return 0
+	}
+	lines := strings.Split(s, "\n")
+	maxW := 0
+	for _, line := range lines {
+		w := runewidth.StringWidth(line)
+		if w > maxW {
+			maxW = w
+		}
+	}
+	return float64(maxW)
+}
+
+// applyWrapTextStyles は \n を含むセルに WrapText スタイルを適用する．
+func applyWrapTextStyles(f *excelize.File, sheet string, sh Sheet, styles []Style, styleMap map[int]int) error {
+	wrapCache := make(map[int]int)
+
+	for axis, cell := range sh.Cells {
+		if !valueHasNewline(cell.V) {
+			continue
+		}
+		if cell.S != 0 && styleHasWrapText(styles, cell.S) {
+			continue
+		}
+		id, err := getOrCreateWrapStyle(f, styles, cell.S, cell.Z, wrapCache)
+		if err != nil {
+			return err
+		}
+		if err := f.SetCellStyle(sheet, axis, axis, id); err != nil {
+			return err
+		}
+	}
+
+	if len(sh.Rows) == 0 {
+		return nil
+	}
+
+	var wrapRowStyleID int
+	for r, row := range sh.Rows {
+		for c, v := range row {
+			if !valueHasNewline(v) {
+				continue
+			}
+			axis, err := excelize.CoordinatesToCellName(c+1, r+1)
+			if err != nil {
+				return err
+			}
+			if wrapRowStyleID == 0 {
+				id, err := f.NewStyle(&excelize.Style{Alignment: &excelize.Alignment{WrapText: true}})
+				if err != nil {
+					return err
+				}
+				wrapRowStyleID = id
+			}
+			if err := f.SetCellStyle(sheet, axis, axis, wrapRowStyleID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// valueHasNewline は値が文字列かつ改行を含む場合に true を返す．
+func valueHasNewline(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return strings.Contains(s, "\n")
+}
+
+// styleHasWrapText は styles 内の指定 id のスタイルが WrapText を持っているかを確認する．
+func styleHasWrapText(styles []Style, id int) bool {
+	for _, s := range styles {
+		if s.ID == id && s.Alignment != nil && s.Alignment.WrapText {
+			return true
+		}
+	}
+	return false
+}
+
+// getOrCreateWrapStyle はベーススタイルに WrapText を追加したスタイルを取得/作成する．
+func getOrCreateWrapStyle(f *excelize.File, styles []Style, baseID int, numFmt string, cache map[int]int) (int, error) {
+	if id, ok := cache[baseID]; ok {
+		return id, nil
+	}
+
+	if baseID == 0 && numFmt == "" {
+		id, err := f.NewStyle(&excelize.Style{Alignment: &excelize.Alignment{WrapText: true}})
+		if err != nil {
+			return 0, err
+		}
+		cache[0] = id
+		return id, nil
+	}
+
+	var base Style
+	for _, s := range styles {
+		if s.ID == baseID {
+			base = s
+			break
+		}
+	}
+	es, err := toExcelizeStyle(base)
+	if err != nil {
+		return 0, err
+	}
+	if es.Alignment == nil {
+		es.Alignment = &excelize.Alignment{}
+	}
+	es.Alignment.WrapText = true
+	if numFmt != "" {
+		es.CustomNumFmt = &numFmt
+	}
+	id, err := f.NewStyle(es)
+	if err != nil {
+		return 0, err
+	}
+	cache[baseID] = id
+	return id, nil
 }
 
 func parseLink(l interface{}) (target, tooltip string) {

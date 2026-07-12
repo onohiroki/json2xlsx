@@ -24,6 +24,10 @@ type ConvertOptions struct {
 	// EvalFormulas が true の場合，t="f" かつ v のないセルの数式を評価し，
 	// 計算結果を v に補完する．
 	EvalFormulas bool
+	// AutoFit が true の場合，列幅をセル内容に合わせて自動調整する．
+	// 明示的に cols[].width が指定された列はその値が優先される．
+	// また，改行 (\n) を含むセルには WrapText が自動適用される（行高は設定しない）．
+	AutoFit bool
 	// BaseDir は画像パス解決の基準ディレクトリ．空の場合は CWD を使用．
 	BaseDir string
 }
@@ -45,7 +49,7 @@ func Convert(r io.Reader, out io.Writer, opts ConvertOptions) error {
 		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
 
-	if err := convertWorkbook(wb, out, opts.BaseDir); err != nil {
+	if err := convertWorkbook(wb, out, opts.BaseDir, opts.AutoFit); err != nil {
 		if !opts.DataJSON {
 			if schemaErr := ValidateJSON(data); schemaErr != nil {
 				return fmt.Errorf("%v\n\n%v", err, schemaErr)
