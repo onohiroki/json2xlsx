@@ -3,6 +3,7 @@ module github.com/onohiroki/json2xlsx
 go 1.22
 
 require (
+	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/xuri/excelize/v2 v2.8.1
@@ -10,7 +11,6 @@ require (
 )
 
 require (
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
