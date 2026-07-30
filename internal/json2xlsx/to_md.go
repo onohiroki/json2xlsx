@@ -33,6 +33,7 @@ type MarkdownOptions struct {
 	ExplicitMode   bool
 	DataJSON       bool
 	EvalFormulas   bool
+	Compact        bool
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -80,7 +81,11 @@ func displayWidth(s string) int {
 
 // padCell は文字列 s を表示幅 width になるまでスペースでパディングする。
 // align は "---"（左寄せ）, "---:"（右寄せ）, ":---:"（中央寄せ）のいずれか。
-func padCell(s string, width int, align string) string {
+// compact が true のときはパディングを一切行わず s をそのまま返す。
+func padCell(s string, width int, align string, compact bool) string {
+	if compact {
+		return s
+	}
 	w := displayWidth(s)
 	if w >= width {
 		return s
@@ -99,7 +104,18 @@ func padCell(s string, width int, align string) string {
 
 // formatSeparator は区切り行のセパレータ文字列を生成する。
 // align は "---"（左寄せ）, "---:"（右寄せ）, ":---:"（中央寄せ）のいずれか。
-func formatSeparator(align string, width int) string {
+// compact が true のときは最小サイズのセパレータを返す。
+func formatSeparator(align string, width int, compact bool) string {
+	if compact {
+		switch align {
+		case "---:":
+			return "---:"
+		case ":---:":
+			return ":---:"
+		default:
+			return "---"
+		}
+	}
 	switch align {
 	case "---:":
 		if width < 2 {
@@ -220,36 +236,40 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 	}
 
 	var hasWarning bool
-	if opts.FirstRowHeader {
-		for c := 1; c <= cg.MaxCol; c++ {
-			cell := cg.Rows[1][c]
-			if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
-				colWidths[c] = w
+	if !opts.Compact {
+		if opts.FirstRowHeader {
+			for c := 1; c <= cg.MaxCol; c++ {
+				cell := cg.Rows[1][c]
+				if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
+					colWidths[c] = w
+				}
 			}
 		}
-	}
 
-	dataStart := 1
-	if opts.FirstRowHeader {
-		dataStart = 2
-	}
-	for r := dataStart; r <= cg.MaxRow; r++ {
-		for c := 1; c <= cg.MaxCol; c++ {
-			cell := cg.Rows[r][c]
-			if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
-				colWidths[c] = w
+		dataStart := 1
+		if opts.FirstRowHeader {
+			dataStart = 2
+		}
+		for r := dataStart; r <= cg.MaxRow; r++ {
+			for c := 1; c <= cg.MaxCol; c++ {
+				cell := cg.Rows[r][c]
+				if w := displayWidth(formatCell(cell, opts.Mode, &hasWarning)); w > colWidths[c] {
+					colWidths[c] = w
+				}
 			}
 		}
 	}
 
 	const minSepWidth = 3
-	for c := 1; c <= cg.MaxCol; c++ {
-		if colWidths[c] < minSepWidth {
-			colWidths[c] = minSepWidth
+	if !opts.Compact {
+		for c := 1; c <= cg.MaxCol; c++ {
+			if colWidths[c] < minSepWidth {
+				colWidths[c] = minSepWidth
+			}
 		}
-	}
-	if rowIndexWidth < minSepWidth {
-		rowIndexWidth = minSepWidth
+		if rowIndexWidth < minSepWidth {
+			rowIndexWidth = minSepWidth
+		}
 	}
 
 	var b strings.Builder
@@ -260,7 +280,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			cell := cg.Rows[1][c]
 			val := formatCell(cell, opts.Mode, &hasWarning)
 			b.WriteString(" ")
-			b.WriteString(padCell(val, colWidths[c], "---"))
+			b.WriteString(padCell(val, colWidths[c], "---", opts.Compact))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
@@ -268,7 +288,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		b.WriteString("|")
 		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString(" ")
-			b.WriteString(formatSeparator(colAlign[c], colWidths[c]))
+			b.WriteString(formatSeparator(colAlign[c], colWidths[c], opts.Compact))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
@@ -279,7 +299,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 				cell := cg.Rows[r][c]
 				val := formatCell(cell, opts.Mode, &hasWarning)
 				b.WriteString(" ")
-				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
+				b.WriteString(padCell(val, colWidths[c], colAlign[c], opts.Compact))
 				b.WriteString(" |")
 			}
 			b.WriteString("\n")
@@ -288,12 +308,12 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		b.WriteString("|")
 		if opts.RowIndex {
 			b.WriteString(" ")
-			b.WriteString(padCell("", rowIndexWidth, "---:"))
+			b.WriteString(padCell("", rowIndexWidth, "---:", opts.Compact))
 			b.WriteString(" |")
 		}
 		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString(" ")
-			b.WriteString(padCell(cg.ColNames[c], colWidths[c], "---"))
+			b.WriteString(padCell(cg.ColNames[c], colWidths[c], "---", opts.Compact))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
@@ -301,12 +321,12 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		b.WriteString("|")
 		if opts.RowIndex {
 			b.WriteString(" ")
-			b.WriteString(formatSeparator("---:", rowIndexWidth))
+			b.WriteString(formatSeparator("---:", rowIndexWidth, opts.Compact))
 			b.WriteString(" |")
 		}
 		for c := 1; c <= cg.MaxCol; c++ {
 			b.WriteString(" ")
-			b.WriteString(formatSeparator(colAlign[c], colWidths[c]))
+			b.WriteString(formatSeparator(colAlign[c], colWidths[c], opts.Compact))
 			b.WriteString(" |")
 		}
 		b.WriteString("\n")
@@ -315,14 +335,14 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			b.WriteString("|")
 			if opts.RowIndex {
 				b.WriteString(" ")
-				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---:"))
+				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---:", opts.Compact))
 				b.WriteString(" |")
 			}
 			for c := 1; c <= cg.MaxCol; c++ {
 				cell := cg.Rows[r][c]
 				val := formatCell(cell, opts.Mode, &hasWarning)
 				b.WriteString(" ")
-				b.WriteString(padCell(val, colWidths[c], colAlign[c]))
+				b.WriteString(padCell(val, colWidths[c], colAlign[c], opts.Compact))
 				b.WriteString(" |")
 			}
 			b.WriteString("\n")

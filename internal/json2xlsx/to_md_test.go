@@ -186,6 +186,74 @@ func TestToMarkdown_InvalidMode(t *testing.T) {
 	}
 }
 
+func TestToMarkdown_Compact(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		in := `{
+		  "cells": {
+		    "A1": {"t":"s","v":"a"},
+		    "B1": {"t":"s","v":"b"},
+		    "A2": {"t":"n","v":1},
+		    "B2": {"t":"n","v":2}
+		  }
+		}`
+		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, RowIndex: true, Compact: true})
+		want := "|  | A | B |\n" +
+			"| ---: | --- | --- |\n" +
+			"| 1 | a | b |\n" +
+			"| 2 | 1 | 2 |\n"
+		if got != want {
+			t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+		}
+	})
+	t.Run("first_row_header", func(t *testing.T) {
+		in := `{
+		  "cells": {
+		    "A1": {"t":"s","v":"Name"},
+		    "B1": {"t":"s","v":"Value"},
+		    "A2": {"t":"s","v":"Alice"},
+		    "B2": {"t":"n","v":100}
+		  }
+		}`
+		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, FirstRowHeader: true, Compact: true})
+		want := "| Name | Value |\n" +
+			"| --- | ---: |\n" +
+			"| Alice | 100 |\n"
+		if got != want {
+			t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+		}
+	})
+	t.Run("mode_both", func(t *testing.T) {
+		in := `{
+		  "cells": {
+		    "A1": {"t":"f","f":"B1*2","v":84},
+		    "B1": {"t":"n","v":42}
+		  }
+		}`
+		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeBoth, Compact: true})
+		want := "| A | B |\n" +
+			"| --- | --- |\n" +
+			"| 84<br />=B1*2 | 42 |\n"
+		if got != want {
+			t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+		}
+	})
+	t.Run("without_row_index", func(t *testing.T) {
+		in := `{
+		  "cells": {
+		    "A1": {"t":"n","v":42},
+		    "B1": {"t":"n","v":7}
+		  }
+		}`
+		got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeFormula, Compact: true})
+		want := "| A | B |\n" +
+			"| --- | --- |\n" +
+			"| 42 | 7 |\n"
+		if got != want {
+			t.Fatalf("mismatch.\n got:\n%q\nwant:\n%q", got, want)
+		}
+	})
+}
+
 func TestToMarkdown_InvalidInput(t *testing.T) {
 	var out bytes.Buffer
 	err := ToMarkdown(strings.NewReader("\x00\x01"), &out, MarkdownOptions{})

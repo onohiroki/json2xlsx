@@ -61,7 +61,7 @@ func usageJa() {
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute] [--autofit]
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json] [--compute]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json] [--compute]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
@@ -80,6 +80,7 @@ Usage:
   --image-mode         to-json の画像出力モード: base64 (JSON に埋め込み) または file (外部ファイル)
   --mode               セル表示モード (f=数式優先, v=値優先, both=併記)．to-md デフォルト f, to-html デフォルト v
   --first-row-header   to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
+  --compact / -c       to-md で列のパディングを抑制しコンパクトに表示する
   --grid               to-html で枠線未指定セルにグレーの細枠線を表示する
 
 ロングオプションは --name 形式，短いオプションは -i / -o 形式で指定します
@@ -96,7 +97,7 @@ func usageEn() {
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute] [--autofit]
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--data-json] [--compute]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json] [--compute]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
@@ -115,6 +116,7 @@ Options:
   --image-mode         Image output mode: base64 (embed in JSON) or file (write to disk)
   --mode               Cell display mode (f=formula, v=value, both=both). Default to-md=f, to-html=v
   --first-row-header   Treat first row as table header (suppress A/B/C and row numbers)
+  --compact / -c       Suppress column alignment padding for compact tables (to-md only)
   --grid               Show light gray gridlines for empty cells in to-html
 
 Long options use --name, short options use -i / -o.
@@ -278,13 +280,15 @@ func runToMD(args []string) {
 	fs := flag.NewFlagSet("to-md", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output, mode string
-	var firstRowHeader, dataJSON, compute bool
+	var firstRowHeader, dataJSON, compute, compact bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output Markdown file (default: stdout)")
 	fs.StringVar(&mode, "mode", "f", "cell display mode: f|v|both")
 	fs.BoolVar(&firstRowHeader, "first-row-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	fs.BoolVar(&compute, "compute", false, "evaluate formulas (t=f) and fill cached values")
+	fs.BoolVar(&compact, "compact", false, "compact output, suppress column alignment padding")
+	fs.BoolVar(&compact, "c", false, "compact output (alias for --compact)")
 	_ = fs.Parse(args)
 
 	if err := json2xlsx.ValidateMode(json2xlsx.MarkdownMode(mode)); err != nil {
@@ -320,6 +324,7 @@ func runToMD(args []string) {
 		ExplicitMode:   explicitMode,
 		DataJSON:       dataJSON,
 		EvalFormulas:   compute,
+		Compact:        compact,
 	}
 	if err := json2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
