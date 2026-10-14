@@ -63,7 +63,7 @@ go build -o json2xlsx ./cmd/json2xlsx
 
 ## Usage
 
-`json2xlsx` is a single-binary CLI that converts between XLSX and JSON. Subcommands are `to-json` (XLSX → JSON), `to-xlsx` (JSON → XLSX), `to-md` (JSON / XLSX → Markdown table), `to-html` (JSON / XLSX → HTML `<table>`), and `to-csv` (JSON / XLSX → CSV). If the subcommand is omitted, it behaves as `to-xlsx` by default.
+`json2xlsx` is a single-binary CLI that converts between XLSX and JSON. Subcommands are `to-json` (XLSX → JSON), `to-xlsx` (JSON → XLSX), `to-md` (JSON / XLSX → Markdown table), `to-html` (JSON / XLSX → HTML `<table>`), `to-csv` (JSON / XLSX → CSV), `info` (summarize the input), `eval` (evaluate a single formula), and `functions` (list supported functions). If the subcommand is omitted, it behaves as `to-xlsx` by default.
 
 ### `to-json` — XLSX → JSON
 
@@ -239,6 +239,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--mode v`: prefer `v`. If `v` is missing, fall back to the formula `=B1*2`.
 - `--mode both`: when both `v` and a formula exist, display both like `84<br />=B1*2`.
 - `--first-row-header`: treat the first row as the table header. Suppress A/B/C column names and row numbers.
+- `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted. Column names and row numbers are shown in absolute coordinates. A range that does not intersect the data is an error.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 - `--compute`: evaluate formulas before output.
 
@@ -319,10 +320,59 @@ Options:
 
 - `--sheet`: extract a specific sheet by name (for multi-sheet XLSX or Workbook JSON).
 - `--sheet-index`: extract a sheet by 1-based index (for multi-sheet XLSX or Workbook JSON).
+- `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted (applies to sheet cell input only).
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 - `--compute`: evaluate formulas before output.
 
 Date cells (`t: "d"`) are automatically converted to readable strings (serial values → RFC3339-like, string values → pass-through).
+
+### `info` — summarize the input
+
+Read an XLSX or Workbook JSON and summarize its structure. The input kind is auto-detected via magic bytes; when `-i` is omitted, standard input is used.
+
+```bash
+json2xlsx info -i input.xlsx
+json2xlsx info -i input.xlsx --json
+json2xlsx info -i input.xlsx --sheet "Sales"
+cat input.xlsx | json2xlsx info
+```
+
+For each sheet it reports the used range (`A1:F20`), rows/cols, cell count, formula count, merges, tables, conditional formats, charts, pictures, and sparklines. Use `--sheet` to restrict to one sheet. `--json` emits an object with schema `json2xlsx-info/1`.
+
+### `eval` — evaluate a single formula
+
+Evaluate one formula with the built-in formula engine. Passing an XLSX or Workbook JSON via `-i` lets the formula reference its cells. When `-i` is omitted and standard input is a pipe, standard input is read. The formula is a positional argument and may appear before or after the flags.
+
+```bash
+json2xlsx eval '=SUM(1,2,3)'
+json2xlsx eval '=PMT(0.05/12,360,-300000)'
+json2xlsx eval -i book.xlsx '=SUM(B2:C2)'
+json2xlsx eval -i book.xlsx --sheet Sales --cell B2 '=B2*2'
+cat book.xlsx | json2xlsx eval '=SUM(B2:C2)'
+```
+
+- `--sheet`: sheet name for the evaluation context (default: first sheet).
+- `--cell`: origin cell for the evaluation context (default `A1`), used for circular-reference detection and caching.
+- `--json`: emit `{"value": <value>}` or `{"error": {"code": "#DIV/0!", "message": "..."}}`.
+
+Formula errors (such as `#DIV/0!`) exit with code **0**; only usage errors and I/O failures exit non-zero.
+
+**Note:** evaluation uses the built-in engine, so it is **not fully Excel-compatible**. Cross-sheet references, array formulas, and some string criteria are unsupported. It returns what `--compute` would produce, not necessarily what Excel would.
+
+### `functions` — list supported functions
+
+List the functions supported by `--compute` / `eval`, with categories.
+
+```bash
+json2xlsx functions
+json2xlsx functions --search lookup
+json2xlsx functions --category date
+json2xlsx functions --json
+```
+
+- `--search X`: filter by name substring (case-insensitive).
+- `--category C`: filter by exact category (`math`, `logical`, `statistical`, `conditional`, `lookup`, `text`, `date`, `info`, `trig`).
+- `--json`: emit `[{"name": "SUM", "category": "math"}, ...]`.
 
 ## Input JSON concepts
 

@@ -63,7 +63,7 @@ go build -o json2xlsx ./cmd/json2xlsx
 
 ## 使い方
 
-`json2xlsx` は単一バイナリの CLI で，XLSX と JSON を相互変換します．サブコマンドは `to-json` (XLSX → JSON)，`to-xlsx` (JSON → XLSX)，`to-md` (JSON / XLSX → Markdown テーブル)，`to-html` (JSON / XLSX → HTML `<table>`)，`to-csv` (JSON / XLSX → CSV) の 5 種類で，**サブコマンドを省略した場合は `to-xlsx` として動作**します．
+`json2xlsx` は単一バイナリの CLI で，XLSX と JSON を相互変換します．サブコマンドは `to-json` (XLSX → JSON)，`to-xlsx` (JSON → XLSX)，`to-md` (JSON / XLSX → Markdown テーブル)，`to-html` (JSON / XLSX → HTML `<table>`)，`to-csv` (JSON / XLSX → CSV)，`info` (入力のサマリ)，`eval` (数式の単体評価)，`functions` (対応関数一覧) の 8 種類で，**サブコマンドを省略した場合は `to-xlsx` として動作**します．
 
 ### `to-json` — XLSX → JSON
 
@@ -243,6 +243,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--mode v`: `v` を優先表示．`v` が無ければ `=B1*2` にフォールバック．
 - `--mode both`: `v` と数式の両方がある場合 `84<br />=B1*2` のように併記．
 - `--first-row-header`: 最初の行をテーブルヘッダとして扱う．A/B/C 列名 + 行番号を抑制する．
+- `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける．列名・行番号は絶対座標で表示する．範囲が実データと交差しない場合はエラー．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 - `--compute`: 出力前に数式を評価する．
 
@@ -323,10 +324,59 @@ cat input.json | json2xlsx to-csv > output.csv
 
 - `--sheet`: シート名で特定のシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
 - `--sheet-index`: 1 始まりのインデックスでシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
+- `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける（シートのセル入力にのみ適用）．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 - `--compute`: 出力前に数式を評価する．
 
 日付セル (`t: "d"`) は自動的に人読可能な文字列に変換されます（シリアル値 → RFC3339 形式，文字列値 → そのまま）．
+
+### `info` — 入力のサマリ
+
+XLSX または Workbook JSON を読み込み，シート構成を要約します．XLSX と JSON は magic byte で自動判定し，`-i` を省略すると標準入力を使います．
+
+```bash
+json2xlsx info -i input.xlsx
+json2xlsx info -i input.xlsx --json
+json2xlsx info -i input.xlsx --sheet "売上"
+cat input.xlsx | json2xlsx info
+```
+
+各シートについて，使用範囲 (`A1:F20`)，行数・列数，セル数，数式数，マージ数，テーブル数，条件付き書式数，グラフ数，画像数，スパークライン数を出力します．`--sheet` で 1 シートに絞り込めます．`--json` はスキーマ `json2xlsx-info/1` のオブジェクトを出力します．
+
+### `eval` — 数式の単体評価
+
+1 つの数式を組み込みの数式エンジンで評価します．`-i` に XLSX または Workbook JSON を渡すと，そのセルを参照できます（`-i` を省略し標準入力がパイプの場合は標準入力を読み込みます）．数式は位置引数として，フラグの前後どちらにも置けます．
+
+```bash
+json2xlsx eval '=SUM(1,2,3)'
+json2xlsx eval '=PMT(0.05/12,360,-300000)'
+json2xlsx eval -i book.xlsx '=SUM(B2:C2)'
+json2xlsx eval -i book.xlsx --sheet 売上 --cell B2 '=B2*2'
+cat book.xlsx | json2xlsx eval '=SUM(B2:C2)'
+```
+
+- `--sheet`: 評価文脈に使うシート名（省略時は先頭シート）．
+- `--cell`: 評価原点セル（既定 `A1`）．循環参照検出とキャッシュに使う．
+- `--json`: `{"value": <値>}` または `{"error": {"code": "#DIV/0!", "message": "..."}}` を出力する．
+
+数式エラー (`#DIV/0!` など) は **終了コード 0** で出力されます（`--json` の `error`，または人間向けにはエラーコード）．使用法の誤りや入出力の失敗のみ非零終了です．
+
+**注意:** 評価には組込みエンジンを使うため **Excel 完全互換ではありません**．クロスシート参照・配列数式・一部の文字列条件などは未対応です．「Excel の答え」ではなく「`--compute` が出す答え」を返します．
+
+### `functions` — 対応関数一覧
+
+`--compute` / `eval` が対応する関数をカテゴリ付きで一覧します．
+
+```bash
+json2xlsx functions
+json2xlsx functions --search lookup
+json2xlsx functions --category date
+json2xlsx functions --json
+```
+
+- `--search X`: 関数名の部分一致（大文字小文字無視）．
+- `--category C`: カテゴリの完全一致 (`math`, `logical`, `statistical`, `conditional`, `lookup`, `text`, `date`, `info`, `trig`)．
+- `--json`: `[{"name": "SUM", "category": "math"}, ...]` を出力する．
 
 ## 入力JSONの考え方
 

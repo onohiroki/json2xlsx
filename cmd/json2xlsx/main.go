@@ -1,15 +1,18 @@
 package main
 
 import (
-    "flag"
-    "fmt"
-    "io"
-    "os"
-    "path/filepath"
-    "runtime/debug"
-    "strings"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime/debug"
+	"strconv"
+	"strings"
+	"text/tabwriter"
 
-    "github.com/onohiroki/json2xlsx/internal/json2xlsx"
+	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
 )
 
 // inputBaseDir returns the directory component of an input file path.
@@ -17,26 +20,26 @@ import (
 // If the caller passes an empty string (e.g., stdin), the returned
 // value is also an empty string so that callers can treat it as “no base”.
 func inputBaseDir(input string) string {
-    if input == "" {
-        return ""
-    }
-    return filepath.Dir(input)
+	if input == "" {
+		return ""
+	}
+	return filepath.Dir(input)
 }
 
 var version = "dev"
 
 func getVersion() string {
-    if version != "dev" {
-        return version
-    }
-    info, ok := debug.ReadBuildInfo()
-    if !ok {
-        return "dev"
-    }
-    if info.Main.Version != "" && info.Main.Version != "(devel)" {
-        return info.Main.Version
-    }
-    return "dev"
+	if version != "dev" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
 }
 
 // Note: Japanese text in this file uses "，" and "．" as punctuation
@@ -61,9 +64,12 @@ func usageJa() {
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute] [--autofit]
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--data-json] [--compute]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--range A1:F20] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json] [--compute]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--range A1:F20] [--data-json] [--compute]
+  json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
+  json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
+  json2xlsx functions [--search X] [--category C] [--json]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
 
 オプション:
@@ -72,8 +78,13 @@ Usage:
   --data-json          入力をデータ JSON (二次元配列 / オブジェクト配列 / Map-of-Arrays) として扱う
   --compute            数式 (t=f) を評価し v を補完する
   --autofit            列幅を内容に合わせて自動調整し，改行セルに折り返しを設定する
-  --sheet              to-csv で入力 XLSX または JSON から抽出するシート名
+  --sheet              to-csv / info / eval で対象にするシート名
   --sheet-index        to-csv で入力 XLSX または JSON から抽出するシート番号 (1から開始)
+  --range              to-md / to-csv で出力する矩形範囲 (例 A1:F20，単一セル A1)．範囲外はエラー
+  --cell               eval で数式の評価原点にするセル (既定 A1)
+  --json               info / eval / functions で JSON を出力する
+  --search             functions で関数名を部分一致 (大文字小文字無視) で絞り込む
+  --category           functions でカテゴリを完全一致で絞り込む
   --date-serial        to-json で日時セルを Excel シリアル値で出力する (既定)
   --date-display       to-json で日時セルを表示文字列で出力する (非推奨，--date-rfc3339 を推奨)
   --date-rfc3339       to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
@@ -88,6 +99,9 @@ Usage:
 to-md / to-html / to-xlsx は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する．
 JSON の場合は SheetJS Cell Object 形式を基本とするが，--data-json を指定すると二次元配列・オブジェクト配列・Map-of-Arrays の 3 形式を受け付ける．
 to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す．
+info / eval は XLSX と Workbook JSON の両方を受け付ける (-i 省略時 stdin)．
+eval は組込みの数式エンジンで評価するため Excel 完全互換ではない (クロスシート参照・配列数式などは未対応)．
+--range は A1:F20 または単一セル A1 のみを受け付ける．範囲外はエラーになる．
 サブコマンドを省略した場合は to-xlsx として動作する．`)
 }
 
@@ -97,9 +111,12 @@ func usageEn() {
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute] [--autofit]
-  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--data-json] [--compute]
+  json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--range A1:F20] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
-  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--data-json] [--compute]
+  json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--range A1:F20] [--data-json] [--compute]
+  json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
+  json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
+  json2xlsx functions [--search X] [--category C] [--json]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
 
 Options:
@@ -108,8 +125,13 @@ Options:
   --data-json          Treat input as data JSON (2D array / array of objects / map-of-arrays)
   --compute            Evaluate formulas (t=f) and fill cached values
   --autofit            Auto-adjust column widths and enable wrap text for cells with newlines
-  --sheet              Sheet name for to-csv
+  --sheet              Sheet name for to-csv / info / eval
   --sheet-index        Sheet index for to-csv (1-based)
+  --range              Rectangular range for to-md / to-csv (e.g. A1:F20 or single cell A1)
+  --cell               eval origin cell for the evaluation context (default A1)
+  --json               Output JSON for info / eval / functions
+  --search             functions: filter by name substring (case-insensitive)
+  --category           functions: filter by exact category
   --date-serial        Emit date cells as Excel serial values (default)
   --date-display       Emit date cells as display strings
   --date-rfc3339       Reinterpret date/time serial as RFC3339 (UTC)
@@ -124,7 +146,11 @@ When subcommand is omitted, defaults to to-xlsx.
 to-md / to-html / to-xlsx auto-detects XLSX vs JSON using magic bytes (PK\x03\x04).
 Without --data-json, JSON input must be SheetJS Cell Object format.
 With --data-json, accepts 2D array / array of objects / map-of-arrays.
-to-csv converts JSON or XLSX back to CSV.`)
+to-csv converts JSON or XLSX back to CSV.
+info / eval accept both XLSX and Workbook JSON (stdin when -i is omitted).
+eval uses the built-in formula engine, so it is not fully Excel-compatible
+(cross-sheet references, array formulas, etc. are unsupported).
+--range accepts A1:F20 or a single cell A1 only; out-of-range is an error.`)
 }
 
 func main() {
@@ -132,7 +158,7 @@ func main() {
 	sub := "to-xlsx"
 	if len(args) > 0 {
 		switch args[0] {
-		case "to-json", "to-xlsx", "to-md", "to-html", "to-csv":
+		case "to-json", "to-xlsx", "to-md", "to-html", "to-csv", "info", "eval", "functions":
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
@@ -156,6 +182,12 @@ func main() {
 		runToHTML(args)
 	case "to-csv":
 		runToCSV(args)
+	case "info":
+		runInfo(args)
+	case "eval":
+		runEval(args)
+	case "functions":
+		runFunctions(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -203,10 +235,10 @@ func runToJSON(args []string) {
 	defer closeW()
 
 	opts := json2xlsx.ToJSONOptions{
-		DateMode:    dateMode,
+		DateMode:     dateMode,
 		WrapWithBook: true,
-		ImageMode:   imageModeVal,
-		BaseDir:     outputBaseDir(output),
+		ImageMode:    imageModeVal,
+		BaseDir:      outputBaseDir(output),
 	}
 	if err := json2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
@@ -279,11 +311,12 @@ func runToXLSX(args []string) {
 func runToMD(args []string) {
 	fs := flag.NewFlagSet("to-md", flag.ExitOnError)
 	fs.Usage = usage
-	var input, output, mode string
+	var input, output, mode, rangeStr string
 	var firstRowHeader, dataJSON, compute, compact bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output Markdown file (default: stdout)")
 	fs.StringVar(&mode, "mode", "f", "cell display mode: f|v|both")
+	fs.StringVar(&rangeStr, "range", "", "output only the given range (e.g. A1:F20)")
 	fs.BoolVar(&firstRowHeader, "first-row-header", false, "use first row as table header (suppress A/B/C column headers and row numbers)")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	fs.BoolVar(&compute, "compute", false, "evaluate formulas (t=f) and fill cached values")
@@ -325,6 +358,7 @@ func runToMD(args []string) {
 		DataJSON:       dataJSON,
 		EvalFormulas:   compute,
 		Compact:        compact,
+		Range:          rangeStr,
 	}
 	if err := json2xlsx.ToMarkdown(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-md: %v\n", err)
@@ -387,13 +421,14 @@ func runToHTML(args []string) {
 func runToCSV(args []string) {
 	fs := flag.NewFlagSet("to-csv", flag.ExitOnError)
 	fs.Usage = usage
-	var input, output, sheet string
+	var input, output, sheet, rangeStr string
 	var sheetIndex int
 	var dataJSON, compute bool
 	fs.StringVar(&input, "i", "", "input CSV JSON or XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output CSV file (default: stdout)")
 	fs.StringVar(&sheet, "sheet", "", "sheet name for XLSX or Workbook JSON")
 	fs.IntVar(&sheetIndex, "sheet-index", 0, "sheet index (1-based) for XLSX or Workbook JSON")
+	fs.StringVar(&rangeStr, "range", "", "output only the given range (e.g. A1:F20)")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	fs.BoolVar(&compute, "compute", false, "evaluate formulas (t=f) and fill cached values")
 	_ = fs.Parse(args)
@@ -412,10 +447,244 @@ func runToCSV(args []string) {
 	}
 	defer closeW()
 
-	if err := json2xlsx.ToCSV(r, w, sheet, sheetIndex, dataJSON, compute); err != nil {
+	if err := json2xlsx.ToCSVRange(r, w, sheet, sheetIndex, dataJSON, compute, rangeStr); err != nil {
 		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runFunctions(args []string) {
+	fs := flag.NewFlagSet("functions", flag.ExitOnError)
+	fs.Usage = usage
+	var asJSON bool
+	var search, category string
+	fs.BoolVar(&asJSON, "json", false, "output as JSON")
+	fs.StringVar(&search, "search", "", "filter by name substring (case-insensitive)")
+	fs.StringVar(&category, "category", "", "filter by category")
+	_ = fs.Parse(args)
+
+	if category != "" {
+		valid := false
+		for _, c := range json2xlsx.FunctionCategories() {
+			if c == category {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			fmt.Fprintf(os.Stderr, "functions: unknown category %q (valid: %s)\n", category, strings.Join(json2xlsx.FunctionCategories(), ", "))
+			os.Exit(2)
+		}
+	}
+
+	funcs := json2xlsx.FilterFunctions(search, category)
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(funcs); err != nil {
+			fmt.Fprintf(os.Stderr, "functions: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, fi := range funcs {
+		fmt.Fprintf(w, "%s\t%s\n", fi.Name, fi.Category)
+	}
+	if err := w.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "functions: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runInfo(args []string) {
+	fs := flag.NewFlagSet("info", flag.ExitOnError)
+	fs.Usage = usage
+	var input, sheet string
+	var asJSON bool
+	fs.StringVar(&input, "i", "", "input XLSX or Workbook JSON file (default: stdin)")
+	fs.StringVar(&sheet, "sheet", "", "restrict output to one sheet name")
+	fs.BoolVar(&asJSON, "json", false, "output as JSON")
+	_ = fs.Parse(args)
+
+	r, closeR, err := openInput(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open input: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeR()
+
+	wb, charts, err := json2xlsx.ReadBookInfoSource(r)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "info: %v\n", err)
+		os.Exit(1)
+	}
+
+	info := json2xlsx.BuildBookInfoWithCharts(wb, charts)
+
+	if sheet != "" {
+		filtered := make([]json2xlsx.SheetInfo, 0, 1)
+		found := false
+		for _, s := range info.Sheets {
+			if s.Name == sheet {
+				filtered = append(filtered, s)
+				found = true
+			}
+		}
+		if !found {
+			fmt.Fprintf(os.Stderr, "info: sheet %q not found\n", sheet)
+			os.Exit(1)
+		}
+		info.Sheets = filtered
+		info.Totals = json2xlsx.TotalsForSheets(filtered)
+	}
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(info); err != nil {
+			fmt.Fprintf(os.Stderr, "info: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, s := range info.Sheets {
+		rng := s.UsedRange
+		if rng == "" {
+			rng = "-"
+		}
+		fmt.Fprintf(w, "%s\t%s\trows=%d\tcols=%d\tcells=%d\tformulas=%d\tmerges=%d\ttables=%d\tcondFormats=%d\tcharts=%d\tpictures=%d\tsparklines=%d\n",
+			s.Name, rng, s.Rows, s.Cols, s.Cells, s.Formulas, s.Merges, len(s.Tables), s.ConditionalFormats, s.Charts, s.Pictures, s.Sparklines)
+	}
+	fmt.Fprintf(w, "totals\tsheets=%d\tcells=%d\tformulas=%d\tmerges=%d\ttables=%d\tcharts=%d\tpictures=%d\n",
+		info.Totals.Sheets, info.Totals.Cells, info.Totals.Formulas, info.Totals.Merges, info.Totals.Tables, info.Totals.Charts, info.Totals.Pictures)
+	if err := w.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "info: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runEval(args []string) {
+	formula, rest, err := extractFormulaArg(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+		os.Exit(2)
+	}
+
+	fs := flag.NewFlagSet("eval", flag.ExitOnError)
+	fs.Usage = usage
+	var input, sheet, cell string
+	var asJSON bool
+	fs.StringVar(&input, "i", "", "input XLSX or Workbook JSON for cell context (default: none)")
+	fs.StringVar(&sheet, "sheet", "", "sheet name for cell context")
+	fs.StringVar(&cell, "cell", "A1", "origin cell for evaluation context")
+	fs.BoolVar(&asJSON, "json", false, "output as JSON")
+	_ = fs.Parse(rest)
+
+	if formula == "" {
+		fmt.Fprintln(os.Stderr, "eval: formula is required")
+		usage()
+		os.Exit(2)
+	}
+
+	var wb *json2xlsx.Workbook
+	switch {
+	case input != "":
+		r, closeR, err := openInput(input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open input: %v\n", err)
+			os.Exit(1)
+		}
+		defer closeR()
+		wb, _, err = json2xlsx.ReadBookInfoSource(r)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+			os.Exit(1)
+		}
+	case stdinIsPiped():
+		wb, _, err = json2xlsx.ReadBookInfoSource(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	res, err := json2xlsx.EvalFormula(formula, wb, json2xlsx.EvalOptions{Sheet: sheet, Cell: cell})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+		os.Exit(2)
+	}
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetEscapeHTML(false)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(res); err != nil {
+			fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if res.Code != "" || res.Error != "" {
+		fmt.Fprintln(os.Stdout, res.Code)
+		return
+	}
+	fmt.Fprintln(os.Stdout, formatEvalValue(res.Value))
+}
+
+// formatEvalValue は eval の人間向け出力を整形する．
+func formatEvalValue(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// extractFormulaArg は eval の位置引数 (数式) を 1 つ抜き出し，
+// 残り (フラグ) を返す．数式はフラグの前後どちらにも置ける．
+func extractFormulaArg(args []string) (string, []string, error) {
+	valueFlags := map[string]bool{"i": true, "sheet": true, "cell": true}
+	var formula string
+	rest := []string{}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "-") {
+			rest = append(rest, a)
+			name := strings.TrimLeft(a, "-")
+			if eq := strings.IndexByte(name, '='); eq >= 0 {
+				name = name[:eq]
+			} else if valueFlags[name] && i+1 < len(args) {
+				i++
+				rest = append(rest, args[i])
+			}
+			continue
+		}
+		if formula != "" {
+			return "", nil, fmt.Errorf("unexpected argument %q", a)
+		}
+		formula = a
+	}
+	return formula, rest, nil
+}
+
+// stdinIsPiped は標準入力が端末ではなくパイプ/ファイルかを返す．
+// eval で -i 省略時に，端末で待ち続けないための判定に使う．
+func stdinIsPiped() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice == 0
 }
 
 func openInput(path string) (io.Reader, func(), error) {

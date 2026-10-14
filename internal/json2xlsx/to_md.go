@@ -34,6 +34,8 @@ type MarkdownOptions struct {
 	DataJSON       bool
 	EvalFormulas   bool
 	Compact        bool
+	// Range は出力対象の矩形範囲 ("A1:F20" または "A1")．空なら全体．
+	Range string
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
@@ -58,7 +60,19 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 
 	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
 
-	out, hasWarning := renderMarkdown(*wb, opts)
+	var rng *CellRange
+	if strings.TrimSpace(opts.Range) != "" {
+		parsed, err := ParseCellRange(opts.Range)
+		if err != nil {
+			return err
+		}
+		rng = &parsed
+	}
+
+	out, hasWarning, err := renderMarkdownRange(*wb, opts, rng)
+	if err != nil {
+		return err
+	}
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
@@ -134,6 +148,12 @@ func formatSeparator(align string, width int, compact bool) string {
 
 // renderMarkdown は Workbook を Markdown 文字列にレンダリングする。
 func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
+	out, hasWarning, _ := renderMarkdownRange(wb, opts, nil)
+	return out, hasWarning
+}
+
+// renderMarkdownRange は範囲指定付きでレンダリングする。rng が nil なら全体。
+func renderMarkdownRange(wb Workbook, opts MarkdownOptions, rng *CellRange) (string, bool, error) {
 	sheets := wb.Sheets
 
 	var b strings.Builder
@@ -148,22 +168,29 @@ func renderMarkdown(wb Workbook, opts MarkdownOptions) (string, bool) {
 			b.WriteString(sh.Name)
 			b.WriteString("\n\n")
 		}
-		out, w := renderSheet(sh, opts)
+		out, w, err := renderSheetRange(sh, opts, rng)
+		if err != nil {
+			return "", false, fmt.Errorf("sheet %q: %w", sh.Name, err)
+		}
 		b.WriteString(out)
 		if w {
 			hasWarning = true
 		}
 	}
-	return b.String(), hasWarning
+	return b.String(), hasWarning, nil
 }
 
-// renderSheet は単一シートをテーブルとしてレンダリングする。空シートは空文字を返す。
+// renderSheetRange は単一シートをテーブルとしてレンダリングする。空シートは空文字を返す。
 // FirstRowHeader=true のとき 1 行目をテーブルヘッダとして扱う（--first-row-header）。
 // それ以外は A/B/C 列名ヘッダ + 行番号を表示する（デフォルト）。
-func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
-	cg, ok := BuildCellGrid(sh)
+// rng が指定された場合はその範囲だけを切り出し，列名と行番号は絶対座標で表示する。
+func renderSheetRange(sh Sheet, opts MarkdownOptions, rng *CellRange) (string, bool, error) {
+	cg, ok, err := BuildCellGridRange(sh, rng)
+	if err != nil {
+		return "", false, err
+	}
 	if !ok {
-		return "", false
+		return "", false, nil
 	}
 
 	colAlign := make([]string, cg.MaxCol+1)
@@ -232,7 +259,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 
 	rowIndexWidth := 0
 	if opts.RowIndex && !opts.FirstRowHeader {
-		rowIndexWidth = len(strconv.Itoa(cg.MaxRow))
+		rowIndexWidth = len(strconv.Itoa(cg.RowOffset + cg.MaxRow))
 	}
 
 	var hasWarning bool
@@ -335,7 +362,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 			b.WriteString("|")
 			if opts.RowIndex {
 				b.WriteString(" ")
-				b.WriteString(padCell(strconv.Itoa(r), rowIndexWidth, "---:", opts.Compact))
+				b.WriteString(padCell(strconv.Itoa(cg.RowOffset+r), rowIndexWidth, "---:", opts.Compact))
 				b.WriteString(" |")
 			}
 			for c := 1; c <= cg.MaxCol; c++ {
@@ -349,7 +376,7 @@ func renderSheet(sh Sheet, opts MarkdownOptions) (string, bool) {
 		}
 	}
 
-	return b.String(), hasWarning
+	return b.String(), hasWarning, nil
 }
 
 // formatCell は 1 セルの Markdown 表現を返す。

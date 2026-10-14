@@ -409,3 +409,158 @@ func TestCLI_ToCSV_Compute(t *testing.T) {
 		}
 	})
 }
+
+func TestExtractFormulaArg(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		formula string
+		rest    []string
+	}{
+		{"formula only", []string{"=1+2"}, "=1+2", []string{}},
+		{"flag before formula", []string{"-i", "book.xlsx", "=SUM(A1:A2)"}, "=SUM(A1:A2)", []string{"-i", "book.xlsx"}},
+		{"formula before flag", []string{"=SUM(A1:A2)", "-i", "book.xlsx"}, "=SUM(A1:A2)", []string{"-i", "book.xlsx"}},
+		{"json flag", []string{"--json", "=1"}, "=1", []string{"--json"}},
+		{"cell flag", []string{"--cell", "B2", "=A1"}, "=A1", []string{"--cell", "B2"}},
+		{"sheet with equals", []string{"--sheet=Data", "=A1"}, "=A1", []string{"--sheet=Data"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			formula, rest, err := extractFormulaArg(tc.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if formula != tc.formula {
+				t.Errorf("formula = %q, want %q", formula, tc.formula)
+			}
+			if strings.Join(rest, " ") != strings.Join(tc.rest, " ") {
+				t.Errorf("rest = %v, want %v", rest, tc.rest)
+			}
+		})
+	}
+
+	if _, _, err := extractFormulaArg([]string{"=1", "=2"}); err == nil {
+		t.Error("expected error for two positional formulas")
+	}
+}
+
+func TestCLI_Functions(t *testing.T) {
+	stdout, stderr, code := runCLI(t, "functions", "--search", "lookup")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	for _, name := range []string{"VLOOKUP", "HLOOKUP", "XLOOKUP"} {
+		if !strings.Contains(stdout, name) {
+			t.Errorf("expected %s in output, got: %s", name, stdout)
+		}
+	}
+
+	stdout, stderr, code = runCLI(t, "functions", "--category", "date", "--json")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if !json.Valid([]byte(stdout)) {
+		t.Fatalf("functions --json output is not valid JSON: %s", stdout)
+	}
+	if !strings.Contains(stdout, `"name": "TODAY"`) && !strings.Contains(stdout, `"name":"TODAY"`) {
+		t.Errorf("expected TODAY in JSON output, got: %s", stdout)
+	}
+
+	_, stderr, code = runCLI(t, "functions", "--category", "nope")
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2 for unknown category (stderr: %s)", code, stderr)
+	}
+}
+
+func TestCLI_Info(t *testing.T) {
+	book := `{"name":"S1","cells":{"A1":{"t":"s","v":"x"},"B2":{"t":"f","f":"1+1"}}}`
+	stdout, stderr, code := runCLIWithStdin(t, book, "info")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "S1") || !strings.Contains(stdout, "A1:B2") {
+		t.Errorf("expected sheet name and used range, got: %s", stdout)
+	}
+
+	stdout, stderr, code = runCLIWithStdin(t, book, "info", "--json")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if !json.Valid([]byte(stdout)) {
+		t.Fatalf("info --json output is not valid JSON: %s", stdout)
+	}
+	var info map[string]any
+	if err := json.Unmarshal([]byte(stdout), &info); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if info["schema"] != "json2xlsx-info/1" {
+		t.Errorf("schema = %v, want json2xlsx-info/1", info["schema"])
+	}
+}
+
+func TestCLI_Eval(t *testing.T) {
+	stdout, stderr, code := runCLI(t, "eval", "=SUM(1,2,3)")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "6" {
+		t.Errorf("stdout = %q, want 6", stdout)
+	}
+
+	// 数式エラーは exit 0 で出力される
+	stdout, stderr, code = runCLI(t, "eval", "=1/0")
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "#DIV/0!" {
+		t.Errorf("stdout = %q, want #DIV/0!", stdout)
+	}
+
+	stdout, stderr, code = runCLI(t, "eval", "--json", "=1/0")
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !json.Valid([]byte(stdout)) || !strings.Contains(stdout, "#DIV/0!") {
+		t.Errorf("expected JSON error with code, got: %s", stdout)
+	}
+}
+
+func TestCLI_EvalWithStdinWorkbook(t *testing.T) {
+	book := `{"name":"S1","cells":{"A1":{"t":"n","v":10},"A2":{"t":"n","v":20}}}`
+	stdout, stderr, code := runCLIWithStdin(t, book, "eval", "=SUM(A1:A2)")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "30" {
+		t.Errorf("stdout = %q, want 30", stdout)
+	}
+}
+
+func TestCLI_ToMD_Range(t *testing.T) {
+	book := `{"name":"S1","cells":{
+		"A1":{"t":"s","v":"a"},"B1":{"t":"s","v":"b"},
+		"A2":{"t":"n","v":1},"B2":{"t":"n","v":2}}}`
+	stdout, stderr, code := runCLIWithStdin(t, book, "to-md", "--range", "B1:B2")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "| B") {
+		t.Errorf("expected column B label, got: %s", stdout)
+	}
+	if strings.Contains(stdout, "| A") {
+		t.Errorf("column A should not appear, got: %s", stdout)
+	}
+}
+
+func TestCLI_ToCSV_Range(t *testing.T) {
+	book := `{"name":"S1","cells":{
+		"A1":{"t":"n","v":1},"B1":{"t":"n","v":2},
+		"A2":{"t":"n","v":3},"B2":{"t":"n","v":4}}}`
+	stdout, stderr, code := runCLIWithStdin(t, book, "to-csv", "--range", "B1:B2")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "2\n4" {
+		t.Errorf("stdout = %q, want \"2\\n4\"", stdout)
+	}
+}

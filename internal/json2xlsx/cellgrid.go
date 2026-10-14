@@ -8,6 +8,10 @@ type CellGrid struct {
 	MaxCol   int
 	MaxRow   int
 	ColNames []string // 1-indexed
+	// RowOffset / ColOffset は --range で切り出したときの原点補正．
+	// 切り出しなしの場合は 0．絶対座標は RowOffset+r / ColOffset+c．
+	RowOffset int
+	ColOffset int
 }
 
 // BuildCellGrid は Sheet の cells/rows から二次元行列を構築する．

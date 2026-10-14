@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -19,6 +20,21 @@ type csvKeyValue struct {
 }
 
 func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON bool, compute bool) error {
+	return ToCSVRange(r, w, sheetName, sheetIndex, dataJSON, compute, "")
+}
+
+// ToCSVRange は --range 付きの CSV 変換．rangeStr が空なら全体を出力する．
+// range はシートのセル入力 (XLSX / Workbook JSON) にのみ適用される．
+func ToCSVRange(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON bool, compute bool, rangeStr string) error {
+	var rng *CellRange
+	if strings.TrimSpace(rangeStr) != "" {
+		parsed, err := ParseCellRange(rangeStr)
+		if err != nil {
+			return err
+		}
+		rng = &parsed
+	}
+
 	br := bufio.NewReader(r)
 	head, err := br.Peek(4)
 	if err != nil && err != io.EOF {
@@ -34,7 +50,7 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 		if compute {
 			formulaWarnings = EvalWorkbookFormulas(res.Workbook)
 		}
-		if err := convertWorkbookObjectToCSV(*res.Workbook, w, nil, sheetName, sheetIndex); err != nil {
+		if err := convertWorkbookObjectToCSV(*res.Workbook, w, nil, sheetName, sheetIndex, rng); err != nil {
 			return err
 		}
 		for _, msg := range formulaWarnings {
@@ -58,7 +74,7 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 	}
 
 	if isWorkbook {
-		formulaWarnings, err := convertWorkbookToCSV(trimmed, w, sheetName, sheetIndex, compute)
+		formulaWarnings, err := convertWorkbookToCSV(trimmed, w, sheetName, sheetIndex, compute, rng)
 		if err != nil {
 			return err
 		}
@@ -249,7 +265,7 @@ func detectCSVInputFormat(data []byte) (isWorkbook bool, trimmed []byte, err err
 	}
 }
 
-func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int, compute bool) ([]string, error) {
+func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int, compute bool, rng *CellRange) ([]string, error) {
 	var wb Workbook
 	if err := json.Unmarshal(data, &wb); err != nil {
 		return nil, fmt.Errorf("parse workbook json: %w", err)
@@ -260,13 +276,13 @@ func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex
 	if compute {
 		formulaWarnings = EvalWorkbookFormulas(&wb)
 	}
-	if err := convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex); err != nil {
+	if err := convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex, rng); err != nil {
 		return nil, err
 	}
 	return formulaWarnings, nil
 }
 
-func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName string, sheetIndex int) error {
+func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName string, sheetIndex int, rng *CellRange) error {
 	sh, err := resolveSheet(wb, sheetName, sheetIndex)
 	if err != nil {
 		return err
@@ -280,7 +296,10 @@ func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName
 		return errors.New("empty input: no cells found")
 	}
 
-	cg, ok := BuildCellGrid(sh)
+	cg, ok, err := BuildCellGridRange(sh, rng)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return errors.New("empty input: no valid cells found")
 	}
@@ -357,8 +376,6 @@ func guessCellMapFromData(data []byte) map[string]Cell {
 	}
 	return nil
 }
-
-
 
 func normalizeCSVValue(key string, raw interface{}) (*string, error) {
 	switch v := raw.(type) {
