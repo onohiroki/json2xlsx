@@ -120,6 +120,8 @@ The built-in formula engine evaluates formulas cell-by-cell. Below is the full l
 
 **Comparison operators:** `<`, `>`, `=`, `<=`, `>=`, `<>` (not equal). Comparison results are `1` (true) or `0` (false). Strings are compared case-insensitively. Mixed types follow the Excel order: numbers < strings.
 
+**Cross-sheet references:** `Sheet1!A1`, `'Sales 2026'!A1`, and `'売上'!A1` are supported. Sheet names are case-insensitive. Ranges such as `SUM(Sales!D2:D5)` work with aggregate, criteria, and lookup functions. 3D references (`Sheet1:Sheet3!A1`) and external workbook references (`[Book.xlsx]Sheet1!A1`) are not supported. Sheet names containing spaces or non-ASCII characters must be quoted.
+
 **Supported functions:**
 
 | Function | Description |
@@ -209,7 +211,7 @@ The built-in formula engine evaluates formulas cell-by-cell. Below is the full l
 
 - Range references (e.g. `A1:A10`) are valid only inside function arguments; standalone ranges produce an error.
 - Cell references use A1-style only (no R1C1). Column letters are limited to 3 characters (`A`–`ZZZ`).
-- Cross-sheet references are **not** supported.
+- Cross-sheet references are supported (`Sheet1!A1`, `'Sales 2026'!A1`). Sheet names with spaces or non-ASCII characters must be quoted. 3D references (`Sheet1:Sheet3!A1`) and external workbook references are not supported.
 - Array formulas, volatile flags, and iterative calculation are **not** supported.
 - Circular references are detected and reported as warnings. All other evaluation errors cause the cell to be skipped.
 
@@ -363,7 +365,7 @@ cat book.xlsx | json2xlsx eval '=SUM(B2:C2)'
 
 Formula errors (such as `#DIV/0!`) exit with code **0**; only usage errors and I/O failures exit non-zero.
 
-**Note:** evaluation uses the built-in engine, so it is **not fully Excel-compatible**. Cross-sheet references, array formulas, and some string criteria are unsupported. It returns what `--compute` would produce, not necessarily what Excel would.
+**Note:** evaluation uses the built-in engine, so it is **not fully Excel-compatible**. Array formulas, 3D references, external workbook references, and some string criteria are unsupported. It returns what `--compute` would produce, not necessarily what Excel would.
 
 ### `functions` — list supported functions
 
@@ -499,6 +501,7 @@ Key points:
 - A string starting with `=` is a formula. Use `{ "v": "=text" }` for a literal string.
 - `columns[].formula` applies to every data row. `{key}` is the current row cell, `{key:col}` is the column letter, and `{r}` is the row number. For example, `={qty}*{price}` becomes `=B2*C2`, and `=SUM({amount:col}2:{amount:col}6)` becomes `=SUM(D2:D6)`.
 - Unknown formula placeholders are validation errors. Array rows and literal column references such as `=B{r}*C{r}` still work.
+- Formulas may reference other sheets: `=SUM(Sales!D2:D5)` or `=SUM('売上'!D2:D5)`. Quote sheet names with spaces or non-ASCII characters.
 - Cell objects (`{ "v": ..., "f": ..., "format": ..., "style": ..., "align": ..., "t": ... }`) are available as an escape hatch.
 - Styles are named in `styles`. `headerStyle` / `bodyStyle` apply to the header and data. Precedence is `bodyStyle`/`headerStyle` < `columns[].style` < cell `style`; `format` and `align` are applied on top.
 - Sheet names must be at most 31 characters and must not contain `[]:*?/\`.

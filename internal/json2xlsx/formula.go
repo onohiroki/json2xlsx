@@ -14,15 +14,24 @@ import (
 // Warning messages for failed evaluations are returned.
 func EvalWorkbookFormulas(wb *Workbook) []string {
 	var warnings []string
+	sheets := make(map[string]map[string]Cell, len(wb.Sheets))
+	names := make([]string, len(wb.Sheets))
+	for si := range wb.Sheets {
+		sh := &wb.Sheets[si]
+		name := effectiveSheetName(*sh, si)
+		names[si] = name
+		sheets[name] = mergedSheetCells(*sh)
+	}
+	ctx := newWorkbookEvalContext(sheets)
 	for si := range wb.Sheets {
 		sh := &wb.Sheets[si]
 		if len(sh.Cells) == 0 {
 			continue
 		}
-		ctx := newEvalContext(mergedSheetCells(*sh))
+		sheetName := names[si]
 		for axis, cell := range sh.Cells {
 			if cell.T == "f" && cell.V == nil && cell.F != "" {
-				fv, err := ctx.evaluate(axis, cell.F)
+				fv, err := ctx.evaluateSheet(sheetName, axis, cell.F)
 				if err != nil {
 					warnings = append(warnings, fmt.Sprintf("warning: %s=%s: %v", axis, cell.F, err))
 					continue
@@ -41,6 +50,13 @@ func EvalWorkbookFormulas(wb *Workbook) []string {
 		}
 	}
 	return warnings
+}
+
+func effectiveSheetName(sh Sheet, index int) string {
+	if sh.Name != "" {
+		return sh.Name
+	}
+	return fmt.Sprintf("Sheet%d", index+1)
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +136,9 @@ const (
 )
 
 type token struct {
-	typ tokenType
-	lit string
+	typ   tokenType
+	lit   string
+	sheet string
 }
 
 type tokenizer struct {
@@ -229,6 +246,8 @@ func (t *tokenizer) next() token {
 		return token{typ: tokenAmp, lit: "&"}
 	case ch == '"':
 		return t.readString()
+	case ch == '\'':
+		return t.readQuotedSheetRef()
 	case ch == '.' || (ch >= '0' && ch <= '9'):
 		return t.readNumber()
 	default:
@@ -291,6 +310,10 @@ func (t *tokenizer) readIdent() token {
 		}
 	}
 	raw := t.input[start:t.pos]
+	if raw != "" && t.pos < len(t.input) && t.input[t.pos] == '!' {
+		t.pos++
+		return t.readCellRefAfterBang(raw)
+	}
 	cleaned := strings.ReplaceAll(raw, "$", "")
 	upper := strings.ToUpper(cleaned)
 	// Strip _xlfn. prefix added by Excel for future/unsupported functions.
@@ -305,6 +328,56 @@ func (t *tokenizer) readIdent() token {
 	}
 
 	return token{typ: tokenIllegal, lit: raw}
+}
+
+// readQuotedSheetRef reads a quoted sheet name and the cell reference after !.
+func (t *tokenizer) readQuotedSheetRef() token {
+	start := t.pos
+	t.pos++ // opening quote
+	var b strings.Builder
+	closed := false
+	for t.pos < len(t.input) {
+		ch := t.input[t.pos]
+		if ch == '\'' {
+			if t.pos+1 < len(t.input) && t.input[t.pos+1] == '\'' {
+				b.WriteByte('\'')
+				t.pos += 2
+				continue
+			}
+			t.pos++
+			closed = true
+			break
+		}
+		b.WriteByte(ch)
+		t.pos++
+	}
+	if !closed || t.pos >= len(t.input) || t.input[t.pos] != '!' {
+		if t.pos == start {
+			t.pos++
+		}
+		return token{typ: tokenIllegal, lit: t.input[start:t.pos]}
+	}
+	t.pos++ // !
+	return t.readCellRefAfterBang(b.String())
+}
+
+// readCellRefAfterBang reads the A1 part after a sheet name and !.
+func (t *tokenizer) readCellRefAfterBang(sheet string) token {
+	start := t.pos
+	for t.pos < len(t.input) {
+		ch := t.input[t.pos]
+		if ch == '$' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+			t.pos++
+			continue
+		}
+		break
+	}
+	raw := t.input[start:t.pos]
+	cleaned := strings.ReplaceAll(raw, "$", "")
+	if sheet == "" || !looksLikeCellRef(cleaned) {
+		return token{typ: tokenIllegal, lit: sheet + "!" + raw}
+	}
+	return token{typ: tokenCellRef, lit: strings.ToUpper(cleaned), sheet: sheet}
 }
 
 // looksLikeCellRef checks if s matches [A-Za-z]{1,3}[0-9]+.
@@ -352,15 +425,17 @@ func (e *stringExpr) eval(ctx *evalContext) (formulaValue, error) {
 }
 
 type cellRefExpr struct {
-	ref string
+	ref   string
+	sheet string
 }
 
 func (e *cellRefExpr) eval(ctx *evalContext) (formulaValue, error) {
-	return ctx.getCellValue(normalizeCellRef(e.ref))
+	return ctx.getCellValue(e.sheet, normalizeCellRef(e.ref))
 }
 
 type rangeExpr struct {
 	start, end string
+	sheet      string
 }
 
 func (e *rangeExpr) eval(ctx *evalContext) (formulaValue, error) {
@@ -883,7 +958,15 @@ func (p *parser) parseFactor() expr {
 			p.error("invalid range: expected cell references on both sides of ':'")
 			return primary
 		}
-		return &rangeExpr{start: start.ref, end: end.ref}
+		sheet := start.sheet
+		if sheet == "" {
+			sheet = end.sheet
+		}
+		if start.sheet != "" && end.sheet != "" && !strings.EqualFold(start.sheet, end.sheet) {
+			p.error("range cannot span sheets: %s!%s:%s!%s", start.sheet, start.ref, end.sheet, end.ref)
+			return primary
+		}
+		return &rangeExpr{start: start.ref, end: end.ref, sheet: sheet}
 	}
 	return primary
 }
@@ -903,7 +986,7 @@ func (p *parser) parsePrimary() expr {
 		return &stringExpr{val: tok.lit}
 
 	case tokenCellRef:
-		return &cellRefExpr{ref: tok.lit}
+		return &cellRefExpr{ref: tok.lit, sheet: tok.sheet}
 
 	case tokenFunc:
 		return p.parseFuncCall(tok)
@@ -976,31 +1059,80 @@ func (p *parser) error(format string, args ...interface{}) {
 // ---------------------------------------------------------------------------
 
 type evalContext struct {
-	cells      map[string]Cell
-	visiting   map[string]bool
-	cache      map[string]formulaValue
-	formulaRef string
+	sheets      map[string]map[string]Cell
+	activeSheet string
+	visiting    map[string]bool
+	cache       map[string]formulaValue
+	formulaRef  string
 }
 
 func newEvalContext(cells map[string]Cell) *evalContext {
 	return &evalContext{
-		cells:    cells,
+		sheets:   map[string]map[string]Cell{"": cells},
 		visiting: make(map[string]bool),
 		cache:    make(map[string]formulaValue),
 	}
 }
 
+func newWorkbookEvalContext(sheets map[string]map[string]Cell) *evalContext {
+	return &evalContext{
+		sheets:   sheets,
+		visiting: make(map[string]bool),
+		cache:    make(map[string]formulaValue),
+	}
+}
+
+func (ctx *evalContext) sheetCells(sheet string) (map[string]Cell, string, bool) {
+	if sheet == "" {
+		sheet = ctx.activeSheet
+	}
+	if cells, ok := ctx.sheets[sheet]; ok {
+		return cells, sheet, true
+	}
+	for name, cells := range ctx.sheets {
+		if strings.EqualFold(name, sheet) {
+			return cells, name, true
+		}
+	}
+	return nil, sheet, false
+}
+
+func (ctx *evalContext) getCell(sheet, ref string) (Cell, bool) {
+	cells, _, ok := ctx.sheetCells(sheet)
+	if !ok {
+		return Cell{}, false
+	}
+	cell, ok := cells[ref]
+	return cell, ok
+}
+
 func (ctx *evalContext) evaluate(originAxis, formula string) (formulaValue, error) {
-	if cached, ok := ctx.cache[originAxis]; ok {
+	return ctx.evaluateSheet(ctx.activeSheet, originAxis, formula)
+}
+
+func (ctx *evalContext) evaluateSheet(sheet, originAxis, formula string) (formulaValue, error) {
+	if sheet == "" {
+		sheet = ctx.activeSheet
+	}
+	cacheKey := sheet + "!" + originAxis
+	if cached, ok := ctx.cache[cacheKey]; ok {
 		return cached, nil
 	}
-	if ctx.visiting[originAxis] {
+	if ctx.visiting[cacheKey] {
 		return formulaValue{}, fmt.Errorf("circular reference detected")
 	}
-	ctx.visiting[originAxis] = true
-	defer delete(ctx.visiting, originAxis)
+	ctx.visiting[cacheKey] = true
+	defer delete(ctx.visiting, cacheKey)
 
+	prevSheet := ctx.activeSheet
+	prevRef := ctx.formulaRef
+	ctx.activeSheet = sheet
 	ctx.formulaRef = originAxis
+	defer func() {
+		ctx.activeSheet = prevSheet
+		ctx.formulaRef = prevRef
+	}()
+
 	p := newParser(formula)
 	ast, err := p.parse()
 	if err != nil {
@@ -1010,14 +1142,19 @@ func (ctx *evalContext) evaluate(originAxis, formula string) (formulaValue, erro
 	if err != nil {
 		return formulaValue{}, err
 	}
-	ctx.cache[originAxis] = val
+	ctx.cache[cacheKey] = val
 	return val, nil
 }
 
 // getCellValue returns the value of a cell by reference as a formulaValue.
 // String cells are returned as strVal; numeric/formula cells as numVal.
-func (ctx *evalContext) getCellValue(ref string) (formulaValue, error) {
-	cell, ok := ctx.cells[ref]
+// An empty sheet means the active sheet.
+func (ctx *evalContext) getCellValue(sheet, ref string) (formulaValue, error) {
+	cells, resolved, ok := ctx.sheetCells(sheet)
+	if !ok {
+		return formulaValue{}, fmt.Errorf("unknown sheet %q", sheet)
+	}
+	cell, ok := cells[ref]
 	if !ok {
 		return numVal(0), nil
 	}
@@ -1028,19 +1165,22 @@ func (ctx *evalContext) getCellValue(ref string) (formulaValue, error) {
 		return numVal(toFloat64(cell.V)), nil
 	}
 	if cell.T == "f" && cell.F != "" {
-		if cached, ok := ctx.cache[ref]; ok {
-			return cached, nil
-		}
-		return ctx.evaluate(ref, cell.F)
+		return ctx.evaluateSheet(resolved, ref, cell.F)
 	}
 	return numVal(0), nil
 }
 
-func (ctx *evalContext) collectRange(start, end string) []float64 {
+func (ctx *evalContext) collectRange(sheet, start, end string) ([]float64, error) {
+	if sheet == "" {
+		sheet = ctx.activeSheet
+	}
+	if _, _, ok := ctx.sheetCells(sheet); !ok {
+		return nil, fmt.Errorf("unknown sheet %q", sheet)
+	}
 	refs := expandRange(start, end)
 	var vals []float64
 	for _, ref := range refs {
-		cell, ok := ctx.cells[ref]
+		cell, ok := ctx.getCell(sheet, ref)
 		if !ok {
 			continue
 		}
@@ -1049,14 +1189,14 @@ func (ctx *evalContext) collectRange(start, end string) []float64 {
 				continue
 			}
 		}
-		fv, err := ctx.getCellValue(ref)
+		fv, err := ctx.getCellValue(sheet, ref)
 		if err == nil {
 			if n, nerr := fv.asNumber(); nerr == nil {
 				vals = append(vals, n)
 			}
 		}
 	}
-	return vals
+	return vals, nil
 }
 
 // evalArgNum evaluates a single expression and returns its numeric value.
@@ -1070,7 +1210,7 @@ func (ctx *evalContext) evalArgNum(arg expr) (float64, error) {
 
 func (ctx *evalContext) evalArg(arg expr) ([]float64, error) {
 	if r, ok := arg.(*rangeExpr); ok {
-		return ctx.collectRange(r.start, r.end), nil
+		return ctx.collectRange(r.sheet, r.start, r.end)
 	}
 	fv, err := arg.eval(ctx)
 	if err != nil {
@@ -1122,8 +1262,8 @@ func evalFuncAverage(ctx *evalContext, args []expr) (float64, error) {
 
 // cellHasNumericValue checks whether a cell contains a numeric value or a
 // formula that can be evaluated to a number. String-valued cells are excluded.
-func (ctx *evalContext) cellHasNumericValue(ref string) bool {
-	cell, ok := ctx.cells[normalizeCellRef(ref)]
+func (ctx *evalContext) cellHasNumericValue(sheet, ref string) bool {
+	cell, ok := ctx.getCell(sheet, normalizeCellRef(ref))
 	if !ok {
 		return false
 	}
@@ -1132,7 +1272,7 @@ func (ctx *evalContext) cellHasNumericValue(ref string) bool {
 			return false
 		}
 	}
-	if _, err := ctx.getCellValue(ref); err == nil {
+	if _, err := ctx.getCellValue(sheet, ref); err == nil {
 		return true
 	}
 	return false
@@ -1145,12 +1285,12 @@ func evalFuncCount(ctx *evalContext, args []expr) (float64, error) {
 		case *rangeExpr:
 			refs := expandRange(a.start, a.end)
 			for _, ref := range refs {
-				if ctx.cellHasNumericValue(ref) {
+				if ctx.cellHasNumericValue(a.sheet, ref) {
 					count++
 				}
 			}
 		case *cellRefExpr:
-			if ctx.cellHasNumericValue(a.ref) {
+			if ctx.cellHasNumericValue(a.sheet, a.ref) {
 				count++
 			}
 		default:
@@ -1387,7 +1527,7 @@ func evalFuncSumif(ctx *evalContext, args []expr) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var sumRefs []string
+	var sumRefs []evalRef
 	if len(args) == 3 {
 		sumRefs, err = rangeOrCellRefs(ctx, args[2])
 		if err != nil {
@@ -1402,12 +1542,12 @@ func evalFuncSumif(ctx *evalContext, args []expr) (float64, error) {
 	}
 	var total float64
 	for i := 0; i < limit; i++ {
-		cellVal, err := ctx.getCellValue(checkRange[i])
+		cellVal, err := ctx.getCellValue(checkRange[i].sheet, checkRange[i].ref)
 		if err != nil {
 			continue
 		}
 		if matchCriteria(cellVal, criteriaVal) {
-			sumVal, err := ctx.getCellValue(sumRefs[i])
+			sumVal, err := ctx.getCellValue(sumRefs[i].sheet, sumRefs[i].ref)
 			if err == nil {
 				if n, nerr := sumVal.asNumber(); nerr == nil {
 					total += n
@@ -1432,7 +1572,7 @@ func evalFuncCountif(ctx *evalContext, args []expr) (float64, error) {
 	}
 	var count float64
 	for _, ref := range refs {
-		cellVal, err := ctx.getCellValue(ref)
+		cellVal, err := ctx.getCellValue(ref.sheet, ref.ref)
 		if err != nil {
 			continue
 		}
@@ -1443,14 +1583,24 @@ func evalFuncCountif(ctx *evalContext, args []expr) (float64, error) {
 	return count, nil
 }
 
+type evalRef struct {
+	sheet string
+	ref   string
+}
+
 // rangeOrCellRefs extracts a list of cell references from an expression.
 // Accepts *rangeExpr (expanded) or *cellRefExpr (single element).
-func rangeOrCellRefs(ctx *evalContext, arg expr) ([]string, error) {
+func rangeOrCellRefs(ctx *evalContext, arg expr) ([]evalRef, error) {
 	switch a := arg.(type) {
 	case *rangeExpr:
-		return expandRange(a.start, a.end), nil
+		refs := expandRange(a.start, a.end)
+		out := make([]evalRef, 0, len(refs))
+		for _, ref := range refs {
+			out = append(out, evalRef{sheet: a.sheet, ref: ref})
+		}
+		return out, nil
 	case *cellRefExpr:
-		return []string{a.ref}, nil
+		return []evalRef{{sheet: a.sheet, ref: a.ref}}, nil
 	default:
 		return nil, fmt.Errorf("expected a cell reference or range")
 	}

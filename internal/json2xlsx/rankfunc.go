@@ -22,7 +22,7 @@ func evalFuncRank(ctx *evalContext, args []expr) (float64, error) {
 	}
 	var values []float64
 	for _, ref := range refs {
-		fv, err := ctx.getCellValue(ref)
+		fv, err := ctx.getCellValue(ref.sheet, ref.ref)
 		if err != nil {
 			continue
 		}

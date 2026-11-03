@@ -433,12 +433,12 @@ func evalFuncCounta(ctx *evalContext, args []expr) (float64, error) {
 		case *rangeExpr:
 			refs := expandRange(a.start, a.end)
 			for _, ref := range refs {
-				if _, ok := ctx.cells[ref]; ok {
+				if _, ok := ctx.getCell(a.sheet, ref); ok {
 					count++
 				}
 			}
 		case *cellRefExpr:
-			if _, ok := ctx.cells[a.ref]; ok {
+			if _, ok := ctx.getCell(a.sheet, a.ref); ok {
 				count++
 			}
 		default:

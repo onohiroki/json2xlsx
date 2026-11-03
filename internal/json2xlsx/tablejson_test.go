@@ -448,3 +448,40 @@ func TestTableJSONColumnHeaderPrecedence(t *testing.T) {
 		t.Fatalf("B1 = %q", got)
 	}
 }
+
+func TestTableJSONCrossSheetCompute(t *testing.T) {
+	const input = `{
+	  "tables": [
+	    {
+	      "name": "Sales",
+	      "columns": [
+	        {"key": "item", "header": "item"},
+	        {"key": "qty", "header": "qty"},
+	        {"key": "price", "header": "price"},
+	        {"key": "amount", "header": "amount", "formula": "={qty}*{price}"}
+	      ],
+	      "rows": [
+	        {"item": "A", "qty": 10, "price": 100},
+	        {"item": "B", "qty": 5, "price": 200}
+	      ]
+	    },
+	    {
+	      "name": "Summary",
+	      "columns": [{"key": "label", "header": "label"}, {"key": "value", "header": "value"}],
+	      "rows": [{"label": "total", "value": "=SUM(Sales!D2:D3)"}]
+	    }
+	  ]
+	}`
+	var buf bytes.Buffer
+	if err := Convert(strings.NewReader(input), &buf, ConvertOptions{TableJSON: true, EvalFormulas: true}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if got, _ := f.GetCellValue("Summary", "B2"); got != "2000" {
+		t.Fatalf("Summary!B2 = %q, want 2000", got)
+	}
+}

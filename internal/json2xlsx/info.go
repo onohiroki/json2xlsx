@@ -11,7 +11,7 @@ func evalFuncIsnumber(ctx *evalContext, args []expr) (float64, error) {
 		return 0, fmt.Errorf("ISNUMBER requires exactly 1 argument")
 	}
 	if ref, ok := args[0].(*cellRefExpr); ok {
-		cell, exists := ctx.cells[ref.ref]
+		cell, exists := ctx.getCell(ref.sheet, ref.ref)
 		if !exists || cell.V == nil {
 			return 0, nil
 		}
@@ -34,7 +34,7 @@ func evalFuncIsblank(ctx *evalContext, args []expr) (float64, error) {
 		return 0, fmt.Errorf("ISBLANK requires exactly 1 argument")
 	}
 	if ref, ok := args[0].(*cellRefExpr); ok {
-		cell, exists := ctx.cells[ref.ref]
+		cell, exists := ctx.getCell(ref.sheet, ref.ref)
 		if !exists || cell.V == nil {
 			return 1, nil
 		}
@@ -48,7 +48,7 @@ func evalFuncIstext(ctx *evalContext, args []expr) (float64, error) {
 		return 0, fmt.Errorf("ISTEXT requires exactly 1 argument")
 	}
 	if ref, ok := args[0].(*cellRefExpr); ok {
-		cell, exists := ctx.cells[ref.ref]
+		cell, exists := ctx.getCell(ref.sheet, ref.ref)
 		if !exists || cell.V == nil {
 			return 0, nil
 		}
@@ -66,7 +66,7 @@ func evalFuncIsnontext(ctx *evalContext, args []expr) (float64, error) {
 		return 0, fmt.Errorf("ISNONTEXT requires exactly 1 argument")
 	}
 	if ref, ok := args[0].(*cellRefExpr); ok {
-		cell, exists := ctx.cells[ref.ref]
+		cell, exists := ctx.getCell(ref.sheet, ref.ref)
 		if !exists || cell.V == nil {
 			return 1, nil
 		}

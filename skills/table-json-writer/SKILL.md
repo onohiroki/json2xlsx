@@ -61,6 +61,7 @@ Use this skill when the user asks for a simple table, report, or summary sheet. 
 - A string starting with `=` is a formula.
 - In formulas, `{key}` becomes the current row cell (`B2`), `{key:col}` becomes the column letter (`B`), and `{r}` becomes the row number (`2`).
 - Example: `={数量}*{単価}` becomes `=B2*C2`; `=SUM({金額:col}2:{金額:col}6)` becomes `=SUM(D2:D6)`.
+- Cross-sheet references work: `=SUM(Sales!D2:D5)` or `=SUM('売上'!D2:D5)`. Quote sheet names with spaces or non-ASCII characters.
 - Unknown placeholders are validation errors. Use SheetJS JSON if you need literal braces in formulas.
 - To write a literal string that starts with `=`, use `{ "v": "=text" }`.
 - For a formula with a cached value, use `{ "v": 42, "f": "SUM(A1:A3)" }`.

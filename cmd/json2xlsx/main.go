@@ -109,7 +109,7 @@ JSON の場合は SheetJS Cell Object 形式を基本とするが，--data-json 
 --table-json を指定すると，tables / header / rows を使う高レベルな表形式を受け付ける．
 to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す．
 info / eval は XLSX と Workbook JSON の両方を受け付ける (-i 省略時 stdin)．
-eval は組込みの数式エンジンで評価するため Excel 完全互換ではない (クロスシート参照・配列数式などは未対応)．
+eval は組込みの数式エンジンで評価するため Excel 完全互換ではない (配列数式・3D 参照・外部ブック参照などは未対応)．
 --range は A1:F20 または単一セル A1 のみを受け付ける．範囲外はエラーになる．
 サブコマンドを省略した場合は to-xlsx として動作する．`)
 }
@@ -165,7 +165,7 @@ With --table-json, accepts the high-level tables / header / rows format.
 to-csv converts JSON or XLSX back to CSV.
 info / eval accept both XLSX and Workbook JSON (stdin when -i is omitted).
 eval uses the built-in formula engine, so it is not fully Excel-compatible
-(cross-sheet references, array formulas, etc. are unsupported).
+(array formulas, 3D references, external workbook references, etc. are unsupported).
 --range accepts A1:F20 or a single cell A1 only; out-of-range is an error.`)
 }
 

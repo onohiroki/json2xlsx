@@ -254,9 +254,10 @@ func evalFuncSubtotal(ctx *evalContext, args []expr) (float64, error) {
 		case *rangeExpr:
 			refs := expandRange(a.start, a.end)
 			for _, ref := range refs {
-				if sub, ok := ctx.cells[ref]; ok {
-					if sub.V != nil {
-						all = append(all, toFloat64(sub.V))
+				fv, err := ctx.getCellValue(a.sheet, ref)
+				if err == nil {
+					if n, nerr := fv.asNumber(); nerr == nil {
+						all = append(all, n)
 					}
 				}
 			}

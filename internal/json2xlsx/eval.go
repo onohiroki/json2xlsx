@@ -57,20 +57,41 @@ func EvalFormula(formula string, wb *Workbook, opts EvalOptions) (EvalResult, er
 	}
 	origin = normalizeCellRef(origin)
 
-	cells := map[string]Cell{}
+	var ctx *evalContext
+	originSheet := ""
 	if wb != nil {
 		normalizeWorkbook(wb)
-		sh, err := resolveSheet(*wb, opts.Sheet, 0)
-		if err != nil {
-			return EvalResult{}, err
+		if len(wb.Sheets) == 0 {
+			return EvalResult{}, fmt.Errorf("workbook has no sheets")
 		}
-		if sh.Cells != nil {
-			cells = sh.Cells
+		sheets := make(map[string]map[string]Cell, len(wb.Sheets))
+		for i := range wb.Sheets {
+			name := effectiveSheetName(wb.Sheets[i], i)
+			sheets[name] = mergedSheetCells(wb.Sheets[i])
 		}
+		if opts.Sheet != "" {
+			found := ""
+			for i := range wb.Sheets {
+				name := effectiveSheetName(wb.Sheets[i], i)
+				if strings.EqualFold(name, opts.Sheet) {
+					found = name
+					break
+				}
+			}
+			if found == "" {
+				return EvalResult{}, fmt.Errorf("sheet %q not found", opts.Sheet)
+			}
+			originSheet = found
+		} else {
+			originSheet = effectiveSheetName(wb.Sheets[0], 0)
+		}
+		ctx = newWorkbookEvalContext(sheets)
+		ctx.activeSheet = originSheet
+	} else {
+		ctx = newEvalContext(map[string]Cell{})
 	}
 
-	ctx := newEvalContext(cells)
-	fv, err := ctx.evaluate(origin, f)
+	fv, err := ctx.evaluateSheet(originSheet, origin, f)
 	if err != nil {
 		return EvalResult{Code: errorToExcelCode(err), Error: err.Error()}, nil
 	}

@@ -25,12 +25,12 @@ func evalFuncVlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	if err != nil {
 		return formulaValue{}, err
 	}
-	var start, end string
+	var sheet, start, end string
 	switch a := args[1].(type) {
 	case *rangeExpr:
-		start, end = a.start, a.end
+		sheet, start, end = a.sheet, a.start, a.end
 	case *cellRefExpr:
-		start, end = a.ref, a.ref
+		sheet, start, end = a.sheet, a.ref, a.ref
 	default:
 		return formulaValue{}, fmt.Errorf("VLOOKUP second argument must be a cell reference or range")
 	}
@@ -65,12 +65,12 @@ func evalFuncVlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	}
 	refs := expandRange(start, end)
 	for r := 0; r < numRows; r++ {
-		cellVal, err := ctx.getCellValue(refs[r])
+		cellVal, err := ctx.getCellValue(sheet, refs[r])
 		if err != nil {
 			continue
 		}
 		if compareValues(cellVal, lookupVal) == 0 {
-			fv, err := ctx.getCellValue(refs[(colIdx-1)*numRows+r])
+			fv, err := ctx.getCellValue(sheet, refs[(colIdx-1)*numRows+r])
 			if err != nil {
 				return formulaValue{}, err
 			}
@@ -88,12 +88,12 @@ func evalFuncHlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	if err != nil {
 		return formulaValue{}, err
 	}
-	var start, end string
+	var sheet, start, end string
 	switch a := args[1].(type) {
 	case *rangeExpr:
-		start, end = a.start, a.end
+		sheet, start, end = a.sheet, a.start, a.end
 	case *cellRefExpr:
-		start, end = a.ref, a.ref
+		sheet, start, end = a.sheet, a.ref, a.ref
 	default:
 		return formulaValue{}, fmt.Errorf("HLOOKUP second argument must be a cell reference or range")
 	}
@@ -128,12 +128,12 @@ func evalFuncHlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 	refs := expandRange(start, end)
 	numCols := maxCol - minCol + 1
 	for c := 0; c < numCols; c++ {
-		cellVal, err := ctx.getCellValue(refs[c*numRows])
+		cellVal, err := ctx.getCellValue(sheet, refs[c*numRows])
 		if err != nil {
 			continue
 		}
 		if compareValues(cellVal, lookupVal) == 0 {
-			fv, err := ctx.getCellValue(refs[c*numRows+(rowIdx-1)])
+			fv, err := ctx.getCellValue(sheet, refs[c*numRows+(rowIdx-1)])
 			if err != nil {
 				return formulaValue{}, err
 			}
@@ -166,7 +166,7 @@ func evalFuncMatch(ctx *evalContext, args []expr) (float64, error) {
 	switch matchType {
 	case 0:
 		for i, ref := range refs {
-			cellVal, err := ctx.getCellValue(ref)
+			cellVal, err := ctx.getCellValue(ref.sheet, ref.ref)
 			if err != nil {
 				continue
 			}
@@ -186,12 +186,12 @@ func evalFuncIndex(ctx *evalContext, args []expr) (formulaValue, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return formulaValue{}, fmt.Errorf("INDEX requires 2 or 3 arguments")
 	}
-	var start, end string
+	var sheet, start, end string
 	switch a := args[0].(type) {
 	case *rangeExpr:
-		start, end = a.start, a.end
+		sheet, start, end = a.sheet, a.start, a.end
 	case *cellRefExpr:
-		start, end = a.ref, a.ref
+		sheet, start, end = a.sheet, a.ref, a.ref
 	default:
 		return formulaValue{}, fmt.Errorf("INDEX first argument must be a cell reference or range")
 	}
@@ -227,7 +227,7 @@ func evalFuncIndex(ctx *evalContext, args []expr) (formulaValue, error) {
 		return formulaValue{}, fmt.Errorf("INDEX column out of range")
 	}
 	refs := expandRange(start, end)
-	fv, err := ctx.getCellValue(refs[(colNum-1)*numRows+(rowNum-1)])
+	fv, err := ctx.getCellValue(sheet, refs[(colNum-1)*numRows+(rowNum-1)])
 	if err != nil {
 		return formulaValue{}, err
 	}
@@ -254,12 +254,12 @@ func evalFuncXlookup(ctx *evalContext, args []expr) (formulaValue, error) {
 		return formulaValue{}, fmt.Errorf("XLOOKUP lookup and return arrays must be the same size")
 	}
 	for i, ref := range lookupRefs {
-		cellVal, err := ctx.getCellValue(ref)
+		cellVal, err := ctx.getCellValue(ref.sheet, ref.ref)
 		if err != nil {
 			continue
 		}
 		if compareValues(cellVal, lookupVal) == 0 {
-			fv, err := ctx.getCellValue(returnRefs[i])
+			fv, err := ctx.getCellValue(returnRefs[i].sheet, returnRefs[i].ref)
 			if err != nil {
 				return formulaValue{}, err
 			}
