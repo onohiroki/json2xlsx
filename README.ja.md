@@ -36,9 +36,11 @@ AI コーディングツールに「その場で XLSX を生成するコード�
 
 ## 特徴
 
-- Go 1.22+ で動作する軽量 CLI．[2]
+- Go 1.25+ で動作する軽量 CLI．[2]
 - 主要依存は `excelize` (XLSX 読み書き) と `jsonschema/v6` (JSON バリデーション)．[1]
 - SheetJS 風の Cell Object に加え，シンプルな二次元配列形式の JSON を入力できる．[4][3]
+- **高レベルな table JSON** — `--table-json` で `tables` / `header` / `rows` 形式を受け付ける．列単位の書式，名前付きスタイル，数式テンプレート，固定ペイン，オートフィルタに対応する．
+- **MCP サーバ** — `json2xlsx mcp` で変換・検証・プレビュー・情報取得・スキーマ resources をローカル MCP クライアントに公開する．
 - 基本表，数式，改行，枠線，色，数値書式，リンク，固定ペインなどをサポート（二次元配列形式は数式やスタイルには非対応）．
 - AI 生成部を切り離しているため，任意の LLM と組み合わせやすい．
 - **グラフ生成** — 棒・折れ線・円・散布図など 8 種類のチャートをサポート．タイトル・凡例・軸・データラベルも設定可能．
@@ -63,7 +65,7 @@ go build -o json2xlsx ./cmd/json2xlsx
 
 ## 使い方
 
-`json2xlsx` は単一バイナリの CLI で，XLSX と JSON を相互変換します．サブコマンドは `to-json` (XLSX → JSON)，`to-xlsx` (JSON → XLSX)，`to-md` (JSON / XLSX → Markdown テーブル)，`to-html` (JSON / XLSX → HTML `<table>`)，`to-csv` (JSON / XLSX → CSV)，`info` (入力のサマリ)，`eval` (数式の単体評価)，`functions` (対応関数一覧) の 8 種類で，**サブコマンドを省略した場合は `to-xlsx` として動作**します．
+`json2xlsx` は単一バイナリの CLI で，XLSX と JSON を相互変換します．サブコマンドは `to-json` (XLSX → JSON)，`to-xlsx` (JSON → XLSX)，`to-md` (JSON / XLSX → Markdown テーブル)，`to-html` (JSON / XLSX → HTML `<table>`)，`to-csv` (JSON / XLSX → CSV)，`info` (入力のサマリ)，`eval` (数式の単体評価)，`functions` (対応関数一覧)，`mcp` (ローカル stdio MCP サーバ) の 9 種類で，**サブコマンドを省略した場合は `to-xlsx` として動作**します．
 
 ### `to-json` — XLSX → JSON
 
@@ -96,11 +98,12 @@ cat input.xlsx | json2xlsx to-json > output.json
 
 ### `to-xlsx` — JSON → XLSX (デフォルト)
 
-JSON を読み込み，`.xlsx` を出力します．デフォルトでは SheetJS 形式の Workbook JSON を受け付けます．`--data-json` を指定すると，二次元配列（例: `[["A", 1], ["B", 2]]`），オブジェクト配列，Map-of-Arrays の各形式に対応します．データ JSON 形式（`--data-json`）では数式やスタイルは指定できません．
+JSON を読み込み，`.xlsx` を出力します．デフォルトでは SheetJS 形式の Workbook JSON を受け付けます．`--data-json` を指定すると，二次元配列（例: `[["A", 1], ["B", 2]]`），オブジェクト配列，Map-of-Arrays の各形式に対応します．データ JSON 形式（`--data-json`）では数式やスタイルは指定できません．`--table-json` を指定すると，後述する高レベルな table 形式を受け付けます．
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx
 json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
+json2xlsx to-xlsx -i table.json -o output.xlsx --table-json
 ```
 
 `--compute` を指定すると，キャッシュ値 (`v`) がない数式 (`t: "f"`) を組み込みの数式エンジンで評価します．評価に失敗したセルはスキップされ，警告が stderr に出力されます．
@@ -378,6 +381,67 @@ json2xlsx functions --json
 - `--category C`: カテゴリの完全一致 (`math`, `logical`, `statistical`, `conditional`, `lookup`, `text`, `date`, `info`, `trig`)．
 - `--json`: `[{"name": "SUM", "category": "math"}, ...]` を出力する．
 
+### `mcp` — ローカル stdio MCP サーバ
+
+stdin/stdout でローカル MCP サーバを起動します．シェルを持たない MCP クライアント（チャットアプリ，サンドボックス化されたエージェントなど）から `json2xlsx` を直接呼び出せます．
+
+```bash
+json2xlsx mcp
+json2xlsx mcp --allow-dir /path/to/work --allow-dir /tmp
+```
+
+公開するツール:
+
+| ツール | 役割 |
+|---|---|
+| `json2xlsx_convert` | JSON (table / SheetJS / data) → XLSX．`output_path` は必須 |
+| `json2xlsx_validate` | ファイルを書かずに入力を検証し `issues[]` を返す |
+| `json2xlsx_preview` | XLSX を書かずに Markdown として表示する |
+| `json2xlsx_inspect` | XLSX または Workbook JSON のサマリを返す |
+| `json2xlsx_to_json` | XLSX → JSON をファイルに出力する |
+| `json2xlsx_functions` | 対応する数式関数を検索する |
+
+resources として `json2xlsx://schema`，`json2xlsx://schema/table`，`json2xlsx://skill/sheetjs`，`json2xlsx://skill/table`，および一部の `json2xlsx://samples/*` を公開します．
+
+オプション:
+
+- `--allow-dir DIR`: サーバが読み書きを許可するディレクトリ．複数指定可．既定はカレントディレクトリ．
+- `--max-input-bytes N`: 入力サイズ上限（既定 33554432）．
+- `--max-output-bytes N`: 出力サイズ上限（既定 134217728）．
+- `--max-cells N`，`--max-sheets N`，`--max-preview-bytes N`: 追加の上限．
+
+Claude Desktop の設定例:
+
+```json
+{
+  "mcpServers": {
+    "json2xlsx": {
+      "command": "/usr/local/bin/json2xlsx",
+      "args": ["mcp", "--allow-dir", "/Users/me/work"]
+    }
+  }
+}
+```
+
+OpenCode の設定例:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "json2xlsx": {
+      "type": "local",
+      "command": ["json2xlsx", "mcp", "--allow-dir", "."],
+      "enabled": true
+    }
+  }
+}
+```
+
+相対パスの `input_path`，`output_path`，`base_dir` は最初の `--allow-dir` を基準に解決されます．
+
+サーバはログを stderr にのみ出力します．XLSX のバイナリを stdout に書くことはないため，MCP のプロトコルストリームは汚れません．
+
 ## 入力JSONの考え方
 
 `json2xlsx` は，SheetJS 互換を意識した JSON を受け取り，セル単位で `.xlsx` に変換します．[3][4]
@@ -392,6 +456,52 @@ json2xlsx functions --json
 - Map-of-Arrays 形式（例: `{"Name": ["Alice", "Bob"], "Age": [30, 25]}`）
 
 ※ データ JSON 形式は純粋なデータ用であり，数式やスタイルはサポートされません．数式やスタイルを利用する場合は SheetJS 形式の Cell Object 形式を使用してください．
+
+**`--table-json` 指定時:** セルマップより LLM が生成しやすい高レベルな table 形式を受け付けます．複数シート，ヘッダ，データ行，列単位の書式，名前付きスタイル，固定ペイン，オートフィルタに対応します．
+
+```json
+{
+  "tables": [
+    {
+      "name": "Sales",
+      "header": ["商品", "数量", "単価", "金額"],
+      "rows": [
+        ["A", 10, 100],
+        ["B", 5, 200]
+      ],
+      "columns": [
+        { "width": 18 },
+        { "format": "#,##0" },
+        { "format": "#,##0" },
+        { "format": "#,##0", "formula": "=B{r}*C{r}" }
+      ],
+      "styles": {
+        "header": {
+          "font": { "bold": true },
+          "fill": { "type": "pattern", "pattern": 1, "color": ["#E0EBF5"] }
+        }
+      },
+      "headerStyle": "header",
+      "freezeHeader": true,
+      "autoFilter": true
+    }
+  ]
+}
+```
+
+主なポイント:
+
+- `tables` は必須．1 要素が 1 シートに対応する．
+- `header` は省略可．指定時は 1 行目がヘッダになり，データは 2 行目から始まる．
+- `rows` は配列の配列．数値・文字列・真偽値・`null` を受け付ける．
+- `=` で始まる文字列は数式になる．リテラルは `{ "v": "=text" }` を使う．
+- `columns[].formula` はデータ行に適用される．`{r}` は行番号に置換されるため，同じ数式を繰り返さなくてよい．
+- セルオブジェクト (`{ "v": ..., "f": ..., "format": ..., "style": ..., "align": ..., "t": ... }`) をエスケープハッチとして使える．
+- スタイルは `styles` に名前付きで定義する．`headerStyle` / `bodyStyle` がヘッダとデータに適用される．優先順位は `bodyStyle`/`headerStyle` < `columns[].style` < セルの `style` で，`format` と `align` はその上に適用される．
+- シート名は 31 文字以内にし，`[]:*?/\` を含めない．
+- グラフ・画像・条件付き書式・スパークラインなどが必要な場合は SheetJS 形式を使う．
+
+JSON Schema は `schemas/table.schema.json` にあります．専用スキルは `skills/table-json-writer/` にあります．
 
 ### 例: Cell Object 形式
 
@@ -712,6 +822,8 @@ type SheetBackground struct {
 
 このため，`json2xlsx` 側は「正しい形式の JSON が来る」前提でシンプルに保てます．
 
+単純な表には，`skills/table-json-writer/` の `table-json-writer` スキルを使って，セルマップではなく高レベルな `tables` 形式を出力させるのが有効です．この形式は短く，誤りも少なくなります．グラフ・画像・条件付き書式などが必要な場合は，引き続き `sheetjs-json-writer` を使います．
+
 また，SheetJS 互換の仕様を参考にした再実装は，互換実装として整理可能です．[5][4]
 
 ## ライセンス
@@ -722,6 +834,8 @@ type SheetBackground struct {
 - `excelize`: BSD 3-Clause
 - `jsonschema/v6`: MIT
 - `go-runewidth`: MIT
+- `modelcontextprotocol/go-sdk`: Apache-2.0
+- `google/jsonschema-go`: MIT
 
 ## 参考
 

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"strings"
 
@@ -16,7 +15,7 @@ import (
 
 var tStrAttrRe = regexp.MustCompile(` t="str"`)
 
-func convertWorkbook(wb *Workbook, out io.Writer, baseDir string, autoFit bool) error {
+func convertWorkbook(wb *Workbook, out io.Writer, baseDir string, autoFit bool, warnings *[]string) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
@@ -29,8 +28,7 @@ func convertWorkbook(wb *Workbook, out io.Writer, baseDir string, autoFit bool) 
 		return fmt.Errorf("build styles: %w", err)
 	}
 
-	var warnings int
-	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, &warnings, baseDir, autoFit); err != nil {
+	if err := createSheets(f, wb.Sheets, styleMap, wb.Styles, warnings, baseDir, autoFit); err != nil {
 		return err
 	}
 
@@ -47,9 +45,6 @@ func convertWorkbook(wb *Workbook, out io.Writer, baseDir string, autoFit bool) 
 		return err
 	}
 
-	if warnings > 0 {
-		return fmt.Errorf("conversion completed with %d warning(s)", warnings)
-	}
 	return nil
 }
 
@@ -77,7 +72,7 @@ func validateWorkbook(sheets []Sheet, wb *Workbook) error {
 	return nil
 }
 
-func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string, autoFit bool) error {
+func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles []Style, warnings *[]string, baseDir string, autoFit bool) error {
 	defaultName := f.GetSheetName(0)
 	firstAssigned := false
 
@@ -107,7 +102,7 @@ func createSheets(f *excelize.File, sheets []Sheet, styleMap map[int]int, styles
 	return nil
 }
 
-func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *int, baseDir string, autoFit bool) error {
+func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, styles []Style, warnings *[]string, baseDir string, autoFit bool) error {
 	for r, row := range sh.Rows {
 		for c, v := range row {
 			axis, err := excelize.CoordinatesToCellName(c+1, r+1)
@@ -124,8 +119,7 @@ func writeSheet(f *excelize.File, name string, sh Sheet, styleMap map[int]int, s
 		if err := setCell(f, name, axis, cell, styleMap, styles); err != nil {
 			var we *WarningError
 			if errors.As(err, &we) {
-				fmt.Fprintf(os.Stderr, "warning: %v\n", we.Err)
-				*warnings++
+				*warnings = append(*warnings, fmt.Sprintf("warning: %v", we.Err))
 			} else {
 				return fmt.Errorf("set cell %s: %w", axis, err)
 			}

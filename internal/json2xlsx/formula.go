@@ -19,7 +19,7 @@ func EvalWorkbookFormulas(wb *Workbook) []string {
 		if len(sh.Cells) == 0 {
 			continue
 		}
-		ctx := newEvalContext(sh.Cells)
+		ctx := newEvalContext(mergedSheetCells(*sh))
 		for axis, cell := range sh.Cells {
 			if cell.T == "f" && cell.V == nil && cell.F != "" {
 				fv, err := ctx.evaluate(axis, cell.F)
@@ -96,7 +96,7 @@ func (v formulaValue) asString() string {
 type tokenType int
 
 const (
-	tokenNumber  tokenType = iota
+	tokenNumber tokenType = iota
 	tokenCellRef
 	tokenColon
 	tokenFunc
@@ -143,14 +143,14 @@ var knownFuncs = map[string]bool{
 	"SUMIF": true, "COUNTIF": true,
 	"FLOOR": true, "CEILING": true, "MOD": true, "POWER": true, "SQRT": true, "INT": true,
 	"COUNTA": true,
-	"VAR": true, "VAR.S": true, "VAR.P": true,
+	"VAR":    true, "VAR.S": true, "VAR.P": true,
 	"GEOMEAN": true, "HARMEAN": true, "TRIMMEAN": true,
 	"RANK": true, "RANK.EQ": true, "LARGE": true, "SMALL": true,
 	"TODAY": true, "NOW": true,
 	"AVERAGEIF": true, "SUMIFS": true, "COUNTIFS": true, "AVERAGEIFS": true,
 	"MINIFS": true, "MAXIFS": true,
 	"IFERROR": true,
-	"IFS": true, "SWITCH": true,
+	"IFS":     true, "SWITCH": true,
 	"YEAR": true, "MONTH": true, "DAY": true, "DAYS": true, "DATE": true, "EDATE": true, "EOMONTH": true, "WEEKDAY": true, "WEEKNUM": true,
 	"NETWORKDAYS": true, "WORKDAY": true,
 	"VLOOKUP": true, "XLOOKUP": true, "INDEX": true, "MATCH": true, "CHOOSE": true,
@@ -162,7 +162,7 @@ var knownFuncs = map[string]bool{
 	"LOG": true, "FACT": true,
 	"SUMSQ": true, "EVEN": true, "ODD": true, "MROUND": true, "DELTA": true, "GESTEP": true,
 	"HLOOKUP": true,
-	"MODE": true, "MODE.SNGL": true, "SUBTOTAL": true,
+	"MODE":    true, "MODE.SNGL": true, "SUBTOTAL": true,
 	"ISNUMBER": true, "ISBLANK": true, "ISTEXT": true, "ISNONTEXT": true, "ISERROR": true, "ISNA": true,
 	"ROW": true, "COLUMN": true,
 	"CONCAT": true, "CONCATENATE": true,
@@ -507,7 +507,7 @@ func matchCriteria(cellVal, criteria formulaValue) bool {
 				op = tokenGT
 				remainder = s[1:]
 			}
-					if op != 0 && remainder != "" {
+			if op != 0 && remainder != "" {
 				var criteriaVal formulaValue
 				if n, err := strconv.ParseFloat(remainder, 64); err == nil {
 					criteriaVal = numVal(n)
@@ -1406,7 +1406,7 @@ func evalFuncSumif(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
- 		if matchCriteria(cellVal, criteriaVal) {
+		if matchCriteria(cellVal, criteriaVal) {
 			sumVal, err := ctx.getCellValue(sumRefs[i])
 			if err == nil {
 				if n, nerr := sumVal.asNumber(); nerr == nil {
@@ -1436,7 +1436,7 @@ func evalFuncCountif(ctx *evalContext, args []expr) (float64, error) {
 		if err != nil {
 			continue
 		}
- 		if matchCriteria(cellVal, criteriaVal) {
+		if matchCriteria(cellVal, criteriaVal) {
 			count++
 		}
 	}

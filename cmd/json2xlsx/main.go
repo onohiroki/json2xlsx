@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
+	"github.com/onohiroki/json2xlsx/internal/mcpserver"
 )
 
 // inputBaseDir returns the directory component of an input file path.
@@ -63,19 +65,21 @@ func usageJa() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute] [--autofit]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json|--table-json] [--compute] [--autofit]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--range A1:F20] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--range A1:F20] [--data-json] [--compute]
   json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
   json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
   json2xlsx functions [--search X] [--category C] [--json]
+  json2xlsx mcp      [--allow-dir DIR]... [--max-input-bytes N] [--max-output-bytes N]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
 
 オプション:
   -i                   入力ファイル (省略時 stdin)．JSON (SheetJS 形式 / データ JSON) または XLSX
   -o                   出力ファイル (省略時 stdout)
   --data-json          入力をデータ JSON (二次元配列 / オブジェクト配列 / Map-of-Arrays) として扱う
+  --table-json         入力を高レベルな table JSON (tables / header / rows) として扱う
   --compute            数式 (t=f) を評価し v を補完する
   --autofit            列幅を内容に合わせて自動調整し，改行セルに折り返しを設定する
   --sheet              to-csv / info / eval で対象にするシート名
@@ -93,11 +97,15 @@ Usage:
   --first-row-header   to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
   --compact / -c       to-md で列のパディングを抑制しコンパクトに表示する
   --grid               to-html で枠線未指定セルにグレーの細枠線を表示する
+  --allow-dir          mcp で読み書きを許可するディレクトリ (複数指定可，既定はカレントディレクトリ)
+  --max-input-bytes    mcp の入力サイズ上限 (既定 33554432)
+  --max-output-bytes   mcp の出力サイズ上限 (既定 134217728)
 
 ロングオプションは --name 形式，短いオプションは -i / -o 形式で指定します
 (-name / --i のような表記も受け付けますが，ドキュメントでは上記表記に統一しています)．
 to-md / to-html / to-xlsx は入力の magic byte (PK\x03\x04) で XLSX か JSON を自動判定する．
 JSON の場合は SheetJS Cell Object 形式を基本とするが，--data-json を指定すると二次元配列・オブジェクト配列・Map-of-Arrays の 3 形式を受け付ける．
+--table-json を指定すると，tables / header / rows を使う高レベルな表形式を受け付ける．
 to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す．
 info / eval は XLSX と Workbook JSON の両方を受け付ける (-i 省略時 stdin)．
 eval は組込みの数式エンジンで評価するため Excel 完全互換ではない (クロスシート参照・配列数式などは未対応)．
@@ -110,19 +118,21 @@ func usageEn() {
 
 Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
-  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json] [--compute] [--autofit]
+  json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json|--table-json] [--compute] [--autofit]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--range A1:F20] [--data-json] [--compute]
   json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json] [--compute]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--range A1:F20] [--data-json] [--compute]
   json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
   json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
   json2xlsx functions [--search X] [--category C] [--json]
+  json2xlsx mcp      [--allow-dir DIR]... [--max-input-bytes N] [--max-output-bytes N]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
 
 Options:
   -i                   Input file (default: stdin). JSON (SheetJS / data JSON) or XLSX
   -o                   Output file (default: stdout)
   --data-json          Treat input as data JSON (2D array / array of objects / map-of-arrays)
+  --table-json         Treat input as high-level table JSON (tables / header / rows)
   --compute            Evaluate formulas (t=f) and fill cached values
   --autofit            Auto-adjust column widths and enable wrap text for cells with newlines
   --sheet              Sheet name for to-csv / info / eval
@@ -140,12 +150,16 @@ Options:
   --first-row-header   Treat first row as table header (suppress A/B/C and row numbers)
   --compact / -c       Suppress column alignment padding for compact tables (to-md only)
   --grid               Show light gray gridlines for empty cells in to-html
+  --allow-dir          Directory the mcp server may read and write (repeatable, default: cwd)
+  --max-input-bytes    mcp input size limit (default: 33554432)
+  --max-output-bytes   mcp output size limit (default: 134217728)
 
 Long options use --name, short options use -i / -o.
 When subcommand is omitted, defaults to to-xlsx.
 to-md / to-html / to-xlsx auto-detects XLSX vs JSON using magic bytes (PK\x03\x04).
 Without --data-json, JSON input must be SheetJS Cell Object format.
 With --data-json, accepts 2D array / array of objects / map-of-arrays.
+With --table-json, accepts the high-level tables / header / rows format.
 to-csv converts JSON or XLSX back to CSV.
 info / eval accept both XLSX and Workbook JSON (stdin when -i is omitted).
 eval uses the built-in formula engine, so it is not fully Excel-compatible
@@ -158,7 +172,7 @@ func main() {
 	sub := "to-xlsx"
 	if len(args) > 0 {
 		switch args[0] {
-		case "to-json", "to-xlsx", "to-md", "to-html", "to-csv", "info", "eval", "functions":
+		case "to-json", "to-xlsx", "to-md", "to-html", "to-csv", "info", "eval", "functions", "mcp":
 			sub = args[0]
 			args = args[1:]
 		case "-h", "--help", "help":
@@ -188,6 +202,8 @@ func main() {
 		runEval(args)
 	case "functions":
 		runFunctions(args)
+	case "mcp":
+		runMCP(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -208,7 +224,7 @@ func runToJSON(args []string) {
 	fs.StringVar(&imageMode, "image-mode", "base64", "image output mode: base64 (embed in JSON) or file (write to disk)")
 	_ = fs.Parse(args)
 
-	dateMode, err := resolveDateMode(dateDisplay, dateRFC3339, dateSerial)
+	dateMode, err := json2xlsx.ResolveDateMode(dateDisplay, dateRFC3339, dateSerial)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
 		os.Exit(2)
@@ -254,35 +270,15 @@ func outputBaseDir(output string) string {
 	return filepath.Dir(output)
 }
 
-func resolveDateMode(dateDisplay, dateRFC3339, dateSerial bool) (json2xlsx.DateMode, error) {
-	count := 0
-	mode := json2xlsx.DateModeSerial
-	if dateDisplay {
-		count++
-		mode = json2xlsx.DateModeDisplay
-	}
-	if dateRFC3339 {
-		count++
-		mode = json2xlsx.DateModeRFC3339
-	}
-	if dateSerial {
-		count++
-		mode = json2xlsx.DateModeSerial
-	}
-	if count > 1 {
-		return "", fmt.Errorf("choose only one of --date-display, --date-rfc3339, --date-serial")
-	}
-	return mode, nil
-}
-
 func runToXLSX(args []string) {
 	fs := flag.NewFlagSet("to-xlsx", flag.ExitOnError)
 	fs.Usage = usage
 	var input, output string
-	var dataJSON, compute, autoFit bool
+	var dataJSON, tableJSON, compute, autoFit bool
 	fs.StringVar(&input, "i", "", "input JSON file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output XLSX file (default: stdout)")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
+	fs.BoolVar(&tableJSON, "table-json", false, "accept high-level table JSON (tables/header/rows)")
 	fs.BoolVar(&compute, "compute", false, "evaluate simple formulas and fill cached values")
 	fs.BoolVar(&autoFit, "autofit", false, "auto-adjust column widths and apply wrap text")
 	_ = fs.Parse(args)
@@ -302,7 +298,7 @@ func runToXLSX(args []string) {
 	defer closeW()
 
 	baseDir := inputBaseDir(input)
-	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON, EvalFormulas: compute, AutoFit: autoFit, BaseDir: baseDir}); err != nil {
+	if err := json2xlsx.Convert(r, w, json2xlsx.ConvertOptions{DataJSON: dataJSON, TableJSON: tableJSON, EvalFormulas: compute, AutoFit: autoFit, BaseDir: baseDir}); err != nil {
 		fmt.Fprintf(os.Stderr, "to-xlsx: %v\n", err)
 		os.Exit(1)
 	}
@@ -449,6 +445,44 @@ func runToCSV(args []string) {
 
 	if err := json2xlsx.ToCSVRange(r, w, sheet, sheetIndex, dataJSON, compute, rangeStr); err != nil {
 		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+type stringList []string
+
+func (s *stringList) String() string { return strings.Join(*s, ",") }
+
+func (s *stringList) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
+func runMCP(args []string) {
+	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
+	fs.Usage = usage
+	var allowDirs stringList
+	var maxInputBytes, maxOutputBytes int64
+	var maxCells, maxSheets, maxPreviewBytes int
+	fs.Var(&allowDirs, "allow-dir", "directory the server may read and write (repeatable, default: cwd)")
+	fs.Int64Var(&maxInputBytes, "max-input-bytes", mcpserver.DefaultMaxInputBytes, "maximum input size in bytes")
+	fs.Int64Var(&maxOutputBytes, "max-output-bytes", mcpserver.DefaultMaxOutputBytes, "maximum output size in bytes")
+	fs.IntVar(&maxCells, "max-cells", mcpserver.DefaultMaxCells, "maximum number of cells per workbook")
+	fs.IntVar(&maxSheets, "max-sheets", mcpserver.DefaultMaxSheets, "maximum number of sheets per workbook")
+	fs.IntVar(&maxPreviewBytes, "max-preview-bytes", mcpserver.DefaultMaxPreviewBytes, "maximum Markdown preview size in bytes")
+	_ = fs.Parse(args)
+
+	opts := mcpserver.Options{
+		Version:         getVersion(),
+		AllowDirs:       allowDirs,
+		MaxInputBytes:   maxInputBytes,
+		MaxOutputBytes:  maxOutputBytes,
+		MaxCells:        maxCells,
+		MaxSheets:       maxSheets,
+		MaxPreviewBytes: maxPreviewBytes,
+	}
+	if err := mcpserver.Run(context.Background(), opts); err != nil {
+		fmt.Fprintf(os.Stderr, "mcp: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -8,6 +8,8 @@ description: Instruct the AI to output only SheetJS-style JSON that can be conve
 ## Purpose
 Receive natural-language table instructions from the user and output **only** SheetJS-style JSON that `json2xlsx` can interpret.
 
+> For simple tables (header + data rows + number formats + formulas), prefer the higher-level `tables` format from the `table-json-writer` skill instead of building a cell map. Use this SheetJS form when you need charts, pictures, conditional formatting, sparklines, or other advanced features.
+
 ## Absolute rules
 - Output must be JSON only. Do not include any explanatory text, preface, or postface.
 - Do not wrap the output in a Markdown code fence (triple backticks); the first character must be `{`.

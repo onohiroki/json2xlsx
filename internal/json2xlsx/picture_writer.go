@@ -30,6 +30,12 @@ func resolvePath(path, baseDir string) string {
 	return filepath.Join(baseDir, cleanPath)
 }
 
+// ResolvePath は画像パスを baseDir 基準で解決する．
+// 呼び出し側がパスの安全性を検証するために公開している．
+func ResolvePath(path, baseDir string) string {
+	return resolvePath(path, baseDir)
+}
+
 func addPicturesToSheet(f *excelize.File, sheet string, pictures []Picture, baseDir string) error {
 	for _, pic := range pictures {
 		if pic.Cell == "" {

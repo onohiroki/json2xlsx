@@ -3,7 +3,6 @@ package json2xlsx
 import (
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -17,10 +16,26 @@ type HTMLOptions struct {
 	ExplicitMode bool
 	DataJSON     bool
 	EvalFormulas bool
+	// Warn は警告の出力先．nil の場合は stderr に出力する．
+	Warn func(string)
 }
 
 // ToHTML は入力 (JSON Workbook または XLSX) を HTML <table> に変換して書き出す。
 func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
+	res, err := ReadWorkbook(r, opts.DataJSON)
+	if err != nil {
+		return err
+	}
+	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
+	return toHTML(res.Workbook, w, opts, pendingWarnings)
+}
+
+// ToHTMLWorkbook はパース済みの Workbook を HTML <table> に変換する。
+func ToHTMLWorkbook(wb *Workbook, w io.Writer, opts HTMLOptions) error {
+	return toHTML(wb, w, opts, nil)
+}
+
+func toHTML(wb *Workbook, w io.Writer, opts HTMLOptions, pendingWarnings []string) error {
 	if opts.Mode == "" {
 		opts.Mode = MarkdownModeValue
 	}
@@ -28,30 +43,23 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 		return err
 	}
 
-	res, err := ReadWorkbook(r, opts.DataJSON)
-	if err != nil {
-		return err
-	}
-	wb := res.Workbook
 	var formulaWarnings []string
 	if opts.EvalFormulas {
 		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
-
-	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
 
 	out, hasWarning := renderHTML(*wb, opts)
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
 	for _, msg := range formulaWarnings {
-		fmt.Fprintln(os.Stderr, msg)
+		EmitWarning(opts.Warn, msg)
 	}
 	for _, msg := range pendingWarnings {
-		fmt.Fprintln(os.Stderr, msg)
+		EmitWarning(opts.Warn, msg)
 	}
 	if hasWarning {
-		fmt.Fprintln(os.Stderr, warnMissingFormulaValue(opts.Mode))
+		EmitWarning(opts.Warn, warnMissingFormulaValue(opts.Mode))
 	}
 	return nil
 }

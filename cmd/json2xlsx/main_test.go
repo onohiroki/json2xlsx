@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
 )
 
@@ -36,7 +39,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestResolveDateMode_Default(t *testing.T) {
-	mode, err := resolveDateMode(false, false, false)
+	mode, err := json2xlsx.ResolveDateMode(false, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -46,7 +49,7 @@ func TestResolveDateMode_Default(t *testing.T) {
 }
 
 func TestResolveDateMode_Display(t *testing.T) {
-	mode, err := resolveDateMode(true, false, false)
+	mode, err := json2xlsx.ResolveDateMode(true, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -56,7 +59,7 @@ func TestResolveDateMode_Display(t *testing.T) {
 }
 
 func TestResolveDateMode_RFC3339(t *testing.T) {
-	mode, err := resolveDateMode(false, true, false)
+	mode, err := json2xlsx.ResolveDateMode(false, true, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,7 +69,7 @@ func TestResolveDateMode_RFC3339(t *testing.T) {
 }
 
 func TestResolveDateMode_Serial(t *testing.T) {
-	mode, err := resolveDateMode(false, false, true)
+	mode, err := json2xlsx.ResolveDateMode(false, false, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,14 +79,14 @@ func TestResolveDateMode_Serial(t *testing.T) {
 }
 
 func TestResolveDateMode_Conflict(t *testing.T) {
-	_, err := resolveDateMode(true, true, false)
+	_, err := json2xlsx.ResolveDateMode(true, true, false)
 	if err == nil {
 		t.Fatal("expected error for conflicting flags")
 	}
 }
 
 func TestResolveDateMode_TripleConflict(t *testing.T) {
-	_, err := resolveDateMode(true, true, true)
+	_, err := json2xlsx.ResolveDateMode(true, true, true)
 	if err == nil {
 		t.Fatal("expected error for triple conflicting flags")
 	}
@@ -562,5 +565,78 @@ func TestCLI_ToCSV_Range(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) != "2\n4" {
 		t.Errorf("stdout = %q, want \"2\\n4\"", stdout)
+	}
+}
+
+func TestCLI_ToXLSX_TableJSON(t *testing.T) {
+	js := `{"tables":[{"header":["a","b"],"rows":[[1,2]],"columns":[{},{"format":"#,##0"}]}]}`
+	stdout, stderr, code := runCLIWithStdin(t, js, "to-xlsx", "--table-json")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.HasPrefix(stdout, "PK\x03\x04") {
+		t.Fatalf("output does not look like XLSX")
+	}
+}
+
+func TestCLI_ToXLSX_TableJSONInvalid(t *testing.T) {
+	js := `{"tables":[{"rows":[[1]],"headerStyle":"missing"}]}`
+	_, stderr, code := runCLIWithStdin(t, js, "to-xlsx", "--table-json")
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code")
+	}
+	if !strings.Contains(stderr, "headerStyle") {
+		t.Fatalf("stderr = %q, want headerStyle issue", stderr)
+	}
+}
+
+func TestCLI_MCP_ConvertTable(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "cli-test", Version: "1"}, nil)
+	cmd := exec.Command(binPath, "mcp", "--allow-dir", dir)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer session.Close()
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	if len(tools.Tools) == 0 {
+		t.Fatal("no tools listed")
+	}
+
+	outPath := filepath.Join(dir, "mcp.xlsx")
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"table": map[string]any{
+				"tables": []any{
+					map[string]any{
+						"header": []any{"a", "b"},
+						"rows":   []any{[]any{1, 2}},
+					},
+				},
+			},
+			"output_path": outPath,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	info, err := os.Stat(outPath)
+	if err != nil {
+		t.Fatalf("output: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("output is empty")
 	}
 }

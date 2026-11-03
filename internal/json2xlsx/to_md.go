@@ -3,7 +3,6 @@ package json2xlsx
 import (
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -36,11 +35,27 @@ type MarkdownOptions struct {
 	Compact        bool
 	// Range は出力対象の矩形範囲 ("A1:F20" または "A1")．空なら全体．
 	Range string
+	// Warn は警告の出力先．nil の場合は stderr に出力する．
+	Warn func(string)
 }
 
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
 // 入力種別は先頭 4 バイトの magic byte (PK\x03\x04 → XLSX) で判定する。
 func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
+	res, err := ReadWorkbook(r, opts.DataJSON)
+	if err != nil {
+		return err
+	}
+	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
+	return toMarkdown(res.Workbook, w, opts, pendingWarnings)
+}
+
+// ToMarkdownWorkbook はパース済みの Workbook を Markdown テーブルに変換する。
+func ToMarkdownWorkbook(wb *Workbook, w io.Writer, opts MarkdownOptions) error {
+	return toMarkdown(wb, w, opts, nil)
+}
+
+func toMarkdown(wb *Workbook, w io.Writer, opts MarkdownOptions, pendingWarnings []string) error {
 	if opts.Mode == "" {
 		opts.Mode = MarkdownModeFormula
 	}
@@ -48,17 +63,10 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		return err
 	}
 
-	res, err := ReadWorkbook(r, opts.DataJSON)
-	if err != nil {
-		return err
-	}
-	wb := res.Workbook
 	var formulaWarnings []string
 	if opts.EvalFormulas {
 		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
-
-	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
 
 	var rng *CellRange
 	if strings.TrimSpace(opts.Range) != "" {
@@ -77,13 +85,13 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 	for _, msg := range formulaWarnings {
-		fmt.Fprintln(os.Stderr, msg)
+		EmitWarning(opts.Warn, msg)
 	}
 	for _, msg := range pendingWarnings {
-		fmt.Fprintln(os.Stderr, msg)
+		EmitWarning(opts.Warn, msg)
 	}
 	if hasWarning {
-		fmt.Fprintln(os.Stderr, warnMissingFormulaValue(opts.Mode))
+		EmitWarning(opts.Warn, warnMissingFormulaValue(opts.Mode))
 	}
 	return nil
 }

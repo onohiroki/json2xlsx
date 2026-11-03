@@ -36,9 +36,11 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 
 ## Features
 
-- Lightweight CLI that runs on Go 1.22+.[2]
+- Lightweight CLI that runs on Go 1.25+.[2]
 - Main dependencies are `excelize` (XLSX read/write) and `jsonschema/v6` (JSON validation).[1]
 - Accepts JSON in both SheetJS-style Cell Objects and simple 2D array formats.[4][3]
+- **High-level table JSON** — `--table-json` accepts a compact `tables` / `header` / `rows` format with per-column formats, named styles, formula templates, freeze panes, and autofilter.
+- **MCP server** — `json2xlsx mcp` exposes conversion, validation, preview, inspection, and schema resources to local MCP clients.
 - Supports formulas, newlines, borders, colors, number formats, links, freeze panes, etc. (Note: 2D array format does not support formulas or styles).
 - Because the AI generation part is separated, it can be combined with any LLM.
 - **Chart generation** — bar, column, line, area, pie, doughnut, scatter, radar charts with customizable titles, legends, axes, and data labels.
@@ -63,7 +65,7 @@ go build -o json2xlsx ./cmd/json2xlsx
 
 ## Usage
 
-`json2xlsx` is a single-binary CLI that converts between XLSX and JSON. Subcommands are `to-json` (XLSX → JSON), `to-xlsx` (JSON → XLSX), `to-md` (JSON / XLSX → Markdown table), `to-html` (JSON / XLSX → HTML `<table>`), `to-csv` (JSON / XLSX → CSV), `info` (summarize the input), `eval` (evaluate a single formula), and `functions` (list supported functions). If the subcommand is omitted, it behaves as `to-xlsx` by default.
+`json2xlsx` is a single-binary CLI that converts between XLSX and JSON. Subcommands are `to-json` (XLSX → JSON), `to-xlsx` (JSON → XLSX), `to-md` (JSON / XLSX → Markdown table), `to-html` (JSON / XLSX → HTML `<table>`), `to-csv` (JSON / XLSX → CSV), `info` (summarize the input), `eval` (evaluate a single formula), `functions` (list supported functions), and `mcp` (local stdio MCP server). If the subcommand is omitted, it behaves as `to-xlsx` by default.
 
 ### `to-json` — XLSX → JSON
 
@@ -92,11 +94,12 @@ Date/time cells (`t: "d"`) default to outputting Excel's internal serial value a
 
 ### `to-xlsx` — JSON → XLSX (default)
 
-Read JSON and output `.xlsx`. Input is expected in SheetJS-style Workbook JSON by default. With `--data-json`, accepts 2D array (e.g. `[["A", 1], ["B", 2]]`), array of objects, or map-of-arrays JSON. Note that data JSON formats (`--data-json`) do not support formulas or styles.
+Read JSON and output `.xlsx`. Input is expected in SheetJS-style Workbook JSON by default. With `--data-json`, accepts 2D array (e.g. `[["A", 1], ["B", 2]]`), array of objects, or map-of-arrays JSON. Note that data JSON formats (`--data-json`) do not support formulas or styles. With `--table-json`, accepts the high-level table format described below.
 
 ```bash
 json2xlsx to-xlsx -i input.json -o output.xlsx
 json2xlsx to-xlsx -i data.json -o output.xlsx --data-json
+json2xlsx to-xlsx -i table.json -o output.xlsx --table-json
 ```
 
 Use `--compute` to evaluate formulas (`t: "f"`) that lack a cached value (`v`). Cells that fail evaluation are skipped with a warning on stderr.
@@ -374,6 +377,67 @@ json2xlsx functions --json
 - `--category C`: filter by exact category (`math`, `logical`, `statistical`, `conditional`, `lookup`, `text`, `date`, `info`, `trig`).
 - `--json`: emit `[{"name": "SUM", "category": "math"}, ...]`.
 
+### `mcp` — local stdio MCP server
+
+Start a local MCP server over stdin/stdout. This lets MCP clients without a shell (chat apps, sandboxed agents, etc.) call `json2xlsx` directly.
+
+```bash
+json2xlsx mcp
+json2xlsx mcp --allow-dir /path/to/work --allow-dir /tmp
+```
+
+The server exposes these tools:
+
+| Tool | Purpose |
+|---|---|
+| `json2xlsx_convert` | JSON (table / SheetJS / data) → XLSX. `output_path` is required |
+| `json2xlsx_validate` | Validate input and return `issues[]` without writing files |
+| `json2xlsx_preview` | Render as Markdown without writing an XLSX |
+| `json2xlsx_inspect` | Summarize an XLSX or workbook JSON |
+| `json2xlsx_to_json` | XLSX → JSON on disk |
+| `json2xlsx_functions` | Search supported formula functions |
+
+Resources include `json2xlsx://schema`, `json2xlsx://schema/table`, `json2xlsx://skill/sheetjs`, `json2xlsx://skill/table`, and selected `json2xlsx://samples/*` entries.
+
+Options:
+
+- `--allow-dir DIR`: directory the server may read and write. Repeatable. Defaults to the current directory.
+- `--max-input-bytes N`: input size limit (default 33554432).
+- `--max-output-bytes N`: output size limit (default 134217728).
+- `--max-cells N`, `--max-sheets N`, `--max-preview-bytes N`: additional limits.
+
+Example Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "json2xlsx": {
+      "command": "/usr/local/bin/json2xlsx",
+      "args": ["mcp", "--allow-dir", "/Users/me/work"]
+    }
+  }
+}
+```
+
+Example OpenCode configuration:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "json2xlsx": {
+      "type": "local",
+      "command": ["json2xlsx", "mcp", "--allow-dir", "."],
+      "enabled": true
+    }
+  }
+}
+```
+
+Relative `input_path`, `output_path`, and `base_dir` values are resolved against the first `--allow-dir`.
+
+The server writes logs to stderr only. It never writes binary XLSX data to stdout, so the MCP protocol stream stays clean.
+
 ## Input JSON concepts
 
 `json2xlsx` accepts JSON inspired by SheetJS compatibility and converts it to `.xlsx` on a per-cell basis.[3][4]
@@ -388,6 +452,52 @@ The expected input representations come in two modes:
 - Map-of-arrays form (e.g. `{"Name": ["Alice", "Bob"], "Age": [30, 25]}`)
 
 Note: data JSON formats are for pure data and do not support formulas or styles. For formulas and styles, use the SheetJS-style Cell Object form.
+
+**With `--table-json`:** accepts a higher-level table format that is easier for LLMs to generate than a cell map. It supports multiple sheets, headers, data rows, per-column formats, named styles, freeze panes, and autofilter.
+
+```json
+{
+  "tables": [
+    {
+      "name": "Sales",
+      "header": ["item", "qty", "price", "amount"],
+      "rows": [
+        ["A", 10, 100],
+        ["B", 5, 200]
+      ],
+      "columns": [
+        { "width": 18 },
+        { "format": "#,##0" },
+        { "format": "#,##0" },
+        { "format": "#,##0", "formula": "=B{r}*C{r}" }
+      ],
+      "styles": {
+        "header": {
+          "font": { "bold": true },
+          "fill": { "type": "pattern", "pattern": 1, "color": ["#E0EBF5"] }
+        }
+      },
+      "headerStyle": "header",
+      "freezeHeader": true,
+      "autoFilter": true
+    }
+  ]
+}
+```
+
+Key points:
+
+- `tables` is required. One element becomes one worksheet.
+- `header` is optional. When present it occupies row 1 and data starts on row 2.
+- `rows` is an array of arrays. Numbers, strings, booleans, and `null` are accepted.
+- A string starting with `=` is a formula. Use `{ "v": "=text" }` for a literal string.
+- `columns[].formula` applies to every data row. `{r}` is replaced by the row number, so you do not repeat the same formula.
+- Cell objects (`{ "v": ..., "f": ..., "format": ..., "style": ..., "align": ..., "t": ... }`) are available as an escape hatch.
+- Styles are named in `styles`. `headerStyle` / `bodyStyle` apply to the header and data. Precedence is `bodyStyle`/`headerStyle` < `columns[].style` < cell `style`; `format` and `align` are applied on top.
+- Sheet names must be at most 31 characters and must not contain `[]:*?/\`.
+- For charts, pictures, conditional formatting, sparklines, and other advanced features, use the SheetJS form.
+
+The JSON Schema is available at `schemas/table.schema.json`. A companion skill is in `skills/table-json-writer/`.
 
 ### Example: Cell Object form
 
@@ -708,6 +818,8 @@ The `sheetjs-json-writer` skill included in the `skills/` directory is a SKILL.m
 
 This allows `json2xlsx` to remain simple under the assumption that "correctly formatted JSON will be provided".
 
+For simple tables, the companion `table-json-writer` skill in `skills/table-json-writer/` asks the AI to emit the higher-level `tables` format instead of a cell map. That format is usually shorter and less error-prone, while `sheetjs-json-writer` remains the right choice for charts, pictures, conditional formatting, and other advanced features.
+
 A reimplementation referencing SheetJS-compatible specs can also be organized as a compatible implementation.[5][4]
 
 ## Licensing
@@ -718,6 +830,8 @@ The licenses of major dependencies are as follows:
 - `excelize`: BSD 3-Clause
 - `jsonschema/v6`: MIT
 - `go-runewidth`: MIT
+- `modelcontextprotocol/go-sdk`: Apache-2.0
+- `google/jsonschema-go`: MIT
 
 ## References
 

@@ -15,9 +15,10 @@ import (
 
 var errPrinter = message.NewPrinter(language.English)
 
-//go:embed schema.json
 // NOTE: `schema.json` is a copy of `schemas/json2xlsx.schema.json`.
 // Keep them in sync when updating the schema.
+//
+//go:embed schema.json
 var schemaData string
 
 var compiledSchema *jsonschema.Schema
@@ -40,28 +41,39 @@ func init() {
 
 const maxSchemaErrors = 10
 
-func ValidateJSON(data []byte) error {
+// JSONIssue は JSON スキーマ検証で見つかった 1 件の問題を表す．
+// Path は ".input.cells.A1.t" のような jq 風のパスになる．
+type JSONIssue struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
+}
+
+// ValidateJSONIssues は JSON をスキーマ検証し，構造化された問題一覧を返す．
+// JSON としてパースできない場合は parse error を返す．
+func ValidateJSONIssues(data []byte) ([]JSONIssue, error) {
 	var v any
 	if err := json.Unmarshal(data, &v); err != nil {
-		return nil
+		return nil, err
 	}
 	if err := compiledSchema.Validate(v); err != nil {
 		var ve *jsonschema.ValidationError
 		if errors.As(err, &ve) {
-			return formatSchemaError(ve)
+			return collectIssues(ve), nil
 		}
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
-type schemaIssue struct {
-	path    string
-	message string
+func ValidateJSON(data []byte) error {
+	issues, err := ValidateJSONIssues(data)
+	if err != nil {
+		return nil
+	}
+	return formatIssues(issues)
 }
 
-func formatSchemaError(ve *jsonschema.ValidationError) error {
-	issues := collectIssues(ve)
-
+func formatIssues(issues []JSONIssue) error {
 	if len(issues) == 0 {
 		return nil
 	}
@@ -78,10 +90,10 @@ func formatSchemaError(ve *jsonschema.ValidationError) error {
 		n = maxSchemaErrors
 	}
 	for _, iss := range issues[:n] {
-		msg := strings.TrimRight(iss.message, "\n")
+		msg := strings.TrimRight(iss.Message, "\n")
 		lines := strings.Split(msg, "\n")
 		b.WriteString("  ")
-		b.WriteString(iss.path)
+		b.WriteString(iss.Path)
 		b.WriteString(": ")
 		b.WriteString(lines[0])
 		b.WriteString("\n")
@@ -95,12 +107,12 @@ func formatSchemaError(ve *jsonschema.ValidationError) error {
 	return fmt.Errorf("%s", strings.TrimRight(b.String(), "\n"))
 }
 
-func collectIssues(ve *jsonschema.ValidationError) []schemaIssue {
+func collectIssues(ve *jsonschema.ValidationError) []JSONIssue {
 	if isRootOneOf(ve) {
-		var issues []schemaIssue
-		issues = append(issues, schemaIssue{
-			path:    instPathToJQ(ve.InstanceLocation),
-			message: `must be either a single sheet with "name" and "cells", a "sheets" array, or a "book" wrapper with version/sheets/charts (mode: embedded|chartSheet)`,
+		var issues []JSONIssue
+		issues = append(issues, JSONIssue{
+			Path:    instPathToJQ(ve.InstanceLocation),
+			Message: `must be either a single sheet with "name" and "cells", a "sheets" array, or a "book" wrapper with version/sheets/charts (mode: embedded|chartSheet)`,
 		})
 		for _, cause := range ve.Causes {
 			issues = append(issues, collectIssues(cause)...)
@@ -109,13 +121,13 @@ func collectIssues(ve *jsonschema.ValidationError) []schemaIssue {
 	}
 
 	if len(ve.Causes) == 0 {
-		return []schemaIssue{{
-			path:    instPathToJQ(ve.InstanceLocation),
-			message: ve.ErrorKind.LocalizedString(errPrinter),
+		return []JSONIssue{{
+			Path:    instPathToJQ(ve.InstanceLocation),
+			Message: ve.ErrorKind.LocalizedString(errPrinter),
 		}}
 	}
 
-	var issues []schemaIssue
+	var issues []JSONIssue
 	for _, cause := range ve.Causes {
 		issues = append(issues, collectIssues(cause)...)
 	}

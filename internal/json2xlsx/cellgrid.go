@@ -15,28 +15,28 @@ type CellGrid struct {
 }
 
 // BuildCellGrid は Sheet の cells/rows から二次元行列を構築する．
+// cells と rows の両方がある場合は rows を先に書き，cells で上書きする．
 // 空シートの場合は第二戻り値が false になる．
 func BuildCellGrid(sh Sheet) (CellGrid, bool) {
 	maxCol, maxRow := 0, 0
-	if len(sh.Cells) > 0 {
-		for axis := range sh.Cells {
-			c, r, err := excelize.CellNameToCoordinates(axis)
-			if err != nil {
-				continue
-			}
-			if c > maxCol {
-				maxCol = c
-			}
-			if r > maxRow {
-				maxRow = r
-			}
+	for axis := range sh.Cells {
+		c, r, err := excelize.CellNameToCoordinates(axis)
+		if err != nil {
+			continue
 		}
-	} else {
+		if c > maxCol {
+			maxCol = c
+		}
+		if r > maxRow {
+			maxRow = r
+		}
+	}
+	if len(sh.Rows) > maxRow {
 		maxRow = len(sh.Rows)
-		for _, row := range sh.Rows {
-			if len(row) > maxCol {
-				maxCol = len(row)
-			}
+	}
+	for _, row := range sh.Rows {
+		if len(row) > maxCol {
+			maxCol = len(row)
 		}
 	}
 	if maxCol == 0 || maxRow == 0 {
@@ -48,18 +48,18 @@ func BuildCellGrid(sh Sheet) (CellGrid, bool) {
 		rows[r] = make([]Cell, maxCol+1)
 	}
 
-	if len(sh.Cells) > 0 {
-		for axis, cell := range sh.Cells {
-			c, r, err := excelize.CellNameToCoordinates(axis)
-			if err == nil && c <= maxCol && r <= maxRow {
-				rows[r][c] = cell
+	for r, row := range sh.Rows {
+		for c, val := range row {
+			if c+1 > maxCol {
+				continue
 			}
+			rows[r+1][c+1] = Cell{V: val}
 		}
-	} else {
-		for r, row := range sh.Rows {
-			for c, val := range row {
-				rows[r+1][c+1] = Cell{V: val}
-			}
+	}
+	for axis, cell := range sh.Cells {
+		c, r, err := excelize.CellNameToCoordinates(axis)
+		if err == nil && c <= maxCol && r <= maxRow {
+			rows[r][c] = cell
 		}
 	}
 
@@ -75,6 +75,28 @@ func BuildCellGrid(sh Sheet) (CellGrid, bool) {
 		MaxRow:   maxRow,
 		ColNames: colNames,
 	}, true
+}
+
+// mergedSheetCells は rows と cells を 1 つのセルマップにまとめる．
+// cells が優先される．数式エンジンの入力ように使う．
+func mergedSheetCells(sh Sheet) map[string]Cell {
+	cells := make(map[string]Cell, len(sh.Cells))
+	for r, row := range sh.Rows {
+		for c, val := range row {
+			if val == nil {
+				continue
+			}
+			axis, err := excelize.CoordinatesToCellName(c+1, r+1)
+			if err != nil {
+				continue
+			}
+			cells[axis] = Cell{V: val}
+		}
+	}
+	for axis, cell := range sh.Cells {
+		cells[axis] = cell
+	}
+	return cells
 }
 
 // cellGridToCSVRows は CellGrid を CSV 出力用の [][]string に変換する．
