@@ -248,6 +248,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--first-row-header`: 最初の行をテーブルヘッダとして扱う．A/B/C 列名 + 行番号を抑制する．
 - `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける．列名・行番号は絶対座標で表示する．範囲が実データと交差しない場合はエラー．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
+- `--table-json`: JSON 入力を高レベルな table JSON（`tables` / `header` / `rows`）として扱う．
 - `--compute`: 出力前に数式を評価する．
 
 ロングオプションは `--name` 形式で表記しています．短い `-i` / `-o` はそのまま `-` 1 文字で指定します．`-mode` のようにハイフン 1 つでも受け付けますが，ドキュメント上の表記は `--` に統一しています．
@@ -298,6 +299,7 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode f`: 数式 (`=B2*C2`) を表示．A/B/C 列名 + 行番号を `<th>` で表示．
 - `--mode both`: `v` と数式の両方を `v<br />=f` のように併記．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
+- `--table-json`: JSON 入力を高レベルな table JSON（`tables` / `header` / `rows`）として扱う．
 - `--grid`: 空セルを含む全セルに灰色の細枠線を表示する（cellspacing を collapsed にする）．
 - `--compute`: 出力前に数式を評価する．
 
@@ -329,6 +331,7 @@ cat input.json | json2xlsx to-csv > output.csv
 - `--sheet-index`: 1 始まりのインデックスでシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
 - `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける（シートのセル入力にのみ適用）．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
+- `--table-json`: JSON 入力を高レベルな table JSON（`tables` / `header` / `rows`）として扱う．
 - `--compute`: 出力前に数式を評価する．
 
 日付セル (`t: "d"`) は自動的に人読可能な文字列に変換されます（シリアル値 → RFC3339 形式，文字列値 → そのまま）．

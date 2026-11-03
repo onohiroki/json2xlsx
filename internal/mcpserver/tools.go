@@ -514,6 +514,9 @@ func (s *server) loadWorkbook(ctx context.Context, spec InputSpec, allowXLSX boo
 
 	switch {
 	case spec.Table != nil:
+		if data, err := json.Marshal(spec.Table); err == nil && int64(len(data)) > s.opts.MaxInputBytes {
+			return nil, nil, "", "table", errf("INPUT_TOO_LARGE", "inline input is %d bytes; limit is %d bytes", len(data), s.opts.MaxInputBytes)
+		}
 		if issues := spec.Table.Validate(); len(issues) > 0 {
 			return nil, nil, "", "table", &json2xlsx.TableValidationError{Issues: issues}
 		}

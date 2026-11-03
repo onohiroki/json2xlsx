@@ -23,6 +23,14 @@ type ReadWorkbookResult struct {
 // XLSX の場合は extractWorkbookWithOptions (DateModeDisplay) を，
 // JSON の場合は UnmarshalWorkbook → normalizeDateCells を適用する．
 func ReadWorkbook(r io.Reader, dataJSON bool) (*ReadWorkbookResult, error) {
+	return ReadWorkbookWithFormat(r, dataJSON, false)
+}
+
+// ReadWorkbookWithFormat は dataJSON / tableJSON を指定して入力をパースする．
+func ReadWorkbookWithFormat(r io.Reader, dataJSON, tableJSON bool) (*ReadWorkbookResult, error) {
+	if dataJSON && tableJSON {
+		return nil, fmt.Errorf("--data-json and --table-json cannot be used together")
+	}
 	br := bufio.NewReader(r)
 	head, err := br.Peek(4)
 	if err != nil {
@@ -53,7 +61,12 @@ func ReadWorkbook(r io.Reader, dataJSON bool) (*ReadWorkbookResult, error) {
 	}
 	// UTF-8 BOM を除去
 	data = trimBOM(data)
-	wb, err := UnmarshalWorkbook(data, dataJSON)
+	var wb *Workbook
+	if tableJSON {
+		wb, err = UnmarshalTableJSON(data)
+	} else {
+		wb, err = UnmarshalWorkbook(data, dataJSON)
+	}
 	if err != nil {
 		return nil, err
 	}

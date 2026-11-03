@@ -31,6 +31,7 @@ type MarkdownOptions struct {
 	FirstRowHeader bool
 	ExplicitMode   bool
 	DataJSON       bool
+	TableJSON      bool
 	EvalFormulas   bool
 	Compact        bool
 	// Range は出力対象の矩形範囲 ("A1:F20" または "A1")．空なら全体．
@@ -42,7 +43,7 @@ type MarkdownOptions struct {
 // ToMarkdown は入力 (JSON Workbook または XLSX) を Markdown テーブルに変換して書き出す。
 // 入力種別は先頭 4 バイトの magic byte (PK\x03\x04 → XLSX) で判定する。
 func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
-	res, err := ReadWorkbook(r, opts.DataJSON)
+	res, err := ReadWorkbookWithFormat(r, opts.DataJSON, opts.TableJSON)
 	if err != nil {
 		return err
 	}

@@ -24,8 +24,14 @@
         "cols":    { "$ref": "#/$defs/cols" },
         "rowDims": { "$ref": "#/$defs/rowDims" },
         "merges":  { "$ref": "#/$defs/merges" },
-        "freeze":  { "$ref": "#/$defs/freeze" },
-        "styles":  { "$ref": "#/$defs/styles" }
+        "freeze":             { "$ref": "#/$defs/freeze" },
+        "autoFilter":         { "$ref": "#/$defs/autoFilter" },
+        "tables":             { "$ref": "#/$defs/tables" },
+        "sparklines":         { "$ref": "#/$defs/sparklines" },
+        "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+        "pictures":           { "$ref": "#/$defs/pictures" },
+        "background":         { "$ref": "#/$defs/background" },
+        "styles":             { "$ref": "#/$defs/styles" }
       },
       "required": ["cells"],
       "additionalProperties": false
@@ -44,8 +50,14 @@
               "rows":    { "$ref": "#/$defs/rows" },
               "cols":    { "$ref": "#/$defs/cols" },
               "rowDims": { "$ref": "#/$defs/rowDims" },
-              "merges":  { "$ref": "#/$defs/merges" },
-              "freeze":  { "$ref": "#/$defs/freeze" }
+              "merges":             { "$ref": "#/$defs/merges" },
+              "freeze":             { "$ref": "#/$defs/freeze" },
+              "autoFilter":         { "$ref": "#/$defs/autoFilter" },
+              "tables":             { "$ref": "#/$defs/tables" },
+              "sparklines":         { "$ref": "#/$defs/sparklines" },
+              "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+              "pictures":           { "$ref": "#/$defs/pictures" },
+              "background":         { "$ref": "#/$defs/background" }
             },
             "required": ["cells"],
             "additionalProperties": false
@@ -304,8 +316,14 @@
         "rows":    { "$ref": "#/$defs/rows" },
         "cols":    { "$ref": "#/$defs/cols" },
         "rowDims": { "$ref": "#/$defs/rowDims" },
-        "merges":  { "$ref": "#/$defs/merges" },
-        "freeze":  { "$ref": "#/$defs/freeze" }
+        "merges":             { "$ref": "#/$defs/merges" },
+        "freeze":             { "$ref": "#/$defs/freeze" },
+        "autoFilter":         { "$ref": "#/$defs/autoFilter" },
+        "tables":             { "$ref": "#/$defs/tables" },
+        "sparklines":         { "$ref": "#/$defs/sparklines" },
+        "conditionalFormats": { "$ref": "#/$defs/conditionalFormats" },
+        "pictures":           { "$ref": "#/$defs/pictures" },
+        "background":         { "$ref": "#/$defs/background" }
       },
       "required": ["cells"],
       "additionalProperties": false
@@ -471,6 +489,199 @@
         "showSerName":   { "type": "boolean" },
         "showPercent":   { "type": "boolean" },
         "showLeaderLn":  { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "sparklines": {
+      "type": "array",
+      "description": "スパークライン一覧",
+      "items": { "$ref": "#/$defs/sparkline" }
+    },
+
+    "sparkline": {
+      "type": "object",
+      "description": "スパークライン",
+      "properties": {
+        "location":       { "type": "string", "description": "配置先セル (例: A2)" },
+        "range":          { "type": "string", "description": "データ範囲 (例: Sheet1!B2:E2)" },
+        "type":           { "type": "string", "enum": ["line", "column", "win_loss"], "description": "スパークライン種別" },
+        "weight":         { "type": "number", "description": "線の太さ" },
+        "dateAxis":       { "type": "boolean", "description": "日付軸を使用" },
+        "markers":        { "type": "boolean", "description": "マーカー表示" },
+        "high":           { "type": "boolean", "description": "最大値強調" },
+        "low":            { "type": "boolean", "description": "最小値強調" },
+        "first":          { "type": "boolean", "description": "最初の値強調" },
+        "last":           { "type": "boolean", "description": "最後の値強調" },
+        "negative":       { "type": "boolean", "description": "負の値強調" },
+        "axis":           { "type": "boolean", "description": "軸表示" },
+        "hidden":         { "type": "boolean", "description": "非表示の行/列のデータを表示" },
+        "reverse":        { "type": "boolean", "description": "プロット方向を反転" },
+        "style":          { "type": "integer", "minimum": 0, "maximum": 35, "description": "組み込みスタイル (0-35)" },
+        "seriesColor":    { "$ref": "#/$defs/colorValue", "description": "線/棒の色" },
+        "negativeColor":  { "$ref": "#/$defs/colorValue", "description": "負の値の色" },
+        "markersColor":   { "$ref": "#/$defs/colorValue", "description": "マーカーの色" },
+        "firstColor":     { "$ref": "#/$defs/colorValue", "description": "最初の値の色" },
+        "lastColor":      { "$ref": "#/$defs/colorValue", "description": "最後の値の色" },
+        "highColor":      { "$ref": "#/$defs/colorValue", "description": "最大値の色" },
+        "lowColor":       { "$ref": "#/$defs/colorValue", "description": "最小値の色" },
+        "emptyCells":     { "type": "string", "enum": ["zero", "gap", "span"], "description": "空セルの扱い" },
+        "max":            { "type": "integer", "description": "軸の最大値のカスタマイズ方法" },
+        "customMax":      { "type": "integer", "description": "軸の最大値" },
+        "min":            { "type": "integer", "description": "軸の最小値のカスタマイズ方法" },
+        "customMin":      { "type": "integer", "description": "軸の最小値" }
+      },
+      "required": ["location", "range"],
+      "additionalProperties": false
+    },
+
+    "autoFilter": {
+      "oneOf": [
+        { "type": "string", "description": "範囲文字列 (例: A1:C10)" },
+        {
+          "type": "object",
+          "description": "SheetJS 互換オブジェクト形式",
+          "properties": {
+            "ref": { "type": "string", "description": "範囲 (例: A1:C10)" }
+          },
+          "required": ["ref"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "tables": {
+      "type": "array",
+      "description": "構造化テーブル一覧",
+      "items": { "$ref": "#/$defs/table" }
+    },
+
+    "table": {
+      "type": "object",
+      "description": "構造化テーブル",
+      "properties": {
+        "range":         { "type": "string", "description": "テーブル範囲 (例: A1:C10)" },
+        "name":          { "type": "string", "description": "テーブル名（省略時は自動生成）" },
+        "style":         { "type": "string", "description": "テーブルスタイル名 (TableStyleMedium2 など)" },
+        "bandedRows":    { "type": "boolean", "description": "交互行バンド" },
+        "bandedColumns": { "type": "boolean", "description": "交互列バンド" },
+        "firstColumn":   { "type": "boolean", "description": "先頭列強調" },
+        "lastColumn":    { "type": "boolean", "description": "最終列強調" },
+        "headerRow":     { "type": "boolean", "description": "ヘッダ行表示" }
+      },
+      "required": ["range"],
+      "additionalProperties": false
+    },
+
+    "conditionalFormats": {
+      "type": "array",
+      "description": "条件付き書式設定の配列",
+      "items": { "$ref": "#/$defs/conditionalFormat" }
+    },
+
+    "conditionalFormat": {
+      "type": "object",
+      "description": "条件付き書式グループ（範囲＋ルール群）",
+      "properties": {
+        "range": { "type": "string", "description": "適用範囲 (例: A1:A10)" },
+        "rules": {
+          "type": "array",
+          "description": "ルールの配列",
+          "items": { "$ref": "#/$defs/conditionalRule" },
+          "minItems": 1
+        }
+      },
+      "required": ["range", "rules"],
+      "additionalProperties": false
+    },
+
+    "conditionalRule": {
+      "type": "object",
+      "description": "条件付き書式ルール",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "ルール種別",
+          "enum": ["cell", "formula", "2_color_scale", "3_color_scale", "data_bar", "iconSet", "top", "bottom", "average", "duplicate", "unique", "blanks", "no_blanks", "errors", "no_errors", "text", "time_period"]
+        },
+        "criteria":     { "type": "string", "description": "評価基準（>, <, between, ==, containsText など）" },
+        "value":        { "type": "string", "description": "基準値" },
+        "minValue":     { "type": "string", "description": "下限値" },
+        "midValue":     { "type": "string", "description": "中間値（3_color_scale 用）" },
+        "maxValue":     { "type": "string", "description": "上限値" },
+        "style":        { "$ref": "#/$defs/conditionalStyle", "description": "条件成立時の書式" },
+        "minType":      { "type": "string", "enum": ["min", "num", "percent", "percentile", "formula", "max"], "description": "最小値の種類" },
+        "midType":      { "type": "string", "enum": ["num", "percent", "percentile", "formula"], "description": "中間値の種類" },
+        "maxType":      { "type": "string", "enum": ["num", "percent", "percentile", "formula", "max"], "description": "最大値の種類" },
+        "minColor":     { "$ref": "#/$defs/colorValue", "description": "色スケールの最小色" },
+        "midColor":     { "$ref": "#/$defs/colorValue", "description": "色スケールの中間色" },
+        "maxColor":     { "$ref": "#/$defs/colorValue", "description": "色スケールの最大色" },
+        "barColor":     { "$ref": "#/$defs/colorValue", "description": "データバーの色" },
+        "barBorderColor": { "$ref": "#/$defs/colorValue", "description": "データバーの枠線色" },
+        "barDirection": { "type": "string", "enum": ["context", "leftToRight", "rightToLeft"], "description": "データバーの方向" },
+        "barOnly":      { "type": "boolean", "description": "値非表示でバーのみ表示" },
+        "barSolid":     { "type": "boolean", "description": "ベタ塗りデータバー" },
+        "iconStyle":    { "type": "string", "description": "アイコンセット名 (3Arrows, 3TrafficLights1 など)" },
+        "reverseIcons": { "type": "boolean", "description": "アイコン順序反転" },
+        "iconsOnly":    { "type": "boolean", "description": "値非表示でアイコンのみ表示" },
+        "aboveAverage": { "type": "boolean", "description": "平均以上（true）/ 平均以下（false）" },
+        "percent":      { "type": "boolean", "description": "上位/下位 N% 指定" },
+        "stopIfTrue":   { "type": "boolean", "description": "条件成立時に後続ルールを評価しない" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+
+    "conditionalStyle": {
+      "type": "object",
+      "description": "条件付き書式用のインラインスタイル（dxf）",
+      "properties": {
+        "id":        { "type": "integer", "description": "省略可（インラインスタイルのため未使用）" },
+        "fill":      { "$ref": "#/$defs/fill" },
+        "border":    { "$ref": "#/$defs/border" },
+        "font":      { "$ref": "#/$defs/font" },
+        "alignment": { "$ref": "#/$defs/alignment" },
+        "numFmt":    { "type": "string", "description": "数値書式コード" }
+      },
+      "additionalProperties": false
+    },
+
+    "pictures": {
+      "type": "array",
+      "description": "画像一覧",
+      "items": { "$ref": "#/$defs/picture" }
+    },
+
+    "picture": {
+      "type": "object",
+      "description": "ワークシートに配置する画像",
+      "properties": {
+        "cell":            { "type": "string", "description": "配置先セル (例: C2)" },
+        "path":            { "type": "string", "description": "画像ファイルのパス" },
+        "data":            { "type": "string", "description": "base64 エンコードされた画像データ" },
+        "extension":       { "type": "string", "description": "画像拡張子 (png, jpg, gif など)" },
+        "altText":         { "type": "string", "description": "代替テキスト" },
+        "printObject":     { "type": "boolean", "description": "印刷対象とする" },
+        "locked":          { "type": "boolean", "description": "ロック" },
+        "lockAspectRatio": { "type": "boolean", "description": "縦横比を固定" },
+        "offsetX":         { "type": "integer", "description": "セル左上からの X オフセット（EMU）" },
+        "offsetY":         { "type": "integer", "description": "セル左上からの Y オフセット（EMU）" },
+        "scaleX":          { "type": "number", "description": "横幅の倍率 (1.0=100%)" },
+        "scaleY":          { "type": "number", "description": "縦幅の倍率 (1.0=100%)" },
+        "hyperlink":       { "type": "string", "description": "画像に設定するハイパーリンク" },
+        "positioning":     { "type": "string", "enum": ["twoCell", "oneCell", "absolute"], "description": "配置動作 (twoCell=セルと移動/サイズ変更, oneCell=移動のみ, absolute=固定)" }
+      },
+      "required": ["cell"],
+      "additionalProperties": false
+    },
+
+    "background": {
+      "type": "object",
+      "description": "シート背景画像",
+      "properties": {
+        "path":      { "type": "string", "description": "画像ファイルのパス" },
+        "data":      { "type": "string", "description": "base64 エンコードされた画像データ" },
+        "extension": { "type": "string", "description": "画像拡張子 (png, jpg, gif など)" }
       },
       "additionalProperties": false
     }

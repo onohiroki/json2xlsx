@@ -15,9 +15,10 @@ import (
 
 var errPrinter = message.NewPrinter(language.English)
 
-// NOTE: `schema.json` is a copy of `schemas/json2xlsx.schema.json`.
-// Keep them in sync when updating the schema.
+// NOTE: `schema.json` is the source of truth. It is copied to
+// `schemas/json2xlsx.schema.json` by go generate.
 //
+//go:generate cp schema.json ../../schemas/json2xlsx.schema.json
 //go:embed schema.json
 var schemaData string
 

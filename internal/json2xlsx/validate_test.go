@@ -1,6 +1,7 @@
 package json2xlsx
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -256,5 +257,15 @@ func TestValidate_IsAllDigits(t *testing.T) {
 	}
 	if isAllDigits("") {
 		t.Error("expected false for ''")
+	}
+}
+
+func TestSchemasAreInSync(t *testing.T) {
+	data, err := os.ReadFile("../../schemas/json2xlsx.schema.json")
+	if err != nil {
+		t.Fatalf("read canonical schema: %v", err)
+	}
+	if !bytes.Equal([]byte(schemaData), data) {
+		t.Fatal("internal/json2xlsx/schema.json and schemas/json2xlsx.schema.json differ; run go generate ./internal/json2xlsx")
 	}
 }

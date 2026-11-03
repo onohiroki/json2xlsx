@@ -15,6 +15,7 @@ type HTMLOptions struct {
 	GridLines    bool // セル間の隙間をなくし、枠線未指定セルにグレーの細枠線を表示する
 	ExplicitMode bool
 	DataJSON     bool
+	TableJSON    bool
 	EvalFormulas bool
 	// Warn は警告の出力先．nil の場合は stderr に出力する．
 	Warn func(string)
@@ -22,7 +23,7 @@ type HTMLOptions struct {
 
 // ToHTML は入力 (JSON Workbook または XLSX) を HTML <table> に変換して書き出す。
 func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
-	res, err := ReadWorkbook(r, opts.DataJSON)
+	res, err := ReadWorkbookWithFormat(r, opts.DataJSON, opts.TableJSON)
 	if err != nil {
 		return err
 	}

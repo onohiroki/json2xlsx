@@ -3,9 +3,11 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,10 +16,18 @@ import (
 
 func newTestSession(t *testing.T, dir string) (*mcp.ClientSession, func()) {
 	t.Helper()
-	srv, err := NewServer(Options{
+	return newTestSessionWithOptions(t, Options{
 		Version:   "test",
 		AllowDirs: []string{dir},
 	})
+}
+
+func newTestSessionWithOptions(t *testing.T, opts Options) (*mcp.ClientSession, func()) {
+	t.Helper()
+	if opts.Version == "" {
+		opts.Version = "test"
+	}
+	srv, err := NewServer(opts)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -485,5 +495,266 @@ func TestRelativeOutputPathUsesAllowDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "relative.xlsx")); err != nil {
 		t.Fatalf("expected output under allow-dir: %v", err)
+	}
+}
+
+func TestSymlinkEscapeRejected(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.json")
+	if err := os.WriteFile(secret, []byte(`{"cells":{"A1":{"t":"s","v":"x"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.json")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "json2xlsx_preview",
+		Arguments: map[string]any{"input_path": "link.json"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError || !strings.Contains(contentText(res.Content), "PATH_NOT_ALLOWED") {
+		t.Fatalf("expected PATH_NOT_ALLOWED, got %v", res.Content)
+	}
+}
+
+func TestImagePathOutsideRejected(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	img := filepath.Join(outside, "image.png")
+	if err := os.WriteFile(img, []byte("not really a png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"sheetjs": map[string]any{
+				"cells":    map[string]any{"A1": map[string]any{"t": "s", "v": "x"}},
+				"pictures": []any{map[string]any{"cell": "A1", "path": img}},
+			},
+			"output_path": "out.xlsx",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError || !strings.Contains(contentText(res.Content), "PATH_NOT_ALLOWED") {
+		t.Fatalf("expected PATH_NOT_ALLOWED, got %v", res.Content)
+	}
+}
+
+func TestInlineInputSizeLimit(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSessionWithOptions(t, Options{
+		Version:       "test",
+		AllowDirs:     []string{dir},
+		MaxInputBytes: 32,
+	})
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"table": map[string]any{
+				"tables": []any{
+					map[string]any{"rows": []any{[]any{"a long value that exceeds the limit"}}},
+				},
+			},
+			"output_path": "out.xlsx",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError || !strings.Contains(contentText(res.Content), "INPUT_TOO_LARGE") {
+		t.Fatalf("expected INPUT_TOO_LARGE, got %q", contentText(res.Content))
+	}
+}
+
+func TestCellLimit(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSessionWithOptions(t, Options{
+		Version:   "test",
+		AllowDirs: []string{dir},
+		MaxCells:  2,
+	})
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"table": map[string]any{
+				"tables": []any{
+					map[string]any{"rows": []any{[]any{1, 2, 3}}},
+				},
+			},
+			"output_path": "out.xlsx",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError || !strings.Contains(contentText(res.Content), "LIMIT_EXCEEDED") {
+		t.Fatalf("expected LIMIT_EXCEEDED, got %v", res.Content)
+	}
+}
+
+func TestExactlyOneInput(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"table":       map[string]any{"tables": []any{map[string]any{"rows": []any{[]any{1}}}}},
+			"data":        []any{[]any{1}},
+			"output_path": "out.xlsx",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError || !strings.Contains(contentText(res.Content), "exactly one") {
+		t.Fatalf("expected exactly-one error, got %v", res.Content)
+	}
+}
+
+func TestToolAnnotations(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	tools, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		switch tool.Name {
+		case "json2xlsx_convert":
+			if tool.Annotations == nil || tool.Annotations.ReadOnlyHint || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+				t.Errorf("convert annotations = %+v", tool.Annotations)
+			}
+		case "json2xlsx_validate", "json2xlsx_preview", "json2xlsx_inspect", "json2xlsx_functions":
+			if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+				t.Errorf("%s annotations = %+v", tool.Name, tool.Annotations)
+			}
+		}
+	}
+}
+
+func TestRelativeInputPath(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "in.json"), []byte(`{"cells":{"A1":{"t":"s","v":"relative"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "json2xlsx_preview",
+		Arguments: map[string]any{"input_path": "in.json"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+}
+
+func TestConcurrentPreview(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	args := map[string]any{
+		"table": map[string]any{
+			"tables": []any{
+				map[string]any{"header": []any{"a"}, "rows": []any{[]any{1}}},
+			},
+		},
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "json2xlsx_preview", Arguments: args})
+			if err != nil {
+				errs <- err
+				return
+			}
+			if res.IsError {
+				errs <- fmt.Errorf("tool error: %v", res.Content)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent call: %v", err)
+	}
+}
+
+func TestToJSONImageFile(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	imgData, err := os.ReadFile("../../samples/sample_image.png")
+	if err != nil {
+		t.Fatalf("read sample image: %v", err)
+	}
+	xlsxPath := filepath.Join(dir, "image.xlsx")
+	f := excelize.NewFile()
+	if err := f.AddPictureFromBytes("Sheet1", "A1", &excelize.Picture{Extension: ".png", File: imgData}); err != nil {
+		t.Fatalf("add picture: %v", err)
+	}
+	if err := f.SaveAs(xlsxPath); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	jsonPath := filepath.Join(dir, "out.json")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_to_json",
+		Arguments: map[string]any{
+			"input_path":  xlsxPath,
+			"output_path": jsonPath,
+			"image_mode":  "file",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "Sheet1_*.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) == 0 {
+		t.Fatalf("expected an extracted image file in %s", dir)
 	}
 }

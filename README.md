@@ -244,6 +244,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 - `--first-row-header`: treat the first row as the table header. Suppress A/B/C column names and row numbers.
 - `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted. Column names and row numbers are shown in absolute coordinates. A range that does not intersect the data is an error.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
+- `--table-json`: treat JSON input as high-level table JSON (`tables` / `header` / `rows`).
 - `--compute`: evaluate formulas before output.
 
 Long options are shown in `--name` form. Short `-i` / `-o` remain single-dash. Single-dash variants (e.g. `-mode`) may also be accepted, but the docs use `--` for consistency.
@@ -294,6 +295,7 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode f`: show formulas (`=B2*C2`). Column names A/B/C and row numbers are shown in `<th>`.
 - `--mode both`: show both `v` and formula like `v<br />=f`.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
+- `--table-json`: treat JSON input as high-level table JSON (`tables` / `header` / `rows`).
 - `--grid`: show thin gray borders on all cells, including empty ones (collapses cellspacing).
 - `--compute`: evaluate formulas before output.
 
@@ -325,6 +327,7 @@ Options:
 - `--sheet-index`: extract a sheet by 1-based index (for multi-sheet XLSX or Workbook JSON).
 - `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted (applies to sheet cell input only).
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
+- `--table-json`: treat JSON input as high-level table JSON (`tables` / `header` / `rows`).
 - `--compute`: evaluate formulas before output.
 
 Date cells (`t: "d"`) are automatically converted to readable strings (serial values → RFC3339-like, string values → pass-through).

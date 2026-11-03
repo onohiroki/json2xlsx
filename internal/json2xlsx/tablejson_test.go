@@ -227,3 +227,26 @@ func TestTableJSONFormulaTemplateCompute(t *testing.T) {
 		t.Fatalf("C3 = %q, want 60", got)
 	}
 }
+
+func TestTableJSONToMarkdown(t *testing.T) {
+	const input = `{"tables":[{"header":["a","b"],"rows":[[1,2]]}]}`
+	var out bytes.Buffer
+	opts := MarkdownOptions{TableJSON: true, FirstRowHeader: true, RowIndex: false, Mode: MarkdownModeValue, Compact: true}
+	if err := ToMarkdown(strings.NewReader(input), &out, opts); err != nil {
+		t.Fatalf("ToMarkdown: %v", err)
+	}
+	if !strings.Contains(out.String(), "| a | b |") {
+		t.Fatalf("markdown = %q", out.String())
+	}
+}
+
+func TestTableJSONToCSV(t *testing.T) {
+	const input = `{"tables":[{"header":["a","b"],"rows":[[1,2]]}]}`
+	var out bytes.Buffer
+	if err := ToCSVWithFormat(strings.NewReader(input), &out, "", 0, false, true, false, ""); err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != "a,b\n1,2" {
+		t.Fatalf("csv = %q", got)
+	}
+}

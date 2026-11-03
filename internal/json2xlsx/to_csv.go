@@ -26,6 +26,14 @@ func ToCSV(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON 
 // ToCSVRange は --range 付きの CSV 変換．rangeStr が空なら全体を出力する．
 // range はシートのセル入力 (XLSX / Workbook JSON) にのみ適用される．
 func ToCSVRange(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON bool, compute bool, rangeStr string) error {
+	return ToCSVWithFormat(r, w, sheetName, sheetIndex, dataJSON, false, compute, rangeStr)
+}
+
+// ToCSVWithFormat は data JSON / table JSON を指定して CSV に変換する．
+func ToCSVWithFormat(r io.Reader, w io.Writer, sheetName string, sheetIndex int, dataJSON, tableJSON, compute bool, rangeStr string) error {
+	if dataJSON && tableJSON {
+		return fmt.Errorf("--data-json and --table-json cannot be used together")
+	}
 	var rng *CellRange
 	if strings.TrimSpace(rangeStr) != "" {
 		parsed, err := ParseCellRange(rangeStr)
@@ -62,6 +70,24 @@ func ToCSVRange(r io.Reader, w io.Writer, sheetName string, sheetIndex int, data
 	data, err := io.ReadAll(br)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
+	}
+
+	if tableJSON {
+		wb, err := UnmarshalTableJSON(data)
+		if err != nil {
+			return err
+		}
+		var formulaWarnings []string
+		if compute {
+			formulaWarnings = EvalWorkbookFormulas(wb)
+		}
+		if err := convertWorkbookObjectToCSV(*wb, w, data, sheetName, sheetIndex, rng); err != nil {
+			return err
+		}
+		for _, msg := range formulaWarnings {
+			fmt.Fprintln(os.Stderr, msg)
+		}
+		return nil
 	}
 
 	if dataJSON {
@@ -287,12 +313,12 @@ func convertWorkbookObjectToCSV(wb Workbook, w io.Writer, data []byte, sheetName
 	if err != nil {
 		return err
 	}
-	if len(sh.Cells) == 0 && data != nil {
+	if len(sh.Cells) == 0 && len(sh.Rows) == 0 && data != nil {
 		if cells := guessCellMapFromData(data); len(cells) > 0 {
 			sh.Cells = cells
 		}
 	}
-	if len(sh.Cells) == 0 {
+	if len(sh.Cells) == 0 && len(sh.Rows) == 0 {
 		return errors.New("empty input: no cells found")
 	}
 
