@@ -14,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/onohiroki/json2xlsx/internal/json2xlsx"
+	"github.com/xuri/excelize/v2"
 )
 
 var binPath string
@@ -662,5 +663,57 @@ func TestCLI_MCP_CreateAllowDir(t *testing.T) {
 	}
 	if !info.IsDir() {
 		t.Fatalf("%s is not a directory", missing)
+	}
+}
+
+func TestCLI_ToJSON_ImageOverwriteGuard(t *testing.T) {
+	dir := t.TempDir()
+	imgData, err := os.ReadFile("../../samples/sample_image.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	xlsxPath := filepath.Join(dir, "in.xlsx")
+	f := excelize.NewFile()
+	if err := f.AddPictureFromBytes("Sheet1", "A1", &excelize.Picture{Extension: ".png", File: imgData}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SaveAs(xlsxPath); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	imagePath := filepath.Join(dir, "Sheet1_1.png")
+	if err := os.WriteFile(imagePath, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	jsonPath := filepath.Join(dir, "out.json")
+
+	_, stderr, code := runCLI(t, "to-json", "-i", xlsxPath, "-o", jsonPath, "--image-mode", "file")
+	if code == 0 {
+		t.Fatalf("expected failure without --overwrite-images")
+	}
+	if !strings.Contains(stderr, "already exists") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+	if got, _ := os.ReadFile(imagePath); string(got) != "old" {
+		t.Fatalf("image = %q, want old", got)
+	}
+	if _, err := os.Stat(jsonPath); !os.IsNotExist(err) {
+		t.Fatalf("JSON should not have been written: %v", err)
+	}
+
+	_, stderr, code = runCLI(t, "to-json", "-i", xlsxPath, "-o", jsonPath, "--image-mode", "file", "--overwrite-images")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	got, err := os.ReadFile(imagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) == "old" || len(got) == 0 {
+		t.Fatalf("image was not replaced: %q", got)
+	}
+	if _, err := os.Stat(jsonPath); err != nil {
+		t.Fatalf("JSON output: %v", err)
 	}
 }

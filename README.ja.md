@@ -76,6 +76,7 @@ json2xlsx to-json -i input.xlsx -o output.json
 json2xlsx to-json -i input.xlsx -o output.json --date-display
 json2xlsx to-json -i input.xlsx -o output.json --date-rfc3339
 json2xlsx to-json -i input.xlsx -o output.json --image-mode file
+json2xlsx to-json -i input.xlsx -o output.json --image-mode file --overwrite-images
 ```
 
 `-i` を省略すると標準入力，`-o` を省略すると標準出力を使います．
@@ -94,7 +95,7 @@ cat input.xlsx | json2xlsx to-json > output.json
 
 **画像出力モード** — `--image-mode` で XLSX 内の画像の出力方法を制御します：
 - `base64`（デフォルト）: JSON 出力内に base64 エンコードされた画像データを `data` フィールドとして埋め込みます．
-- `file`: 画像を個別のファイル（`image_1.png`，`image_2.jpg` など）として JSON 出力と一緒に保存します．JSON 内の `path` フィールドがファイルを参照します．
+- `file`: 画像を個別のファイル（`image_1.png`，`image_2.jpg` など）として JSON 出力と一緒に保存します．JSON 内の `path` フィールドがファイルを参照します．既存の画像ファイルがある場合は「already exists」エラーになります．上書きするには `--overwrite-images` を指定してください．画像は JSON と同じディレクトリの一時ディレクトリにステージされ，JSON の書き込みが成功した後に最終ファイルへ移動されます．
 
 ### `to-xlsx` — JSON → XLSX (デフォルト)
 
@@ -416,6 +417,8 @@ resources として `json2xlsx://schema`，`json2xlsx://schema/table`，`json2xl
 - `--max-input-bytes N`: 入力サイズ上限（既定 33554432）．
 - `--max-output-bytes N`: 出力サイズ上限（既定 134217728）．
 - `--max-cells N`，`--max-sheets N`，`--max-preview-bytes N`: 追加の上限．
+
+`json2xlsx_to_json` で `image_mode: "file"` を使う場合，既存の画像ファイルがあると `IMAGE_EXISTS` になります．`overwrite: true` を指定すると上書きします．画像は一時ディレクトリにステージされ，JSON の書き込みが成功した後に最終ファイルへ移動されます．
 
 Claude Desktop の設定例:
 

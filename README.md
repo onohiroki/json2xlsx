@@ -76,6 +76,7 @@ json2xlsx to-json -i input.xlsx -o output.json
 json2xlsx to-json -i input.xlsx -o output.json --date-display
 json2xlsx to-json -i input.xlsx -o output.json --date-rfc3339
 json2xlsx to-json -i input.xlsx -o output.json --image-mode file
+json2xlsx to-json -i input.xlsx -o output.json --image-mode file --overwrite-images
 ```
 
 If `-i` is omitted, standard input is used; if `-o` is omitted, standard output is used.
@@ -90,7 +91,7 @@ Date/time cells (`t: "d"`) default to outputting Excel's internal serial value a
 
 **Image output mode** — `--image-mode` controls how embedded images in the XLSX are exported:
 - `base64` (default): images are embedded directly in the JSON output as base64-encoded strings in the `data` field.
-- `file`: images are written to separate files on disk (named `image_1.png`, `image_2.jpg`, etc.) alongside the JSON output. The `path` field in the JSON will reference the file.
+- `file`: images are written to separate files on disk (named `image_1.png`, `image_2.jpg`, etc.) alongside the JSON output. The `path` field in the JSON will reference the file. If an image file already exists, `to-json` fails with an "already exists" error. Use `--overwrite-images` to replace existing image files. Images are staged in a temporary directory next to the JSON and moved into place only after the JSON is written successfully.
 
 ### `to-xlsx` — JSON → XLSX (default)
 
@@ -412,6 +413,8 @@ Options:
 - `--max-input-bytes N`: input size limit (default 33554432).
 - `--max-output-bytes N`: output size limit (default 134217728).
 - `--max-cells N`, `--max-sheets N`, `--max-preview-bytes N`: additional limits.
+
+`json2xlsx_to_json` uses `image_mode: "file"` only when requested. Existing image files cause `IMAGE_EXISTS` unless `overwrite: true` is set. Images are staged in a temporary directory and moved into place only after the JSON is written successfully.
 
 Example Claude Desktop configuration:
 

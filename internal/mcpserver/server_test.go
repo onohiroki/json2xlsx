@@ -962,3 +962,74 @@ func TestConvertTableObjectRows(t *testing.T) {
 		t.Fatalf("D2 value = %q", got)
 	}
 }
+
+func TestToJSONImageConflict(t *testing.T) {
+	dir := t.TempDir()
+	imgData, err := os.ReadFile("../../samples/sample_image.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	xlsxPath := filepath.Join(dir, "in.xlsx")
+	f := excelize.NewFile()
+	if err := f.AddPictureFromBytes("Sheet1", "A1", &excelize.Picture{Extension: ".png", File: imgData}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SaveAs(xlsxPath); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	imagePath := filepath.Join(dir, "Sheet1_1.png")
+	if err := os.WriteFile(imagePath, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	jsonPath := filepath.Join(dir, "out.json")
+
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_to_json",
+		Arguments: map[string]any{
+			"input_path":  xlsxPath,
+			"output_path": jsonPath,
+			"image_mode":  "file",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || !strings.Contains(contentText(res.Content), "IMAGE_EXISTS") {
+		t.Fatalf("expected IMAGE_EXISTS, got %v", res.Content)
+	}
+	if got, _ := os.ReadFile(imagePath); string(got) != "old" {
+		t.Fatalf("image = %q, want old", got)
+	}
+	if _, err := os.Stat(jsonPath); !os.IsNotExist(err) {
+		t.Fatalf("JSON should not have been written: %v", err)
+	}
+
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_to_json",
+		Arguments: map[string]any{
+			"input_path":  xlsxPath,
+			"output_path": jsonPath,
+			"image_mode":  "file",
+			"overwrite":   true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	got, err := os.ReadFile(imagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) == "old" || len(got) == 0 {
+		t.Fatalf("image was not replaced: %q", got)
+	}
+}

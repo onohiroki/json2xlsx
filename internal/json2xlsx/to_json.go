@@ -23,6 +23,12 @@ type ToJSONOptions struct {
 	ImageMode ImageMode
 	// BaseDir は画像ファイル出力時の基準ディレクトリ（ImageMode=file 時のみ使用）。
 	BaseDir string
+	// OverwriteImages は image_mode=file の既存画像を置き換える。
+	// 既定は false。false で既存画像がある場合は ImageExistsError を返す。
+	OverwriteImages bool
+
+	// images は ToJSONWithOptionsStaged が内部で設定する。
+	images *StagedImages
 }
 
 // ToJSON は XLSX を読み込み、json2xlsx 互換 JSON (セルマップ形式) を out に書き出す。
@@ -31,7 +37,28 @@ func ToJSON(r io.Reader, out io.Writer) error {
 }
 
 // ToJSONWithOptions はオプション付きで XLSX を json2xlsx 互換 JSON に変換する。
+// image_mode=file の場合は JSON の書き込み後に画像をコミットする。
+// JSON 書き込み後に追加の処理が失敗し得る呼び出し側は
+// ToJSONWithOptionsStaged を使い，Commit/Rollback を制御すること。
 func ToJSONWithOptions(r io.Reader, out io.Writer, opts ToJSONOptions) error {
+	stager, err := ToJSONWithOptionsStaged(r, out, opts)
+	if err != nil {
+		return err
+	}
+	if stager == nil {
+		return nil
+	}
+	defer stager.Cleanup()
+	if err := stager.Commit(); err != nil {
+		return err
+	}
+	return stager.Finalize()
+}
+
+// ToJSONWithOptionsStaged は JSON を out に書き出し，画像は一時ディレクトリに
+// ステージする。呼び出し側は JSON の最終書き込みが成功した後に Commit，
+// 失敗した場合に Rollback を呼ぶ。
+func ToJSONWithOptionsStaged(r io.Reader, out io.Writer, opts ToJSONOptions) (*StagedImages, error) {
 	if opts.DateMode == "" {
 		opts.DateMode = DateModeSerial
 	}
@@ -39,28 +66,48 @@ func ToJSONWithOptions(r io.Reader, out io.Writer, opts ToJSONOptions) error {
 		opts.ImageMode = ImageModeBase64
 	}
 
+	var stager *StagedImages
+	if opts.ImageMode == ImageModeFile {
+		var err error
+		stager, err = newStagedImages(opts.BaseDir, opts.OverwriteImages)
+		if err != nil {
+			return nil, err
+		}
+		opts.images = stager
+	}
+
+	cleanup := func() {
+		if stager != nil {
+			_ = stager.Cleanup()
+		}
+	}
+
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return fmt.Errorf("read input: %w", err)
+		cleanup()
+		return nil, fmt.Errorf("read input: %w", err)
 	}
 	f, err := excelize.OpenReader(bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("open xlsx: %w", err)
+		cleanup()
+		return nil, fmt.Errorf("open xlsx: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
 	wb, err := extractWorkbookWithOptions(f, opts)
 	if err != nil {
-		return err
+		cleanup()
+		return nil, err
 	}
 
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(&wb); err != nil {
-		return fmt.Errorf("encode json: %w", err)
+		cleanup()
+		return nil, fmt.Errorf("encode json: %w", err)
 	}
-	return nil
+	return stager, nil
 }
 
 // sheetJSON は単一シート出力用の補助構造体 (ref を含む)。
@@ -310,14 +357,18 @@ func extractSheet(f *excelize.File, name string, sc *styleCollector, opts ToJSON
 	}
 
 	// pictures
-	if pics, err := extractPicturesFromSheet(f, name, opts.ImageMode, opts.BaseDir); err == nil {
-		sh.Pictures = pics
+	pics, err := extractPicturesFromSheet(f, name, opts.ImageMode, opts.images)
+	if err != nil {
+		return sh, err
 	}
+	sh.Pictures = pics
 
 	// background
-	if bg, err := extractSheetBackground(f, name, opts.ImageMode, opts.BaseDir); err == nil {
-		sh.Background = bg
+	bg, err := extractSheetBackground(f, name, opts.ImageMode, opts.images)
+	if err != nil {
+		return sh, err
 	}
+	sh.Background = bg
 
 	return sh, nil
 }
@@ -429,5 +480,3 @@ func parseScalar(s string) interface{} {
 	}
 	return s
 }
-
-

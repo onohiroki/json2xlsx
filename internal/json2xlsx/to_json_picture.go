@@ -5,14 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
 
-func extractPicturesFromSheet(f *excelize.File, sheetName string, mode ImageMode, baseDir string) ([]Picture, error) {
+func extractPicturesFromSheet(f *excelize.File, sheetName string, mode ImageMode, stager *StagedImages) ([]Picture, error) {
 	cells, err := f.GetPictureCells(sheetName)
 	if err != nil {
 		return nil, nil
@@ -45,10 +44,12 @@ func extractPicturesFromSheet(f *excelize.File, sheetName string, mode ImageMode
 			}
 			ext := strings.TrimPrefix(pic.Extension, ".")
 			if mode == ImageModeFile {
+				if stager == nil {
+					return nil, fmt.Errorf("image mode file requires a staged output")
+				}
 				filename := buildImageFilename(sheetName, imgIndex, ext)
-				outPath := filepath.Join(baseDir, filename)
-				if err := os.WriteFile(outPath, pic.File, 0644); err != nil {
-					return nil, fmt.Errorf("write image file %q: %w", outPath, err)
+				if err := stager.Stage(filename, pic.File); err != nil {
+					return nil, err
 				}
 				p.Path = filename
 			} else {
@@ -61,7 +62,7 @@ func extractPicturesFromSheet(f *excelize.File, sheetName string, mode ImageMode
 	return result, nil
 }
 
-func extractSheetBackground(f *excelize.File, sheetName string, mode ImageMode, baseDir string) (*SheetBackground, error) {
+func extractSheetBackground(f *excelize.File, sheetName string, mode ImageMode, stager *StagedImages) (*SheetBackground, error) {
 	sheetIdx, err := f.GetSheetIndex(sheetName)
 	if err != nil || sheetIdx < 0 {
 		return nil, nil
@@ -130,10 +131,12 @@ func extractSheetBackground(f *excelize.File, sheetName string, mode ImageMode, 
 
 	bg := &SheetBackground{Extension: ext}
 	if mode == ImageModeFile {
+		if stager == nil {
+			return nil, fmt.Errorf("image mode file requires a staged output")
+		}
 		filename := buildImageFilename(sheetName, 0, ext)
-		outPath := filepath.Join(baseDir, filename)
-		if err := os.WriteFile(outPath, imgData, 0644); err != nil {
-			return nil, fmt.Errorf("write background image file %q: %w", outPath, err)
+		if err := stager.Stage(filename, imgData); err != nil {
+			return nil, err
 		}
 		bg.Path = filename
 	} else {

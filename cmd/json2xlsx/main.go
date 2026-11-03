@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -93,6 +94,7 @@ Usage:
   --date-display       to-json で日時セルを表示文字列で出力する (非推奨，--date-rfc3339 を推奨)
   --date-rfc3339       to-json で日時セルを RFC3339 (UTC) に再解釈して出力する
   --image-mode         to-json の画像出力モード: base64 (JSON に埋め込み) または file (外部ファイル)
+  --overwrite-images   to-json の --image-mode file で既存画像を上書きする (既定はエラー)
   --mode               セル表示モード (f=数式優先, v=値優先, both=併記)．to-md デフォルト f, to-html デフォルト v
   --first-row-header   to-md で最初の行をテーブルヘッダとして扱う (A/B/C 列名 + 行番号を抑制)
   --compact / -c       to-md で列のパディングを抑制しコンパクトに表示する
@@ -147,6 +149,7 @@ Options:
   --date-display       Emit date cells as display strings
   --date-rfc3339       Reinterpret date/time serial as RFC3339 (UTC)
   --image-mode         Image output mode: base64 (embed in JSON) or file (write to disk)
+  --overwrite-images   Overwrite existing image files with --image-mode file (default: error)
   --mode               Cell display mode (f=formula, v=value, both=both). Default to-md=f, to-html=v
   --first-row-header   Treat first row as table header (suppress A/B/C and row numbers)
   --compact / -c       Suppress column alignment padding for compact tables (to-md only)
@@ -218,12 +221,14 @@ func runToJSON(args []string) {
 	var input, output string
 	var dateDisplay, dateRFC3339, dateSerial bool
 	var imageMode string
+	var overwriteImages bool
 	fs.StringVar(&input, "i", "", "input XLSX file (default: stdin)")
 	fs.StringVar(&output, "o", "", "output JSON file (default: stdout)")
 	fs.BoolVar(&dateDisplay, "date-display", false, "emit date cells as display strings")
 	fs.BoolVar(&dateRFC3339, "date-rfc3339", false, "reinterpret date/time serial values as RFC3339 (UTC)")
 	fs.BoolVar(&dateSerial, "date-serial", false, "emit date cells as Excel serial values")
 	fs.StringVar(&imageMode, "image-mode", "base64", "image output mode: base64 (embed in JSON) or file (write to disk)")
+	fs.BoolVar(&overwriteImages, "overwrite-images", false, "overwrite existing image files with --image-mode file")
 	_ = fs.Parse(args)
 
 	dateMode, err := json2xlsx.ResolveDateMode(dateDisplay, dateRFC3339, dateSerial)
@@ -245,22 +250,102 @@ func runToJSON(args []string) {
 	}
 	defer closeR()
 
-	w, closeW, err := openOutput(output)
+	opts := json2xlsx.ToJSONOptions{
+		DateMode:        dateMode,
+		WrapWithBook:    true,
+		ImageMode:       imageModeVal,
+		BaseDir:         outputBaseDir(output),
+		OverwriteImages: overwriteImages,
+	}
+
+	if output == "" {
+		var buf bytes.Buffer
+		stager, err := json2xlsx.ToJSONWithOptionsStaged(r, &buf, opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+			os.Exit(1)
+		}
+		if stager != nil {
+			defer stager.Cleanup()
+			if err := stager.Commit(); err != nil {
+				fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		if _, err := os.Stdout.Write(buf.Bytes()); err != nil {
+			if stager != nil {
+				_ = stager.Rollback()
+			}
+			fmt.Fprintf(os.Stderr, "to-json: write stdout: %v\n", err)
+			os.Exit(1)
+		}
+		if stager != nil {
+			if err := stager.Finalize(); err != nil {
+				fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		return
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(output), ".json2xlsx-json-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create output: %v\n", err)
 		os.Exit(1)
 	}
-	defer closeW()
-
-	opts := json2xlsx.ToJSONOptions{
-		DateMode:     dateMode,
-		WrapWithBook: true,
-		ImageMode:    imageModeVal,
-		BaseDir:      outputBaseDir(output),
+	tmpName := tmp.Name()
+	cleanupTmp := func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 	}
-	if err := json2xlsx.ToJSONWithOptions(r, w, opts); err != nil {
+
+	stager, err := json2xlsx.ToJSONWithOptionsStaged(r, tmp, opts)
+	if err != nil {
+		cleanupTmp()
 		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
 		os.Exit(1)
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		cleanupTmp()
+		fmt.Fprintf(os.Stderr, "to-json: chmod temporary output: %v\n", err)
+		os.Exit(1)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		fmt.Fprintf(os.Stderr, "to-json: close temporary output: %v\n", err)
+		os.Exit(1)
+	}
+
+	if stager != nil {
+		defer stager.Cleanup()
+		if err := stager.Commit(); err != nil {
+			_ = os.Remove(tmpName)
+			fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	renameErr := os.Rename(tmpName, output)
+	if renameErr != nil {
+		// Windows では既存ファイルがあると rename が失敗するため，削除して再試行する．
+		if _, statErr := os.Stat(output); statErr == nil {
+			if rmErr := os.Remove(output); rmErr == nil {
+				renameErr = os.Rename(tmpName, output)
+			}
+		}
+	}
+	if renameErr != nil {
+		if stager != nil {
+			_ = stager.Rollback()
+		}
+		_ = os.Remove(tmpName)
+		fmt.Fprintf(os.Stderr, "to-json: write output: %v\n", renameErr)
+		os.Exit(1)
+	}
+	if stager != nil {
+		if err := stager.Finalize(); err != nil {
+			fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 

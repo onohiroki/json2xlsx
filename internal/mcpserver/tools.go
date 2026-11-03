@@ -156,7 +156,7 @@ Accepts the same inputs as json2xlsx_convert, plus an XLSX path. Use this to che
 		Name:  "json2xlsx_to_json",
 		Title: "Convert XLSX to JSON",
 		Description: `Convert an XLSX file to json2xlsx-compatible JSON on disk.
-output_path is required and its parent directory must exist. image_mode defaults to base64 so that no extra image files are written; use file to write images next to the JSON (existing image_N files in that directory may be overwritten).`,
+output_path is required and its parent directory must exist. image_mode defaults to base64 so that no extra image files are written; use file to write images next to the JSON. Existing image files cause IMAGE_EXISTS unless overwrite=true. Images are staged in a temporary directory and only moved into place after the JSON is written.`,
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    false,
 			DestructiveHint: boolPtr(true),
@@ -447,19 +447,45 @@ func (s *server) handleToJSON(ctx context.Context, _ *mcp.CallToolRequest, in to
 
 	var buf bytes.Buffer
 	opts := json2xlsx.ToJSONOptions{
-		DateMode:     dateMode,
-		WrapWithBook: true,
-		ImageMode:    imageMode,
-		BaseDir:      filepath.Dir(outPath),
+		DateMode:        dateMode,
+		WrapWithBook:    true,
+		ImageMode:       imageMode,
+		BaseDir:         filepath.Dir(outPath),
+		OverwriteImages: in.Overwrite,
 	}
-	if err := json2xlsx.ToJSONWithOptions(bytes.NewReader(data), &buf, opts); err != nil {
+	stager, err := json2xlsx.ToJSONWithOptionsStaged(bytes.NewReader(data), &buf, opts)
+	if err != nil {
+		var ie *json2xlsx.ImageExistsError
+		if errors.As(err, &ie) {
+			return fail[toJSONOutput](errf("IMAGE_EXISTS", "%v", err))
+		}
 		return fail[toJSONOutput](errf("CONVERSION_FAILED", "%v", err))
+	}
+	if stager != nil {
+		defer stager.Cleanup()
 	}
 	if int64(buf.Len()) > s.opts.MaxOutputBytes {
 		return fail[toJSONOutput](errf("OUTPUT_TOO_LARGE", "generated JSON is %d bytes; limit is %d bytes", buf.Len(), s.opts.MaxOutputBytes))
 	}
+	if stager != nil {
+		if err := stager.Commit(); err != nil {
+			var ie *json2xlsx.ImageExistsError
+			if errors.As(err, &ie) {
+				return fail[toJSONOutput](errf("IMAGE_EXISTS", "%v", err))
+			}
+			return fail[toJSONOutput](errf("IMAGE_WRITE_FAILED", "%v", err))
+		}
+	}
 	if err := writeFileAtomic(outPath, buf.Bytes(), in.Overwrite); err != nil {
+		if stager != nil {
+			_ = stager.Rollback()
+		}
 		return fail[toJSONOutput](err)
+	}
+	if stager != nil {
+		if err := stager.Finalize(); err != nil {
+			return fail[toJSONOutput](errf("IMAGE_CLEANUP_FAILED", "%v", err))
+		}
 	}
 	out = toJSONOutput{Path: outPath, Bytes: int64(buf.Len())}
 	return textResult(fmt.Sprintf("Wrote %s (%d bytes).", out.Path, out.Bytes)), out, nil
