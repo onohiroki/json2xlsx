@@ -299,9 +299,12 @@ type ChartDLbls struct {
 // Book は book ラッパー形式の内部構造。
 type Book struct {
 	Props  interface{}      `json:"props,omitempty"`
-	Sheets map[string]Sheet `json:"sheets,omitempty"`
-	Charts []Chart          `json:"charts,omitempty"`
-	Styles []Style          `json:"styles,omitempty"`
+	// SheetOrder は book.sheets の出力順を保持する．
+	// 未指定の場合はシート名のアルファベット順になる．
+	SheetOrder []string         `json:"sheetOrder,omitempty"`
+	Sheets     map[string]Sheet `json:"sheets,omitempty"`
+	Charts     []Chart          `json:"charts,omitempty"`
+	Styles     []Style          `json:"styles,omitempty"`
 }
 
 // Workbook はトップレベルの JSON 構造。

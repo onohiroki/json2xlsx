@@ -139,6 +139,7 @@ func (r *tableStyleRegistry) register(s Style) int {
 // ParseTableSpec は table JSON をパースし，意味検証の問題も返す．
 // JSON として壊れている場合は err を返す．
 func ParseTableSpec(data []byte) (*TableSpec, []JSONIssue, error) {
+	data = trimBOM(data)
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	dec.DisallowUnknownFields()
@@ -604,13 +605,7 @@ func normalizeTableValue(v any) any {
 	if !ok {
 		return v
 	}
-	if i, err := n.Int64(); err == nil {
-		return i
-	}
-	if f, err := n.Float64(); err == nil {
-		return f
-	}
-	return n.String()
+	return normalizeJSONNumber(n)
 }
 
 func parseTableCellObject(v any) (tableCell, bool, error) {

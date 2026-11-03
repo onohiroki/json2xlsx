@@ -151,8 +151,10 @@ func extractWorkbookWithOptions(f *excelize.File, opts ToJSONOptions) (Workbook,
 			Sheets: make(map[string]Sheet, len(sheets)),
 			Styles: sc.styles,
 		}
+		book.SheetOrder = make([]string, 0, len(sheets))
 		for _, sh := range sheets {
 			book.Sheets[sh.Name] = sh
+			book.SheetOrder = append(book.SheetOrder, sh.Name)
 		}
 		// chartsheet からグラフを抽出
 		charts, err := extractChartsheets(f)

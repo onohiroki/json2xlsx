@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 )
@@ -13,6 +14,7 @@ import (
 // 二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する．
 // 戻り値の Workbook は常に正規化済み（wb.Sheets / wb.Styles が populated）である．
 func UnmarshalWorkbook(data []byte, dataJSON bool) (*Workbook, error) {
+	data = trimBOM(data)
 	var wb *Workbook
 	var err error
 	if dataJSON {
@@ -24,6 +26,9 @@ func UnmarshalWorkbook(data []byte, dataJSON bool) (*Workbook, error) {
 		return nil, err
 	}
 	normalizeWorkbook(wb)
+	if err := validateSheetNames(wb.Sheets); err != nil {
+		return nil, err
+	}
 	return wb, nil
 }
 
@@ -168,8 +173,7 @@ func unmarshalDataJSON(data []byte) (*Workbook, error) {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && trimmed[0] == '[' {
 		// 1) 二次元配列形式 [[...], ...]
-		var rows [][]any
-		if err := json.Unmarshal(trimmed, &rows); err == nil {
+		if rows, err := decodeDataRows(trimmed); err == nil {
 			return &Workbook{Rows: rows}, nil
 		}
 
@@ -192,6 +196,88 @@ func unmarshalDataJSON(data []byte) (*Workbook, error) {
 	}
 
 	return nil, fmt.Errorf("--data-json: expected array or map-of-arrays JSON")
+}
+
+// decodeDataRows は二次元配列を json.Number を保持したままデコードする．
+// 戻り値の数値は int64 または float64 に正規化される．
+func decodeDataRows(data []byte) ([][]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var rows [][]any
+	if err := dec.Decode(&rows); err != nil {
+		return nil, err
+	}
+	if err := ensureJSONEOF(dec); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		for i, v := range row {
+			row[i] = normalizeJSONValue(v)
+		}
+	}
+	return rows, nil
+}
+
+// decodeJSONArrayUseNumber は配列を json.Number を保持したままデコードする．
+func decodeJSONArrayUseNumber(data []byte) ([]any, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var arr []any
+	if err := dec.Decode(&arr); err != nil {
+		return nil, err
+	}
+	if err := ensureJSONEOF(dec); err != nil {
+		return nil, err
+	}
+	for i, v := range arr {
+		arr[i] = normalizeJSONValue(v)
+	}
+	return arr, nil
+}
+
+// ensureJSONEOF はデコーダの入力末尾に余分な JSON 値がないことを確認する．
+func ensureJSONEOF(dec *json.Decoder) error {
+	var extra any
+	err := dec.Decode(&extra)
+	if err == io.EOF {
+		return nil
+	}
+	if err == nil {
+		return fmt.Errorf("unexpected trailing JSON value")
+	}
+	return err
+}
+
+// normalizeJSONValue は json.Number を int64 / float64 に変換する．
+// 入れ子の配列・オブジェクトも再帰的に処理する．
+func normalizeJSONValue(v any) any {
+	switch x := v.(type) {
+	case json.Number:
+		return normalizeJSONNumber(x)
+	case []any:
+		for i := range x {
+			x[i] = normalizeJSONValue(x[i])
+		}
+		return x
+	case map[string]any:
+		for k := range x {
+			x[k] = normalizeJSONValue(x[k])
+		}
+		return x
+	default:
+		return v
+	}
+}
+
+// normalizeJSONNumber は整数として表現できる数値を int64，それ以外を float64 にする．
+func normalizeJSONNumber(n json.Number) any {
+	if i, err := n.Int64(); err == nil {
+		return i
+	}
+	if f, err := n.Float64(); err == nil {
+		return f
+	}
+	return n.String()
 }
 
 // objectArrayToWorkbook はオブジェクト配列 [{key: val}, ...] を
@@ -263,8 +349,8 @@ func tryMapOfArrays(data []byte) (*Workbook, bool) {
 	arrays := make([][]any, len(keys))
 	maxLen := 0
 	for i, k := range keys {
-		var arr []any
-		if err := json.Unmarshal(raw[k], &arr); err != nil {
+		arr, err := decodeJSONArrayUseNumber(raw[k])
+		if err != nil {
 			return nil, false
 		}
 		if len(arr) > maxLen {
@@ -299,9 +385,10 @@ func tryMapOfArrays(data []byte) (*Workbook, bool) {
 
 // decodeOrderedObject は 1 つの JSON オブジェクトをパースし，宣言順のキー配列と
 // 対応する値のマップを返す．値の型は json.Unmarshal と同等
-// (float64 / string / bool / nil / []any / map[string]any)．
+// (int64 / float64 / string / bool / nil / []any / map[string]any)．
 func decodeOrderedObject(data []byte) ([]string, map[string]any, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
 	tok, err := dec.Token()
 	if err != nil {
 		return nil, nil, err
@@ -325,7 +412,7 @@ func decodeOrderedObject(data []byte) ([]string, map[string]any, error) {
 			return nil, nil, err
 		}
 		keys = append(keys, k)
-		values[k] = v
+		values[k] = normalizeJSONValue(v)
 	}
 	return keys, values, nil
 }

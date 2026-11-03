@@ -322,3 +322,47 @@ func TestToJSON_FreezePanes_ReadDirect(t *testing.T) {
 		t.Errorf("freeze.col = %d, want 0", wb.Freeze.Col)
 	}
 }
+
+func TestToJSON_BookSheetOrderRoundTrip(t *testing.T) {
+	input := `{"sheets":[
+		{"name":"Z","cells":{"A1":{"t":"s","v":"z"}}},
+		{"name":"A","cells":{"A1":{"t":"s","v":"a"}}}
+	]}`
+	var xlsx bytes.Buffer
+	if err := Convert(strings.NewReader(input), &xlsx, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	var out bytes.Buffer
+	if err := ToJSONWithOptions(bytes.NewReader(xlsx.Bytes()), &out, ToJSONOptions{WrapWithBook: true}); err != nil {
+		t.Fatalf("ToJSON: %v", err)
+	}
+	wb, err := UnmarshalWorkbook(out.Bytes(), false)
+	if err != nil {
+		t.Fatalf("UnmarshalWorkbook: %v\n%s", err, out.String())
+	}
+	if len(wb.Sheets) != 2 || wb.Sheets[0].Name != "Z" || wb.Sheets[1].Name != "A" {
+		t.Fatalf("unexpected sheet order: %+v", wb.Sheets)
+	}
+}
+
+func TestToJSON_OutputPassesSchema(t *testing.T) {
+	input := `{"sheets":[
+		{"name":"B","cells":{"A1":{"t":"s","v":"b"}}},
+		{"name":"A","cells":{"A1":{"t":"n","v":1}}}
+	],"styles":[{"id":1,"numFmt":"#,##0"}]}`
+	var xlsx bytes.Buffer
+	if err := Convert(strings.NewReader(input), &xlsx, ConvertOptions{}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	var out bytes.Buffer
+	if err := ToJSONWithOptions(bytes.NewReader(xlsx.Bytes()), &out, ToJSONOptions{WrapWithBook: true}); err != nil {
+		t.Fatalf("ToJSON: %v", err)
+	}
+	issues, err := ValidateJSONIssues(out.Bytes())
+	if err != nil {
+		t.Fatalf("ValidateJSONIssues: %v\n%s", err, out.String())
+	}
+	if len(issues) > 0 {
+		t.Fatalf("to-json output violates schema: %+v\n%s", issues, out.String())
+	}
+}

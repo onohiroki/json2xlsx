@@ -33,7 +33,10 @@
         "background":         { "$ref": "#/$defs/background" },
         "styles":             { "$ref": "#/$defs/styles" }
       },
-      "required": ["cells"],
+      "anyOf": [
+        { "required": ["cells"] },
+        { "required": ["rows"] }
+      ],
       "additionalProperties": false
     },
 
@@ -59,7 +62,10 @@
               "pictures":           { "$ref": "#/$defs/pictures" },
               "background":         { "$ref": "#/$defs/background" }
             },
-            "required": ["cells"],
+            "anyOf": [
+              { "required": ["cells"] },
+              { "required": ["rows"] }
+            ],
             "additionalProperties": false
           },
           "minItems": 1
@@ -95,7 +101,6 @@
         "s": { "$ref": "#/$defs/styleRef" },
         "l": { "$ref": "#/$defs/hyperlink" }
       },
-      "required": ["t"],
       "additionalProperties": false
     },
 
@@ -288,6 +293,11 @@
           "type": "object",
           "properties": {
             "props":  { "type": "object", "description": "文書プロパティ（任意）" },
+            "sheetOrder": {
+              "type": "array",
+              "description": "シートの出力順．未指定時はシート名のアルファベット順",
+              "items": { "type": "string" }
+            },
             "sheets": {
               "type": "object",
               "description": "キーがシート名のオブジェクト",
@@ -302,7 +312,8 @@
           },
           "required": ["sheets"],
           "additionalProperties": false
-        }
+        },
+        "styles": { "$ref": "#/$defs/styles" }
       },
       "required": ["book"],
       "additionalProperties": false
@@ -310,8 +321,9 @@
 
     "bookSheet": {
       "type": "object",
-      "description": "book 内のシートオブジェクト（キーがシート名のため name フィールド不要）",
+      "description": "book 内のシートオブジェクト（キーがシート名のため name フィールドは任意）",
       "properties": {
+        "name":    { "$ref": "#/$defs/sheetName" },
         "cells":   { "$ref": "#/$defs/cells" },
         "rows":    { "$ref": "#/$defs/rows" },
         "cols":    { "$ref": "#/$defs/cols" },
@@ -325,7 +337,10 @@
         "pictures":           { "$ref": "#/$defs/pictures" },
         "background":         { "$ref": "#/$defs/background" }
       },
-      "required": ["cells"],
+      "anyOf": [
+        { "required": ["cells"] },
+        { "required": ["rows"] }
+      ],
       "additionalProperties": false
     },
 

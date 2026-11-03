@@ -379,3 +379,55 @@ func TestNormalizeWorkbook_BookWrapper_StylesPrecedence(t *testing.T) {
 		t.Errorf("expected top-level Styles as fallback, got %+v", wb.Styles)
 	}
 }
+
+func TestValidateSheetNames_DuplicateCaseInsensitive(t *testing.T) {
+	sheets := []Sheet{{Name: "Sales"}, {Name: "sales"}}
+	if err := validateSheetNames(sheets); err == nil {
+		t.Fatal("expected duplicate sheet name error")
+	}
+}
+
+func TestValidateSheetNames_EmptyNamesUseDefaults(t *testing.T) {
+	sheets := []Sheet{{}, {}}
+	if err := validateSheetNames(sheets); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFlattenWorkbook_BookSheetOrder(t *testing.T) {
+	wb := &Workbook{Book: &Book{
+		SheetOrder: []string{"Z", "A"},
+		Sheets: map[string]Sheet{
+			"A": {Cells: map[string]Cell{"A1": {T: "s", V: "a"}}},
+			"Z": {Cells: map[string]Cell{"A1": {T: "s", V: "z"}}},
+		},
+	}}
+	sheets, _ := flattenWorkbook(wb)
+	if len(sheets) != 2 || sheets[0].Name != "Z" || sheets[1].Name != "A" {
+		t.Fatalf("unexpected order: %+v", sheets)
+	}
+}
+
+func TestFlattenWorkbook_BookWithoutOrderIsSorted(t *testing.T) {
+	wb := &Workbook{Book: &Book{
+		Sheets: map[string]Sheet{
+			"C": {Cells: map[string]Cell{"A1": {T: "s", V: "c"}}},
+			"A": {Cells: map[string]Cell{"A1": {T: "s", V: "a"}}},
+			"B": {Cells: map[string]Cell{"A1": {T: "s", V: "b"}}},
+		},
+	}}
+	sheets, _ := flattenWorkbook(wb)
+	if len(sheets) != 3 || sheets[0].Name != "A" || sheets[1].Name != "B" || sheets[2].Name != "C" {
+		t.Fatalf("unexpected order: %+v", sheets)
+	}
+}
+
+func TestNormalizeWorkbook_InfersFormulaType(t *testing.T) {
+	wb := &Workbook{Cells: map[string]Cell{
+		"A1": {F: "1+1"},
+	}}
+	normalizeWorkbook(wb)
+	if got := wb.Sheets[0].Cells["A1"]; got.T != "f" {
+		t.Fatalf("T = %q, want f", got.T)
+	}
+}

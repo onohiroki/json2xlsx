@@ -81,8 +81,37 @@
     },
     "table": {
       "type": "object",
-      "required": [
-        "rows"
+      "anyOf": [
+        {
+          "required": [
+            "rows"
+          ],
+          "properties": {
+            "rows": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "header"
+          ]
+        },
+        {
+          "required": [
+            "columns"
+          ],
+          "properties": {
+            "columns": {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "header"
+                ]
+              }
+            }
+          }
+        }
       ],
       "additionalProperties": false,
       "properties": {

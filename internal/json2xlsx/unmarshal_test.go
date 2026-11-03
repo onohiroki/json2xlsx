@@ -1,6 +1,7 @@
 package json2xlsx
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -62,5 +63,72 @@ func TestUnmarshalWorkbook_StripsInternalKeys(t *testing.T) {
 	}
 	if wb.Sheets[0].Cells["A1"].V != "a" {
 		t.Fatalf("A1 = %v", wb.Sheets[0].Cells["A1"].V)
+	}
+}
+
+func TestUnmarshalWorkbook_DataJSON_PreservesIntegerPrecision(t *testing.T) {
+	wb, err := UnmarshalWorkbook([]byte(`[[9007199254740993]]`), true)
+	if err != nil {
+		t.Fatalf("UnmarshalWorkbook: %v", err)
+	}
+	got := wb.Rows[0][0]
+	if got != int64(9007199254740993) {
+		t.Fatalf("value = %v (%T), want int64", got, got)
+	}
+}
+
+func TestUnmarshalWorkbook_DataJSON_ObjectArrayPreservesIntegerPrecision(t *testing.T) {
+	wb, err := UnmarshalWorkbook([]byte(`[{"n":9007199254740993}]`), true)
+	if err != nil {
+		t.Fatalf("UnmarshalWorkbook: %v", err)
+	}
+	got := wb.Rows[1][0]
+	if got != int64(9007199254740993) {
+		t.Fatalf("value = %v (%T), want int64", got, got)
+	}
+}
+
+func TestUnmarshalWorkbook_DataJSON_MapOfArraysPreservesIntegerPrecision(t *testing.T) {
+	wb, err := UnmarshalWorkbook([]byte(`{"n":[9007199254740993]}`), true)
+	if err != nil {
+		t.Fatalf("UnmarshalWorkbook: %v", err)
+	}
+	got := wb.Rows[1][0]
+	if got != int64(9007199254740993) {
+		t.Fatalf("value = %v (%T), want int64", got, got)
+	}
+}
+
+func TestUnmarshalWorkbook_BOM(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	if _, err := UnmarshalWorkbook(append(bom, []byte(`{"cells":{"A1":{"t":"s","v":"x"}}}`)...), false); err != nil {
+		t.Fatalf("sheetjs BOM: %v", err)
+	}
+	if _, err := UnmarshalWorkbook(append(bom, []byte(`[["a"]]`)...), true); err != nil {
+		t.Fatalf("data BOM: %v", err)
+	}
+}
+
+func TestParseTableSpec_BOM(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	if _, _, err := ParseTableSpec(append(bom, []byte(`{"tables":[{"rows":[[1]]}]}`)...)); err != nil {
+		t.Fatalf("table BOM: %v", err)
+	}
+}
+
+func TestReadWorkbookWithFormat_ShortJSON(t *testing.T) {
+	res, err := ReadWorkbookWithFormat(bytes.NewReader([]byte(`[]`)), true, false)
+	if err != nil {
+		t.Fatalf("ReadWorkbookWithFormat([]): %v", err)
+	}
+	if res.Workbook == nil {
+		t.Fatal("workbook is nil")
+	}
+	res, err = ReadWorkbookWithFormat(bytes.NewReader([]byte(`{}`)), false, false)
+	if err != nil {
+		t.Fatalf("ReadWorkbookWithFormat({}): %v", err)
+	}
+	if res.Workbook == nil {
+		t.Fatal("workbook is nil")
 	}
 }

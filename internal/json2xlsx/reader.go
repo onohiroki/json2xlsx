@@ -26,18 +26,31 @@ func ReadWorkbook(r io.Reader, dataJSON bool) (*ReadWorkbookResult, error) {
 	return ReadWorkbookWithFormat(r, dataJSON, false)
 }
 
+// inputIsXLSX は先頭 4 バイトが XLSX の magic byte かどうかを判定する．
+// 入力が 4 バイト未満の場合は JSON として扱う（io.EOF はエラーにしない）．
+func inputIsXLSX(br *bufio.Reader) (bool, error) {
+	head, err := br.Peek(4)
+	if err == io.EOF {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}), nil
+}
+
 // ReadWorkbookWithFormat は dataJSON / tableJSON を指定して入力をパースする．
 func ReadWorkbookWithFormat(r io.Reader, dataJSON, tableJSON bool) (*ReadWorkbookResult, error) {
 	if dataJSON && tableJSON {
 		return nil, fmt.Errorf("--data-json and --table-json cannot be used together")
 	}
 	br := bufio.NewReader(r)
-	head, err := br.Peek(4)
+	isXLSX, err := inputIsXLSX(br)
 	if err != nil {
 		return nil, fmt.Errorf("read input: %w", err)
 	}
 
-	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
+	if isXLSX {
 		data, err := io.ReadAll(br)
 		if err != nil {
 			return nil, fmt.Errorf("read input: %w", err)

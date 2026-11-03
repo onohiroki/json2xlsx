@@ -52,6 +52,7 @@ type JSONIssue struct {
 // ValidateJSONIssues は JSON をスキーマ検証し，構造化された問題一覧を返す．
 // JSON としてパースできない場合は parse error を返す．
 func ValidateJSONIssues(data []byte) ([]JSONIssue, error) {
+	data = trimBOM(data)
 	var v any
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, err

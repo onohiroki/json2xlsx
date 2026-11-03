@@ -2,9 +2,12 @@ package json2xlsx
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 func TestValidateJSON_ValidSingleSheet(t *testing.T) {
@@ -267,5 +270,65 @@ func TestSchemasAreInSync(t *testing.T) {
 	}
 	if !bytes.Equal([]byte(schemaData), data) {
 		t.Fatal("internal/json2xlsx/schema.json and schemas/json2xlsx.schema.json differ; run go generate ./internal/json2xlsx")
+	}
+}
+
+func TestValidateJSON_RowsOnlySheet(t *testing.T) {
+	data := `{"name":"S","rows":[["a",1]]}`
+	if err := ValidateJSON([]byte(data)); err != nil {
+		t.Fatalf("rows-only sheet should be valid: %v", err)
+	}
+}
+
+func TestValidateJSON_CellWithoutType(t *testing.T) {
+	data := `{"name":"S","cells":{"A1":{"v":"x"},"A2":{"f":"1+1"}}}`
+	if err := ValidateJSON([]byte(data)); err != nil {
+		t.Fatalf("cells without t should be valid: %v", err)
+	}
+}
+
+func TestTableSchema_HeaderOnlyAndRowsOnly(t *testing.T) {
+	data, err := os.ReadFile("../../schemas/table.schema.json")
+	if err != nil {
+		t.Fatalf("read table schema: %v", err)
+	}
+	var schemaObj any
+	if err := json.Unmarshal(data, &schemaObj); err != nil {
+		t.Fatalf("parse table schema: %v", err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("table.schema.json", schemaObj); err != nil {
+		t.Fatalf("add resource: %v", err)
+	}
+	schema, err := c.Compile("table.schema.json")
+	if err != nil {
+		t.Fatalf("compile table schema: %v", err)
+	}
+	valid := []string{
+		`{"tables":[{"rows":[[1]]}]}`,
+		`{"tables":[{"header":["A"]}]}`,
+		`{"tables":[{"columns":[{"header":"A"}]}]}`,
+	}
+	for _, in := range valid {
+		var v any
+		if err := json.Unmarshal([]byte(in), &v); err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(v); err != nil {
+			t.Errorf("expected valid for %s: %v", in, err)
+		}
+	}
+	invalid := []string{
+		`{"tables":[{}]}`,
+		`{"tables":[{"rows":[]}]}`,
+	}
+	for _, in := range invalid {
+		var v any
+		if err := json.Unmarshal([]byte(in), &v); err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(v); err == nil {
+			t.Errorf("expected invalid for %s", in)
+		}
 	}
 }

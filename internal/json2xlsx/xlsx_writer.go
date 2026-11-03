@@ -49,6 +49,9 @@ func convertWorkbook(wb *Workbook, out io.Writer, baseDir string, autoFit bool, 
 }
 
 func validateWorkbook(sheets []Sheet, wb *Workbook) error {
+	if err := validateSheetNames(sheets); err != nil {
+		return err
+	}
 	if len(sheets) == 0 {
 		hasCharts := wb.Book != nil && len(wb.Book.Charts) > 0
 		if !hasCharts {
