@@ -20,8 +20,8 @@ import (
 // table / sheetjs / data / input_path のうち exactly one を指定する．
 type InputSpec struct {
 	Table     *json2xlsx.TableSpec `json:"table,omitempty" jsonschema:"high-level table JSON; use this for simple tables"`
-	SheetJS   any                  `json:"sheetjs,omitempty" jsonschema:"SheetJS-style workbook JSON object"`
-	Data      any                  `json:"data,omitempty" jsonschema:"data JSON: 2D array, array of objects, or map-of-arrays"`
+	SheetJS   any                  `json:"sheetjs,omitempty" jsonschema:"SheetJS-style workbook JSON object (pass an object, not a JSON string); accepts {name,cells}, {sheets:[...]}, or {SheetNames,Sheets}"`
+	Data      any                  `json:"data,omitempty" jsonschema:"data JSON array or object (pass an array/object, not a JSON string): 2D array, array of objects, or map-of-arrays"`
 	InputPath string               `json:"input_path,omitempty" jsonschema:"path to an existing JSON or XLSX file (must be under an allowed directory; relative paths resolve against the first allowed directory)"`
 	Format    string               `json:"format,omitempty" jsonschema:"input format for input_path: auto (default), sheetjs, data, table"`
 	BaseDir   string               `json:"base_dir,omitempty" jsonschema:"base directory for resolving relative image paths; defaults to the first allowed directory or the input file directory; relative paths resolve against the first allowed directory"`
@@ -531,10 +531,18 @@ func (s *server) loadWorkbook(ctx context.Context, spec InputSpec, allowXLSX boo
 		return wb, nil, baseDir, "table", nil
 
 	case spec.SheetJS != nil:
-		data, err := json.Marshal(spec.SheetJS)
+		value, err := unwrapInlineJSON(spec.SheetJS, "sheetjs")
+		if err != nil {
+			return nil, nil, "", "sheetjs", err
+		}
+		data, err := json.Marshal(value)
 		if err != nil {
 			return nil, nil, "", "sheetjs", errf("INVALID_INPUT", "encode sheetjs input: %v", err)
 		}
+		if normalized, ok := json2xlsx.NormalizeSheetJSLibraryShape(data); ok {
+			data = normalized
+		}
+		data = json2xlsx.StripSheetJSInternalKeys(data)
 		if int64(len(data)) > s.opts.MaxInputBytes {
 			return nil, nil, "", "sheetjs", errf("INPUT_TOO_LARGE", "inline input is %d bytes; limit is %d bytes", len(data), s.opts.MaxInputBytes)
 		}
@@ -549,7 +557,11 @@ func (s *server) loadWorkbook(ctx context.Context, spec InputSpec, allowXLSX boo
 		return wb, data, baseDir, "sheetjs", nil
 
 	case spec.Data != nil:
-		data, err := json.Marshal(spec.Data)
+		value, err := unwrapInlineJSON(spec.Data, "data")
+		if err != nil {
+			return nil, nil, "", "data", err
+		}
+		data, err := json.Marshal(value)
 		if err != nil {
 			return nil, nil, "", "data", errf("INVALID_INPUT", "encode data input: %v", err)
 		}
@@ -596,6 +608,12 @@ func (s *server) loadWorkbook(ctx context.Context, spec InputSpec, allowXLSX boo
 		case "sheetjs":
 		default:
 			return nil, nil, "", "", errf("INVALID_INPUT", "unknown format %q; use auto, sheetjs, data, or table", spec.Format)
+		}
+		if format == "sheetjs" {
+			if normalized, ok := json2xlsx.NormalizeSheetJSLibraryShape(data); ok {
+				data = normalized
+			}
+			data = json2xlsx.StripSheetJSInternalKeys(data)
 		}
 		wb, err := json2xlsx.ParseWorkbook(data, opts)
 		if err != nil {
@@ -675,6 +693,25 @@ func (s *server) checkWorkbookPaths(wb *json2xlsx.Workbook, baseDir string) erro
 		return errf("LIMIT_EXCEEDED", "total embedded image data is larger than %d bytes", maxTotalImageBytes)
 	}
 	return nil
+}
+
+// unwrapInlineJSON は文字列として渡された JSON オブジェクト/配列を受け付ける．
+// MCP クライアントによってはネストしたオブジェクトを文字列化して送るため，
+// そのような入力でも変換できるようにする．
+func unwrapInlineJSON(v any, name string) (any, error) {
+	s, ok := v.(string)
+	if !ok {
+		return v, nil
+	}
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return nil, errf("INVALID_INPUT", "%s must not be an empty string", name)
+	}
+	var out any
+	if err := json.Unmarshal([]byte(trimmed), &out); err != nil {
+		return nil, errf("INVALID_INPUT", "%s must be a JSON object or array, not a plain string: %v", name, err)
+	}
+	return out, nil
 }
 
 func isXLSXData(data []byte) bool {

@@ -451,7 +451,7 @@ OpenCode の設定例:
 
 入力表現は 2 つのモードがあります．
 
-**デフォルト（`--data-json` なし）:** SheetJS 形式の Workbook / Sheet JSON（セル参照形式または Cell Object 形式）を受け付けます．
+**デフォルト（`--data-json` なし）:** SheetJS 形式の Workbook / Sheet JSON（セル参照形式または Cell Object 形式）を受け付けます．互換性のため，`SheetNames` と `Sheets` を持つ SheetJS ライブラリ形式の Workbook も受け付けます．`!ref` や `!cols` などの内部キーは無視されます．
 
 **`--data-json` 指定時:** 以下のデータ指向形式を受け付けます．
 - 二次元配列形式の JSON（例: `[["ヘッダ1", "ヘッダ2"], ["値1", 123]]`）

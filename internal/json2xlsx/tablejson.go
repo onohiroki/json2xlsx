@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -602,6 +603,15 @@ func validateTableSpec(spec *TableSpec) []JSONIssue {
 			}
 		}
 
+		styleNames := make([]string, 0, len(t.Styles))
+		for name := range t.Styles {
+			styleNames = append(styleNames, name)
+		}
+		sort.Strings(styleNames)
+		for _, name := range styleNames {
+			issues = append(issues, validateTableStyle(path+".styles."+name, t.Styles[name])...)
+		}
+
 		if t.HeaderStyle != "" {
 			if _, ok := t.Styles[t.HeaderStyle]; !ok {
 				add(path+".headerStyle", fmt.Sprintf("style %q is not defined in styles", t.HeaderStyle))
@@ -647,6 +657,64 @@ func validateTableSpec(spec *TableSpec) []JSONIssue {
 					}
 				}
 			}
+		}
+	}
+	return issues
+}
+
+var tableColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+func validateTableStyle(path string, st TableStyle) []JSONIssue {
+	var issues []JSONIssue
+	add := func(field, msg string) {
+		issues = append(issues, JSONIssue{Path: path + field, Message: msg})
+	}
+	if st.Fill != nil {
+		switch st.Fill.Type {
+		case "", "pattern":
+		default:
+			add(".fill.type", `fill.type must be "pattern"`)
+		}
+		if st.Fill.Pattern < 0 || st.Fill.Pattern > 18 {
+			add(".fill.pattern", "fill.pattern must be between 0 and 18")
+		}
+		for i, c := range st.Fill.Color {
+			if !tableColorRe.MatchString(c) {
+				add(fmt.Sprintf(".fill.color[%d]", i), "color must use #RRGGBB format")
+			}
+		}
+	}
+	for i, b := range st.Border {
+		if _, ok := borderStyleMap[b.Style]; !ok {
+			add(fmt.Sprintf(".border[%d].style", i), fmt.Sprintf("unknown border style %q", b.Style))
+		}
+		if !tableColorRe.MatchString(b.Color) {
+			add(fmt.Sprintf(".border[%d].color", i), "color must use #RRGGBB format")
+		}
+		switch b.Side {
+		case "", "left", "right", "top", "bottom":
+		default:
+			add(fmt.Sprintf(".border[%d].side", i), `side must be "left", "right", "top", or "bottom"`)
+		}
+	}
+	if st.Font != nil {
+		if st.Font.Color != "" && !tableColorRe.MatchString(st.Font.Color) {
+			add(".font.color", "color must use #RRGGBB format")
+		}
+		if st.Font.Size < 0 {
+			add(".font.size", "size must be positive")
+		}
+	}
+	if st.Alignment != nil {
+		switch st.Alignment.Horizontal {
+		case "", "left", "center", "right":
+		default:
+			add(".alignment.horizontal", `horizontal must be "left", "center", or "right"`)
+		}
+		switch st.Alignment.Vertical {
+		case "", "top", "center", "bottom":
+		default:
+			add(".alignment.vertical", `vertical must be "top", "center", or "bottom"`)
 		}
 	}
 	return issues

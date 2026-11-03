@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 // UnmarshalWorkbook は JSON データを Workbook 構造体にパースする．
@@ -27,6 +29,10 @@ func UnmarshalWorkbook(data []byte, dataJSON bool) (*Workbook, error) {
 
 // unmarshalSheetJS は SheetJS 形式のみを受け付ける．フォールバックなし．
 func unmarshalSheetJS(data []byte) (*Workbook, error) {
+	if normalized, ok := NormalizeSheetJSLibraryShape(data); ok {
+		data = normalized
+	}
+	data = StripSheetJSInternalKeys(data)
 	var wb Workbook
 	if err := json.Unmarshal(data, &wb); err != nil {
 		hint := "Hint: Use --data-json for 2D array, array of objects, or map-of-arrays format."
@@ -36,6 +42,125 @@ func unmarshalSheetJS(data []byte) (*Workbook, error) {
 		return nil, fmt.Errorf("ERROR: %v\n\n%s", err, hint)
 	}
 	return &wb, nil
+}
+
+// stripSheetJSInternalKeys は SheetJS の内部キー (!ref, !cols など) を再帰的に除去する．
+func StripSheetJSInternalKeys(data []byte) []byte {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return data
+	}
+	out, err := json.Marshal(stripBangKeys(v))
+	if err != nil {
+		return data
+	}
+	return out
+}
+
+func stripBangKeys(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			if strings.HasPrefix(k, "!") {
+				continue
+			}
+			out[k] = stripBangKeys(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, val := range x {
+			out[i] = stripBangKeys(val)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// normalizeSheetJSLibraryShape は SheetJS ライブラリの Workbook 形式
+// ({"SheetNames": [...], "Sheets": {name: cells}}) を json2xlsx の
+// sheets 配列形式に変換する．変換できない場合は元のデータを返す．
+func NormalizeSheetJSLibraryShape(data []byte) ([]byte, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return data, false
+	}
+	sheetsRaw, ok := raw["Sheets"]
+	if !ok {
+		return data, false
+	}
+	var sheets map[string]json.RawMessage
+	if err := json.Unmarshal(sheetsRaw, &sheets); err != nil {
+		return data, false
+	}
+
+	var names []string
+	if namesRaw, ok := raw["SheetNames"]; ok {
+		if err := json.Unmarshal(namesRaw, &names); err != nil {
+			return data, false
+		}
+	}
+
+	type sheetOut struct {
+		Name  string                     `json:"name"`
+		Cells map[string]json.RawMessage `json:"cells"`
+	}
+	out := make([]sheetOut, 0, len(sheets))
+	seen := map[string]bool{}
+	add := func(name string, sheetRaw json.RawMessage) {
+		if seen[name] {
+			return
+		}
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(sheetRaw, &m); err != nil {
+			return
+		}
+		var cells map[string]json.RawMessage
+		if inner, ok := m["cells"]; ok {
+			if err := json.Unmarshal(inner, &cells); err != nil {
+				return
+			}
+		} else {
+			cells = m
+		}
+		filtered := make(map[string]json.RawMessage, len(cells))
+		for k, v := range cells {
+			if strings.HasPrefix(k, "!") {
+				continue
+			}
+			filtered[k] = v
+		}
+		out = append(out, sheetOut{Name: name, Cells: filtered})
+		seen[name] = true
+	}
+
+	for _, name := range names {
+		if sheetRaw, ok := sheets[name]; ok {
+			add(name, sheetRaw)
+		}
+	}
+	rest := make([]string, 0, len(sheets))
+	for name := range sheets {
+		if !seen[name] {
+			rest = append(rest, name)
+		}
+	}
+	sort.Strings(rest)
+	for _, name := range rest {
+		add(name, sheets[name])
+	}
+	if len(out) == 0 {
+		return data, false
+	}
+	normalized, err := json.Marshal(map[string]any{"sheets": out})
+	if err != nil {
+		return data, false
+	}
+	return normalized, true
 }
 
 // unmarshalDataJSON は二次元配列 / オブジェクト配列 / Map-of-Arrays の 3 形式を自動判別する．

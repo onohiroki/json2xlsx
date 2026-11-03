@@ -250,3 +250,45 @@ func TestTableJSONToCSV(t *testing.T) {
 		t.Fatalf("csv = %q", got)
 	}
 }
+
+func TestTableJSONStyleValidation(t *testing.T) {
+	invalid := `{
+	  "tables": [{
+	    "rows": [[1]],
+	    "headerStyle": "header",
+	    "styles": {
+	      "header": {
+	        "fill": {"type": "solid", "pattern": 1, "color": ["FFE0EBF5"]},
+	        "border": [{"style": "thin", "color": "FF000000"}]
+	      }
+	    }
+	  }]
+	}`
+	issues, err := ValidateTableJSON([]byte(invalid))
+	if err != nil {
+		t.Fatalf("ValidateTableJSON: %v", err)
+	}
+	if len(issues) < 3 {
+		t.Fatalf("issues = %+v, want fill.type, fill.color, border.color issues", issues)
+	}
+
+	valid := `{
+	  "tables": [{
+	    "rows": [[1]],
+	    "headerStyle": "header",
+	    "styles": {
+	      "header": {
+	        "fill": {"type": "pattern", "pattern": 1, "color": ["#E0EBF5"]},
+	        "border": [{"style": "thin", "color": "#000000"}]
+	      }
+	    }
+	  }]
+	}`
+	issues, err = ValidateTableJSON([]byte(valid))
+	if err != nil {
+		t.Fatalf("ValidateTableJSON valid: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("issues = %+v, want none", issues)
+	}
+}

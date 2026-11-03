@@ -447,7 +447,7 @@ The server writes logs to stderr only. It never writes binary XLSX data to stdou
 
 The expected input representations come in two modes:
 
-**Default (no `--data-json`):** expects SheetJS-style Workbook / Sheet JSON (cell reference or Cell Object form).
+**Default (no `--data-json`):** expects SheetJS-style Workbook / Sheet JSON (cell reference or Cell Object form). For compatibility, SheetJS library workbook objects with `SheetNames` and `Sheets` are also accepted. Internal keys such as `!ref` and `!cols` are ignored.
 
 **With `--data-json`:** accepts the following data-oriented formats:
 - 2D array JSON (e.g. `[["Header1", "Header2"], ["val1", 123]]`)

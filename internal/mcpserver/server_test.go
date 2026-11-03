@@ -758,3 +758,132 @@ func TestToJSONImageFile(t *testing.T) {
 		t.Fatalf("expected an extracted image file in %s", dir)
 	}
 }
+
+func TestConvertStringifiedSheetJS(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	outPath := filepath.Join(dir, "stringified.xlsx")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"sheetjs":     `{"cells":{"A1":{"t":"s","v":"stringified"}}}`,
+			"output_path": outPath,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	f, err := excelize.OpenFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if got, _ := f.GetCellValue("Sheet1", "A1"); got != "stringified" {
+		t.Fatalf("A1 = %q", got)
+	}
+}
+
+func TestConvertSheetJSLibraryShape(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	outPath := filepath.Join(dir, "library.xlsx")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"sheetjs": map[string]any{
+				"SheetNames": []any{"売上"},
+				"Sheets": map[string]any{
+					"売上": map[string]any{
+						"A1":   map[string]any{"t": "s", "v": "商品"},
+						"!ref": "A1",
+					},
+				},
+			},
+			"output_path": outPath,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	f, err := excelize.OpenFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if got, _ := f.GetCellValue("売上", "A1"); got != "商品" {
+		t.Fatalf("A1 = %q", got)
+	}
+}
+
+func TestValidateSheetJSLibraryShape(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_validate",
+		Arguments: map[string]any{
+			"sheetjs": map[string]any{
+				"SheetNames": []any{"売上"},
+				"Sheets": map[string]any{
+					"売上": map[string]any{
+						"A1": map[string]any{"t": "s", "v": "商品"},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	structured, _ := res.StructuredContent.(map[string]any)
+	if valid, _ := structured["valid"].(bool); !valid {
+		t.Fatalf("valid = false, issues = %v", structured["issues"])
+	}
+}
+
+func TestValidateStripsSheetJSInternalKeys(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_validate",
+		Arguments: map[string]any{
+			"sheetjs": map[string]any{
+				"name": "S",
+				"cells": map[string]any{
+					"!ref": "A1:B1",
+					"A1":   map[string]any{"t": "s", "v": "a"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	structured, _ := res.StructuredContent.(map[string]any)
+	if valid, _ := structured["valid"].(bool); !valid {
+		t.Fatalf("valid = false, issues = %v", structured["issues"])
+	}
+}
