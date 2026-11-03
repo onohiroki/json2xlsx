@@ -461,6 +461,29 @@ OpenCode の設定例:
 
 `json2xlsx` は，SheetJS 互換を意識した JSON を受け取り，セル単位で `.xlsx` に変換します．[3][4]
 
+### 3形式の比較
+
+| 観点 | SheetJS 形式 | データ JSON | table JSON |
+|---|---|---|---|
+| 指定方法 | フラグなし | `--data-json` | `--table-json` |
+| 入力の形 | セルマップ / `sheets` / `book` | 二次元配列 / オブジェクト配列 / Map-of-Arrays | `tables` / `header` / `rows` |
+| 複数シート | ○ | × | ○ |
+| 数式 | ○ | × | ○ |
+| スタイル・書式 | ○ | × | ○ |
+| グラフ・画像・条件付き書式 | ○ | × | × |
+| 入力検証 | 緩い | ほぼなし | 厳格 |
+| 主な用途 | 凝った帳簿・XLSX 往復 | CSV / SQL 由来の生データ | 一般的な表・レポート |
+
+**選び方**
+
+- 普通の表・レポート → **table JSON**
+- CSV / SQL / API の生データ → **データ JSON**
+- グラフ・画像・条件付き書式・XLSX 往復 → **SheetJS 形式**
+
+詳細は [入力JSONの比較](docs/input-json.ja.md) を参照してください．
+
+### 各形式の詳細
+
 入力表現は 3 つのモードがあります．
 
 **デフォルト（`--data-json` なし）:** SheetJS 形式の Workbook / Sheet JSON（セル参照形式または Cell Object 形式）を受け付けます．互換性のため，`SheetNames` と `Sheets` を持つ SheetJS ライブラリ形式の Workbook も受け付けます．`!ref` や `!cols` などの内部キーは無視されます．`book` ラッパー形式では `book.sheetOrder` でシート順を指定できます（未指定時はシート名のアルファベット順）．重複するシート名は大文字小文字を無視してエラーになります．

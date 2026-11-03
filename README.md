@@ -457,6 +457,29 @@ The server writes logs to stderr only. It never writes binary XLSX data to stdou
 
 `json2xlsx` accepts JSON inspired by SheetJS compatibility and converts it to `.xlsx` on a per-cell basis.[3][4]
 
+### Comparing the three formats
+
+| Aspect | SheetJS format | Data JSON | table JSON |
+|---|---|---|---|
+| Flag | none | `--data-json` | `--table-json` |
+| Input shape | Cell map / `sheets` / `book` | 2D array / array of objects / map-of-arrays | `tables` / `header` / `rows` |
+| Multiple sheets | Yes | No | Yes |
+| Formulas | Yes | No | Yes |
+| Styles and number formats | Yes | No | Yes |
+| Charts, images, conditional formatting | Yes | No | No |
+| Input validation | Lenient | Almost none | Strict |
+| Typical use | Detailed workbooks, XLSX round-trips | Raw CSV / SQL data | Ordinary tables and reports |
+
+**How to choose**
+
+- Ordinary tables and reports → **table JSON**
+- Raw CSV / SQL / API data → **Data JSON**
+- Charts, images, conditional formatting, or XLSX round-trips → **SheetJS format**
+
+See [Input JSON comparison](docs/input-json.md) for details.
+
+### Details for each format
+
 The expected input representations come in three modes:
 
 **Default (no `--data-json`):** expects SheetJS-style Workbook / Sheet JSON (cell reference or Cell Object form). For compatibility, SheetJS library workbook objects with `SheetNames` and `Sheets` are also accepted. Internal keys such as `!ref` and `!cols` are ignored. In the `book` wrapper form, `book.sheetOrder` controls sheet order (alphabetical when omitted). Duplicate sheet names are rejected case-insensitively.
