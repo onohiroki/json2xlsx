@@ -4,24 +4,37 @@
   "title": "json2xlsx table JSON",
   "description": "高レベルな表定義．json2xlsx to-xlsx --table-json で XLSX に変換できる．",
   "type": "object",
-  "required": ["tables"],
+  "required": [
+    "tables"
+  ],
   "additionalProperties": false,
   "properties": {
     "tables": {
       "type": "array",
       "minItems": 1,
       "description": "1 要素が 1 シートに対応する．",
-      "items": { "$ref": "#/$defs/table" }
+      "items": {
+        "$ref": "#/$defs/table"
+      }
     }
   },
   "$defs": {
     "scalar": {
-      "type": ["string", "number", "boolean", "null"]
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "null"
+      ]
     },
     "cellValue": {
       "oneOf": [
-        { "$ref": "#/$defs/scalar" },
-        { "$ref": "#/$defs/cellObject" }
+        {
+          "$ref": "#/$defs/scalar"
+        },
+        {
+          "$ref": "#/$defs/cellObject"
+        }
       ]
     },
     "cellObject": {
@@ -29,51 +42,117 @@
       "description": "セル単位の上書き．文字列が = で始まる場合は数式になる．",
       "additionalProperties": false,
       "properties": {
-        "v": { "$ref": "#/$defs/scalar", "description": "値" },
-        "f": { "type": "string", "description": "数式 (= は不要)" },
-        "format": { "type": "string", "description": "数値書式コード" },
-        "style": { "type": "string", "description": "styles の名前" },
-        "align": { "type": "string", "enum": ["left", "center", "right"] },
-        "t": { "type": "string", "enum": ["s", "n", "b", "f", "d"], "description": "セル型" }
+        "v": {
+          "$ref": "#/$defs/scalar",
+          "description": "値"
+        },
+        "f": {
+          "type": "string",
+          "description": "数式 (= は不要)"
+        },
+        "format": {
+          "type": "string",
+          "description": "数値書式コード"
+        },
+        "style": {
+          "type": "string",
+          "description": "styles の名前"
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "t": {
+          "type": "string",
+          "enum": [
+            "s",
+            "n",
+            "b",
+            "f",
+            "d"
+          ],
+          "description": "セル型"
+        }
       }
     },
     "table": {
       "type": "object",
-      "required": ["rows"],
+      "required": [
+        "rows"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "description": "シート名 (省略時 Sheet1, Sheet2, ...)" },
+        "name": {
+          "type": "string",
+          "description": "シート名 (省略時 Sheet1, Sheet2, ...)"
+        },
         "header": {
           "type": "array",
-          "description": "省略可．指定時は 1 行目がヘッダになり，データは 2 行目から始まる．",
-          "items": { "$ref": "#/$defs/scalar" }
+          "description": "省略可．指定時は 1 行目がヘッダになり，データは 2 行目から始まる．columns[].header がある列はそちらが優先される．",
+          "items": {
+            "$ref": "#/$defs/scalar"
+          }
         },
         "rows": {
           "type": "array",
-          "description": "データ行．",
+          "description": "データ行．各行はセル値の配列，または columns[].key をキーにしたオブジェクト．",
           "items": {
-            "type": "array",
-            "items": { "$ref": "#/$defs/cellValue" }
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/cellValue"
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/$defs/cellValue"
+                }
+              }
+            ]
           }
         },
         "columns": {
           "type": "array",
           "description": "列単位の設定．index 0 が列 A．",
-          "items": { "$ref": "#/$defs/column" }
+          "items": {
+            "$ref": "#/$defs/column"
+          }
         },
         "styles": {
           "type": "object",
           "description": "名前付きスタイル．",
-          "additionalProperties": { "$ref": "#/$defs/style" }
+          "additionalProperties": {
+            "$ref": "#/$defs/style"
+          }
         },
-        "headerStyle": { "type": "string", "description": "ヘッダ行に適用する styles の名前" },
-        "bodyStyle": { "type": "string", "description": "データ行に適用する styles の名前" },
-        "freezeHeader": { "type": "boolean", "description": "ヘッダ行までを固定する" },
-        "autoFilter": { "type": "boolean", "description": "ヘッダとデータ範囲にオートフィルタを設定する" },
+        "headerStyle": {
+          "type": "string",
+          "description": "ヘッダ行に適用する styles の名前"
+        },
+        "bodyStyle": {
+          "type": "string",
+          "description": "データ行に適用する styles の名前"
+        },
+        "freezeHeader": {
+          "type": "boolean",
+          "description": "ヘッダ行までを固定する"
+        },
+        "autoFilter": {
+          "type": "boolean",
+          "description": "ヘッダとデータ範囲にオートフィルタを設定する"
+        },
         "merges": {
           "type": "array",
           "description": "結合範囲 (例 A1:D1)．",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -81,11 +160,39 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 255 },
-        "format": { "type": "string", "description": "数値書式コード" },
-        "align": { "type": "string", "enum": ["left", "center", "right"] },
-        "style": { "type": "string", "description": "styles の名前" },
-        "formula": { "type": "string", "description": "データ行に適用する数式テンプレート．{r} は行番号に置換される．" }
+        "key": {
+          "type": "string",
+          "description": "数式参照用の列キー．オブジェクト行では必須．日本語可．"
+        },
+        "header": {
+          "type": "string",
+          "description": "この列のヘッダ文字列．トップレベルの header より優先される．"
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 255
+        },
+        "format": {
+          "type": "string",
+          "description": "数値書式コード"
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "style": {
+          "type": "string",
+          "description": "styles の名前"
+        },
+        "formula": {
+          "type": "string",
+          "description": "データ行に適用する数式テンプレート．{key} は現在行のセル，{key:col} は列記号，{r} は行番号に置換される．"
+        }
       }
     },
     "style": {
@@ -94,14 +201,29 @@
       "properties": {
         "fill": {
           "type": "object",
-          "required": ["type", "pattern", "color"],
+          "required": [
+            "type",
+            "pattern",
+            "color"
+          ],
           "additionalProperties": false,
           "properties": {
-            "type": { "type": "string", "enum": ["pattern"] },
-            "pattern": { "type": "integer", "minimum": 1 },
+            "type": {
+              "type": "string",
+              "enum": [
+                "pattern"
+              ]
+            },
+            "pattern": {
+              "type": "integer",
+              "minimum": 1
+            },
             "color": {
               "type": "array",
-              "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+              "items": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
             }
           }
         },
@@ -109,12 +231,43 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["style", "color"],
+            "required": [
+              "style",
+              "color"
+            ],
             "additionalProperties": false,
             "properties": {
-              "style": { "type": "string", "enum": ["thin", "medium", "thick", "dashed", "dotted", "double", "hair", "mediumDashed", "dashDot", "mediumDashDot", "dashDotDot", "mediumDashDotDot", "slantDashDot"] },
-              "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-              "side": { "type": "string", "enum": ["left", "right", "top", "bottom"] }
+              "style": {
+                "type": "string",
+                "enum": [
+                  "thin",
+                  "medium",
+                  "thick",
+                  "dashed",
+                  "dotted",
+                  "double",
+                  "hair",
+                  "mediumDashed",
+                  "dashDot",
+                  "mediumDashDot",
+                  "dashDotDot",
+                  "mediumDashDotDot",
+                  "slantDashDot"
+                ]
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "side": {
+                "type": "string",
+                "enum": [
+                  "left",
+                  "right",
+                  "top",
+                  "bottom"
+                ]
+              }
             }
           }
         },
@@ -122,23 +275,54 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "name": { "type": "string" },
-            "size": { "type": "number", "exclusiveMinimum": 0 },
-            "bold": { "type": "boolean" },
-            "italic": { "type": "boolean" },
-            "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+            "name": {
+              "type": "string"
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "bold": {
+              "type": "boolean"
+            },
+            "italic": {
+              "type": "boolean"
+            },
+            "color": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            }
           }
         },
         "alignment": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "horizontal": { "type": "string", "enum": ["left", "center", "right"] },
-            "vertical": { "type": "string", "enum": ["top", "center", "bottom"] },
-            "wrapText": { "type": "boolean" }
+            "horizontal": {
+              "type": "string",
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ]
+            },
+            "vertical": {
+              "type": "string",
+              "enum": [
+                "top",
+                "center",
+                "bottom"
+              ]
+            },
+            "wrapText": {
+              "type": "boolean"
+            }
           }
         },
-        "numFmt": { "type": "string", "description": "数値書式コード" }
+        "numFmt": {
+          "type": "string",
+          "description": "数値書式コード"
+        }
       }
     }
   }

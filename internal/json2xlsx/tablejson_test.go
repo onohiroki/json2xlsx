@@ -292,3 +292,159 @@ func TestTableJSONStyleValidation(t *testing.T) {
 		t.Fatalf("issues = %+v, want none", issues)
 	}
 }
+
+func TestTableJSONObjectRowsJapaneseKeys(t *testing.T) {
+	const input = `{
+	  "tables": [{
+	    "columns": [
+	      {"key": "商品", "header": "商品名", "width": 18},
+	      {"key": "数量", "header": "数量", "format": "#,##0"},
+	      {"key": "単価", "header": "単価", "format": "#,##0"},
+	      {"key": "金額", "header": "金額", "format": "#,##0", "formula": "={数量}*{単価}"}
+	    ],
+	    "rows": [
+	      {"商品": "A", "数量": 10, "単価": 100},
+	      {"商品": "B", "数量": 5, "単価": 200}
+	    ]
+	  }]
+	}`
+
+	f := convertTableJSON(t, input)
+	if got, _ := f.GetCellValue("Sheet1", "A1"); got != "商品名" {
+		t.Fatalf("A1 = %q", got)
+	}
+	if got, _ := f.GetCellFormula("Sheet1", "D2"); got != "B2*C2" {
+		t.Fatalf("D2 = %q, want B2*C2", got)
+	}
+	if got, _ := f.GetCellFormula("Sheet1", "D3"); got != "B3*C3" {
+		t.Fatalf("D3 = %q, want B3*C3", got)
+	}
+	if got, _ := f.GetCellValue("Sheet1", "A2"); got != "A" {
+		t.Fatalf("A2 = %q", got)
+	}
+}
+
+func TestTableJSONObjectRowsColumnRangeFormula(t *testing.T) {
+	const input = `{
+	  "tables": [{
+	    "columns": [
+	      {"key": "item"},
+	      {"key": "amount"}
+	    ],
+	    "rows": [
+	      {"item": "total", "amount": "=SUM({amount:col}2:{amount:col}3)"}
+	    ]
+	  }]
+	}`
+	f := convertTableJSON(t, input)
+	if got, _ := f.GetCellFormula("Sheet1", "B1"); got != "SUM(B2:B3)" {
+		t.Fatalf("B1 = %q, want SUM(B2:B3)", got)
+	}
+}
+
+func TestTableJSONArrayRowsWithKeys(t *testing.T) {
+	const input = `{
+	  "tables": [{
+	    "columns": [
+	      {"key": "qty"},
+	      {"key": "price"},
+	      {"key": "amount", "formula": "={qty}*{price}"}
+	    ],
+	    "rows": [[2, 10]]
+	  }]
+	}`
+	f := convertTableJSON(t, input)
+	if got, _ := f.GetCellFormula("Sheet1", "C1"); got != "A1*B1" {
+		t.Fatalf("C1 = %q, want A1*B1", got)
+	}
+}
+
+func TestTableJSONObjectRowsCellObject(t *testing.T) {
+	const input = `{
+	  "tables": [{
+	    "columns": [{"key": "a"}, {"key": "b"}],
+	    "rows": [{"a": {"v": 5, "format": "0.00"}, "b": {"v": 10, "f": "={a}*2"}}]
+	  }]
+	}`
+	f := convertTableJSON(t, input)
+	if got, _ := f.GetCellFormula("Sheet1", "B1"); got != "A1*2" {
+		t.Fatalf("B1 = %q, want A1*2", got)
+	}
+	if got, _ := f.GetCellValue("Sheet1", "A1"); got != "5.00" {
+		t.Fatalf("A1 = %q", got)
+	}
+}
+
+func TestTableJSONObjectRowsValidation(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "unknown row key",
+			in:   `{"tables":[{"columns":[{"key":"a"}],"rows":[{"a":1,"foo":2}]}]}`,
+			want: `.rows[0].foo`,
+		},
+		{
+			name: "duplicate key",
+			in:   `{"tables":[{"columns":[{"key":"a"},{"key":"a"}],"rows":[{"a":1}]}]}`,
+			want: `.columns[1].key`,
+		},
+		{
+			name: "mixed rows",
+			in:   `{"tables":[{"columns":[{"key":"a"}],"rows":[[1],{"a":2}]}]}`,
+			want: `.rows[1]`,
+		},
+		{
+			name: "missing key for object rows",
+			in:   `{"tables":[{"columns":[{}],"rows":[{"a":1}]}]}`,
+			want: `.columns[0].key`,
+		},
+		{
+			name: "unknown formula placeholder",
+			in:   `{"tables":[{"columns":[{"key":"a"},{"formula":"={missing}"}],"rows":[[1,2]]}]}`,
+			want: `.columns[1].formula`,
+		},
+		{
+			name: "reserved key r",
+			in:   `{"tables":[{"columns":[{"key":"r"}],"rows":[[1]]}]}`,
+			want: `.columns[0].key`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			issues, err := ValidateTableJSON([]byte(tc.in))
+			if err != nil {
+				t.Fatalf("ValidateTableJSON: %v", err)
+			}
+			found := false
+			for _, iss := range issues {
+				if strings.Contains(iss.Path, tc.want) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("issues = %+v, want path containing %q", issues, tc.want)
+			}
+		})
+	}
+}
+
+func TestTableJSONColumnHeaderPrecedence(t *testing.T) {
+	const input = `{
+	  "tables": [{
+	    "header": ["top-a", "top-b"],
+	    "columns": [{"key": "a", "header": "col-a"}, {"key": "b"}],
+	    "rows": [{"a": 1, "b": 2}]
+	  }]
+	}`
+	f := convertTableJSON(t, input)
+	if got, _ := f.GetCellValue("Sheet1", "A1"); got != "col-a" {
+		t.Fatalf("A1 = %q", got)
+	}
+	if got, _ := f.GetCellValue("Sheet1", "B1"); got != "top-b" {
+		t.Fatalf("B1 = %q", got)
+	}
+}

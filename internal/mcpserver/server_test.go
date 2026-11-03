@@ -914,3 +914,51 @@ func TestCreateAllowDirs(t *testing.T) {
 		t.Fatalf("%s is not a directory", missing)
 	}
 }
+
+func TestConvertTableObjectRows(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	outPath := filepath.Join(dir, "object.xlsx")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"table": map[string]any{
+				"tables": []any{
+					map[string]any{
+						"columns": []any{
+							map[string]any{"key": "商品", "header": "商品"},
+							map[string]any{"key": "数量", "header": "数量"},
+							map[string]any{"key": "単価", "header": "単価"},
+							map[string]any{"key": "金額", "header": "金額", "formula": "={数量}*{単価}"},
+						},
+						"rows": []any{
+							map[string]any{"商品": "A", "数量": 10, "単価": 100},
+						},
+					},
+				},
+			},
+			"output_path": outPath,
+			"compute":     true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	f, err := excelize.OpenFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if got, _ := f.GetCellFormula("Sheet1", "D2"); got != "B2*C2" {
+		t.Fatalf("D2 = %q", got)
+	}
+	if got, _ := f.GetCellValue("Sheet1", "D2"); got != "1000" {
+		t.Fatalf("D2 value = %q", got)
+	}
+}

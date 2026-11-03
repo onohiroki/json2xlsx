@@ -466,16 +466,15 @@ Note: data JSON formats are for pure data and do not support formulas or styles.
   "tables": [
     {
       "name": "Sales",
-      "header": ["item", "qty", "price", "amount"],
-      "rows": [
-        ["A", 10, 100],
-        ["B", 5, 200]
-      ],
       "columns": [
-        { "width": 18 },
-        { "format": "#,##0" },
-        { "format": "#,##0" },
-        { "format": "#,##0", "formula": "=B{r}*C{r}" }
+        { "key": "item",  "header": "item",  "width": 18 },
+        { "key": "qty",   "header": "qty",   "format": "#,##0" },
+        { "key": "price", "header": "price", "format": "#,##0" },
+        { "key": "amount","header": "amount","format": "#,##0", "formula": "={qty}*{price}" }
+      ],
+      "rows": [
+        { "item": "A", "qty": 10, "price": 100 },
+        { "item": "B", "qty": 5,  "price": 200 }
       ],
       "styles": {
         "header": {
@@ -494,10 +493,12 @@ Note: data JSON formats are for pure data and do not support formulas or styles.
 Key points:
 
 - `tables` is required. One element becomes one worksheet.
-- `header` is optional. When present it occupies row 1 and data starts on row 2.
-- `rows` is an array of arrays. Numbers, strings, booleans, and `null` are accepted.
+- `header` is optional. When present it occupies row 1 and data starts on row 2. `columns[].header` overrides the top-level header for that column.
+- `rows` can be arrays (`[["A", 10]]`) or objects (`[{"item": "A", "qty": 10}]`). Do not mix both forms in one table.
+- Object rows require `columns[].key` for every column. Keys may contain Japanese characters, but must not contain whitespace, `{`, `}`, or `:`. The key `r` is reserved.
 - A string starting with `=` is a formula. Use `{ "v": "=text" }` for a literal string.
-- `columns[].formula` applies to every data row. `{r}` is replaced by the row number, so you do not repeat the same formula.
+- `columns[].formula` applies to every data row. `{key}` is the current row cell, `{key:col}` is the column letter, and `{r}` is the row number. For example, `={qty}*{price}` becomes `=B2*C2`, and `=SUM({amount:col}2:{amount:col}6)` becomes `=SUM(D2:D6)`.
+- Unknown formula placeholders are validation errors. Array rows and literal column references such as `=B{r}*C{r}` still work.
 - Cell objects (`{ "v": ..., "f": ..., "format": ..., "style": ..., "align": ..., "t": ... }`) are available as an escape hatch.
 - Styles are named in `styles`. `headerStyle` / `bodyStyle` apply to the header and data. Precedence is `bodyStyle`/`headerStyle` < `columns[].style` < cell `style`; `format` and `align` are applied on top.
 - Sheet names must be at most 31 characters and must not contain `[]:*?/\`.

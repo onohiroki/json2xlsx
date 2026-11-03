@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/xuri/excelize/v2"
@@ -22,7 +23,7 @@ type TableSpec struct {
 type TableInput struct {
 	Name         string                `json:"name,omitempty" jsonschema:"worksheet name (default: Sheet1, Sheet2, ...)"`
 	Header       []any                 `json:"header,omitempty" jsonschema:"optional header row; data starts on row 2 when present"`
-	Rows         [][]any               `json:"rows" jsonschema:"data rows; each row is an array of cell values"`
+	Rows         []any                 `json:"rows" jsonschema:"data rows; each row is an array of cell values or an object keyed by columns[].key"`
 	Columns      []TableColumn         `json:"columns,omitempty" jsonschema:"optional per-column settings; index 0 is column A"`
 	Styles       map[string]TableStyle `json:"styles,omitempty" jsonschema:"named styles referenced by headerStyle, bodyStyle, columns[].style, or cell style"`
 	HeaderStyle  string                `json:"headerStyle,omitempty" jsonschema:"name of the style applied to the header row"`
@@ -34,11 +35,13 @@ type TableInput struct {
 
 // TableColumn は列単位の設定．
 type TableColumn struct {
+	Key     string   `json:"key,omitempty" jsonschema:"logical column name used by formulas; required for object rows"`
+	Header  string   `json:"header,omitempty" jsonschema:"header text for this column; overrides the top-level header array"`
 	Width   *float64 `json:"width,omitempty" jsonschema:"column width (0 < width <= 255)"`
 	Format  string   `json:"format,omitempty" jsonschema:"number format code applied to this column"`
 	Align   string   `json:"align,omitempty" jsonschema:"horizontal alignment: left, center, or right"`
 	Style   string   `json:"style,omitempty" jsonschema:"name of a style in styles"`
-	Formula string   `json:"formula,omitempty" jsonschema:"formula template applied to every data row; {r} is replaced by the row number"`
+	Formula string   `json:"formula,omitempty" jsonschema:"formula template applied to every data row; supports {key}, {key:col}, and {r}"`
 }
 
 // TableStyle は名前付きスタイル．SheetJS の Style から id を除いた形．
@@ -200,19 +203,11 @@ func (b *tableBuilder) buildSheet(t TableInput, index int) (Sheet, error) {
 	}
 
 	headerRows := 0
-	if len(t.Header) > 0 {
+	if tableHeaderPresent(t) {
 		headerRows = 1
 	}
 	totalRows := headerRows + len(t.Rows)
-	ncols := len(t.Header)
-	if len(t.Columns) > ncols {
-		ncols = len(t.Columns)
-	}
-	for _, row := range t.Rows {
-		if len(row) > ncols {
-			ncols = len(row)
-		}
-	}
+	ncols := tableColumnCount(t)
 	if ncols == 0 {
 		return Sheet{}, fmt.Errorf("table %q has no columns", name)
 	}
@@ -226,6 +221,7 @@ func (b *tableBuilder) buildSheet(t TableInput, index int) (Sheet, error) {
 	}
 	cells := map[string]Cell{}
 	cols := make([]ColInfo, 0, ncols)
+	keys := tableKeyMap(t, ncols)
 
 	for j := range t.Columns {
 		if t.Columns[j].Width == nil {
@@ -244,7 +240,8 @@ func (b *tableBuilder) buildSheet(t TableInput, index int) (Sheet, error) {
 
 	// ヘッダ行
 	if headerRows == 1 {
-		for j, v := range t.Header {
+		for j := 0; j < ncols; j++ {
+			v := tableHeaderValue(t, j)
 			if v == nil {
 				continue
 			}
@@ -266,12 +263,25 @@ func (b *tableBuilder) buildSheet(t TableInput, index int) (Sheet, error) {
 	// データ行
 	for i, row := range t.Rows {
 		sheetRow := headerRows + i
+		isObjectRow, ok := tableRowKind(row)
+		if !ok {
+			return Sheet{}, fmt.Errorf("table %q row %d: row must be an array or object", name, i+1)
+		}
 		for j := 0; j < ncols; j++ {
-			var raw any
-			if j < len(row) {
-				raw = row[j]
-			}
 			col := columnAt(t.Columns, j)
+			var raw any
+			if isObjectRow {
+				if col.Key == "" {
+					return Sheet{}, fmt.Errorf("table %q row %d column %s: object rows require a column key", name, i+1, mustColumnName(j))
+				}
+				raw = row.(map[string]any)[col.Key]
+			} else {
+				arr := row.([]any)
+				if j < len(arr) {
+					raw = arr[j]
+				}
+			}
+
 			cellObj, isObj, err := parseTableCellObject(raw)
 			if err != nil {
 				return Sheet{}, fmt.Errorf("table %q row %d column %s: %w", name, i+1, mustColumnName(j), err)
@@ -282,12 +292,19 @@ func (b *tableBuilder) buildSheet(t TableInput, index int) (Sheet, error) {
 			case isObj && cellObj.F != "":
 				formula = cellObj.F
 			case col.Formula != "":
-				formula = expandFormula(col.Formula, sheetRow+1)
+				formula = col.Formula
 			}
 			if formula == "" && !isObj {
 				if s, ok := raw.(string); ok && strings.HasPrefix(s, "=") {
 					formula = strings.TrimPrefix(s, "=")
 				}
+			}
+			if formula != "" {
+				expanded, issues := expandFormula(formula, sheetRow+1, keys)
+				if len(issues) > 0 {
+					return Sheet{}, fmt.Errorf("table %q row %d column %s: unknown formula placeholder %s", name, i+1, mustColumnName(j), strings.Join(issues, ", "))
+				}
+				formula = expanded
 			}
 
 			value := raw
@@ -423,6 +440,117 @@ func columnAt(cols []TableColumn, i int) TableColumn {
 	return TableColumn{}
 }
 
+func tableHeaderPresent(t TableInput) bool {
+	if len(t.Header) > 0 {
+		return true
+	}
+	for _, col := range t.Columns {
+		if col.Header != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func tableColumnCount(t TableInput) int {
+	n := len(t.Header)
+	if len(t.Columns) > n {
+		n = len(t.Columns)
+	}
+	for _, row := range t.Rows {
+		if arr, ok := row.([]any); ok && len(arr) > n {
+			n = len(arr)
+		}
+	}
+	return n
+}
+
+func tableHeaderValue(t TableInput, i int) any {
+	col := columnAt(t.Columns, i)
+	if col.Header != "" {
+		return col.Header
+	}
+	if i < len(t.Header) {
+		return t.Header[i]
+	}
+	return nil
+}
+
+func tableRowKind(row any) (bool, bool) {
+	switch row.(type) {
+	case []any:
+		return false, true
+	case map[string]any:
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+// tableKeyMap は key -> 列記号のマップを作る．
+func tableKeyMap(t TableInput, ncols int) map[string]string {
+	keys := map[string]string{}
+	for i := 0; i < ncols; i++ {
+		col := columnAt(t.Columns, i)
+		if col.Key == "" {
+			continue
+		}
+		name, err := columnName(i)
+		if err != nil {
+			continue
+		}
+		keys[col.Key] = name
+	}
+	return keys
+}
+
+// expandFormula は table JSON の数式プレースホルダを展開する．
+// {r} は行番号，{key} は現在行のセル，{key:col} は列記号になる．
+// 未知のプレースホルダは issues として返す．
+func expandFormula(tmpl string, row int, keys map[string]string) (string, []string) {
+	f := strings.TrimPrefix(tmpl, "=")
+	var b strings.Builder
+	var issues []string
+	rowStr := strconv.Itoa(row)
+	for i := 0; i < len(f); {
+		if f[i] != '{' {
+			b.WriteByte(f[i])
+			i++
+			continue
+		}
+		end := strings.IndexByte(f[i+1:], '}')
+		if end < 0 {
+			issues = append(issues, "unclosed placeholder")
+			b.WriteString(f[i:])
+			break
+		}
+		end = i + 1 + end
+		content := f[i+1 : end]
+		switch {
+		case content == "r":
+			b.WriteString(rowStr)
+		case strings.HasSuffix(content, ":col"):
+			key := strings.TrimSuffix(content, ":col")
+			if letter, ok := keys[key]; ok {
+				b.WriteString(letter)
+			} else {
+				issues = append(issues, "{"+content+"}")
+				b.WriteString(f[i : end+1])
+			}
+		default:
+			if letter, ok := keys[content]; ok {
+				b.WriteString(letter)
+				b.WriteString(rowStr)
+			} else {
+				issues = append(issues, "{"+content+"}")
+				b.WriteString(f[i : end+1])
+			}
+		}
+		i = end + 1
+	}
+	return b.String(), issues
+}
+
 func columnName(index int) (string, error) {
 	name, err := excelize.ColumnNumberToName(index + 1)
 	if err != nil {
@@ -445,11 +573,6 @@ func cellName(col, row int) (string, error) {
 		return "", fmt.Errorf("cell at row %d column %d: %w", row+1, col+1, err)
 	}
 	return name, nil
-}
-
-func expandFormula(tmpl string, row int) string {
-	f := strings.TrimPrefix(tmpl, "=")
-	return strings.ReplaceAll(f, "{r}", strconv.Itoa(row))
 }
 
 func inferCellType(v any) string {
@@ -574,17 +697,34 @@ func validateTableSpec(spec *TableSpec) []JSONIssue {
 			seenNames[strings.ToLower(name)] = i
 		}
 
-		if len(t.Header) == 0 && len(t.Rows) == 0 {
+		hasHeader := tableHeaderPresent(t)
+		ncols := tableColumnCount(t)
+		if !hasHeader && len(t.Rows) == 0 {
 			add(path+".rows", "table must have a header or at least one row")
 		}
-		for j, h := range t.Header {
-			if !isScalarValue(h) {
+		for j := 0; j < ncols; j++ {
+			h := tableHeaderValue(t, j)
+			if h != nil && !isScalarValue(h) {
 				add(fmt.Sprintf("%s.header[%d]", path, j), "header value must be a scalar")
 			}
 		}
 
+		letters := tableKeyMap(t, ncols)
+		keySeen := map[string]int{}
 		for j, col := range t.Columns {
 			colPath := fmt.Sprintf("%s.columns[%d]", path, j)
+			if _, err := columnName(j); err != nil {
+				add(colPath, err.Error())
+			}
+			if col.Key != "" {
+				if err := validateTableKey(col.Key); err != nil {
+					add(colPath+".key", err.Error())
+				} else if prev, ok := keySeen[col.Key]; ok {
+					add(colPath+".key", fmt.Sprintf("duplicate column key %q (already used by columns[%d])", col.Key, prev))
+				} else {
+					keySeen[col.Key] = j
+				}
+			}
 			if col.Width != nil && (*col.Width <= 0 || *col.Width > 255) {
 				add(colPath+".width", "width must be greater than 0 and at most 255")
 			}
@@ -598,8 +738,12 @@ func validateTableSpec(spec *TableSpec) []JSONIssue {
 					add(colPath+".style", fmt.Sprintf("style %q is not defined in styles", col.Style))
 				}
 			}
-			if strings.ContainsAny(strings.ReplaceAll(col.Formula, "{r}", ""), "{}") {
-				add(colPath+".formula", `only the {r} placeholder is supported in formula templates`)
+			if col.Formula != "" {
+				if _, refs := expandFormula(col.Formula, 1, letters); len(refs) > 0 {
+					for _, ref := range refs {
+						add(colPath+".formula", "unknown formula placeholder "+ref)
+					}
+				}
 			}
 		}
 
@@ -622,10 +766,10 @@ func validateTableSpec(spec *TableSpec) []JSONIssue {
 				add(path+".bodyStyle", fmt.Sprintf("style %q is not defined in styles", t.BodyStyle))
 			}
 		}
-		if t.FreezeHeader && len(t.Header) == 0 {
+		if t.FreezeHeader && !hasHeader {
 			add(path+".freezeHeader", "freezeHeader requires a header")
 		}
-		if t.AutoFilter && len(t.Header) == 0 {
+		if t.AutoFilter && !hasHeader {
 			add(path+".autoFilter", "autoFilter requires a header")
 		}
 		for j, m := range t.Merges {
@@ -634,32 +778,102 @@ func validateTableSpec(spec *TableSpec) []JSONIssue {
 			}
 		}
 
+		objectRows := false
+		rowKindSet := false
 		for r, row := range t.Rows {
-			for c, v := range row {
-				cellPath := fmt.Sprintf("%s.rows[%d][%d]", path, r, c)
-				if _, isObj, err := parseTableCellObject(v); err != nil {
-					add(cellPath, err.Error())
-					continue
-				} else if !isObj && !isScalarValue(v) {
-					add(cellPath, "cell value must be a scalar or a cell object")
-				}
-				cellObj, isObj, _ := parseTableCellObject(v)
-				if isObj && cellObj.Style != "" {
-					if _, ok := t.Styles[cellObj.Style]; !ok {
-						add(cellPath+".style", fmt.Sprintf("style %q is not defined in styles", cellObj.Style))
+			isObject, ok := tableRowKind(row)
+			if !ok {
+				add(fmt.Sprintf("%s.rows[%d]", path, r), "row must be an array or object")
+				continue
+			}
+			if !rowKindSet {
+				objectRows = isObject
+				rowKindSet = true
+			} else if objectRows != isObject {
+				add(fmt.Sprintf("%s.rows[%d]", path, r), "cannot mix array rows and object rows")
+				continue
+			}
+
+			if isObject {
+				m := row.(map[string]any)
+				for key := range m {
+					if _, ok := keySeen[key]; !ok {
+						add(fmt.Sprintf("%s.rows[%d].%s", path, r, key), fmt.Sprintf("unknown column key %q", key))
 					}
 				}
-				if isObj && cellObj.Align != "" {
-					switch cellObj.Align {
-					case "left", "center", "right":
-					default:
-						add(cellPath+".align", `align must be "left", "center", or "right"`)
+				for j := 0; j < ncols; j++ {
+					col := columnAt(t.Columns, j)
+					if col.Key == "" {
+						add(fmt.Sprintf("%s.columns[%d].key", path, j), "object rows require a key for every column")
+						continue
 					}
+					issues = append(issues, validateTableCellValue(
+						fmt.Sprintf("%s.rows[%d].%s", path, r, col.Key), m[col.Key], t, letters)...)
+				}
+			} else {
+				for c, v := range row.([]any) {
+					issues = append(issues, validateTableCellValue(
+						fmt.Sprintf("%s.rows[%d][%d]", path, r, c), v, t, letters)...)
 				}
 			}
 		}
 	}
 	return issues
+}
+
+func validateTableCellValue(path string, v any, t TableInput, keys map[string]string) []JSONIssue {
+	var issues []JSONIssue
+	add := func(p, msg string) {
+		issues = append(issues, JSONIssue{Path: path + p, Message: msg})
+	}
+	cellObj, isObj, err := parseTableCellObject(v)
+	if err != nil {
+		add("", err.Error())
+		return issues
+	}
+	if !isObj && !isScalarValue(v) {
+		add("", "cell value must be a scalar or a cell object")
+		return issues
+	}
+	if isObj {
+		if cellObj.Style != "" {
+			if _, ok := t.Styles[cellObj.Style]; !ok {
+				add(".style", fmt.Sprintf("style %q is not defined in styles", cellObj.Style))
+			}
+		}
+		switch cellObj.Align {
+		case "", "left", "center", "right":
+		default:
+			add(".align", `align must be "left", "center", or "right"`)
+		}
+		if cellObj.F != "" {
+			if _, refs := expandFormula(cellObj.F, 1, keys); len(refs) > 0 {
+				for _, ref := range refs {
+					add(".f", "unknown formula placeholder "+ref)
+				}
+			}
+		}
+	} else if s, ok := v.(string); ok && strings.HasPrefix(s, "=") {
+		if _, refs := expandFormula(s, 1, keys); len(refs) > 0 {
+			for _, ref := range refs {
+				add("", "unknown formula placeholder "+ref)
+			}
+		}
+	}
+	return issues
+}
+
+func validateTableKey(key string) error {
+	if key == "r" {
+		return fmt.Errorf(`key "r" is reserved for the row placeholder`)
+	}
+	if strings.ContainsAny(key, "{}:") {
+		return fmt.Errorf(`key %q must not contain "{", "}", or ":"`, key)
+	}
+	if strings.TrimSpace(key) != key || strings.IndexFunc(key, unicode.IsSpace) >= 0 {
+		return fmt.Errorf(`key %q must not contain whitespace`, key)
+	}
+	return nil
 }
 
 var tableColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
