@@ -43,7 +43,7 @@ description: AI に SheetJS 風 JSON のみを出力させ，`json2xlsx` で XLS
 }
 ```
 
-`book.sheets` はキーがシート名のオブジェクト。`book.charts` にグラフ定義を記述できる。
+`book.sheets` はキーがシート名のオブジェクト．`book.sheetOrder` でシート順を指定できる（未指定時はシート名のアルファベット順）．`book.charts` にグラフ定義を記述できる．重複するシート名はエラーになる．
 
 ## セルオブジェクト (cells)
 キーは `A1` のようなセル参照．値は次のフィールドを持つ:

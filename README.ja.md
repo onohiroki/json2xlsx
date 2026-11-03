@@ -293,6 +293,7 @@ cat input.xlsx | json2xlsx to-md > output.md
 json2xlsx to-html -i input.json -o output.html
 json2xlsx to-html -i input.xlsx -o output.html
 json2xlsx to-html -i input.json -o output.html --grid
+json2xlsx to-html -i input.json -o output.html --range B2:F10
 cat input.xlsx | json2xlsx to-html > output.html
 ```
 
@@ -301,6 +302,7 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode v` (デフォルト): 数式セルは計算結果 (`v`) を表示．ヘッダ行なし．
 - `--mode f`: 数式 (`=B2*C2`) を表示．A/B/C 列名 + 行番号を `<th>` で表示．
 - `--mode both`: `v` と数式の両方を `v<br />=f` のように併記．
+- `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 - `--table-json`: JSON 入力を高レベルな table JSON（`tables` / `header` / `rows`）として扱う．
 - `--grid`: 空セルを含む全セルに灰色の細枠線を表示する（cellspacing を collapsed にする）．
@@ -332,7 +334,7 @@ cat input.json | json2xlsx to-csv > output.csv
 
 - `--sheet`: シート名で特定のシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
 - `--sheet-index`: 1 始まりのインデックスでシートを抽出する（複数シートの XLSX / Workbook JSON 用）．
-- `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける（シートのセル入力にのみ適用）．
+- `--range A1:F20`: 指定した矩形範囲だけを出力する．単一セル `A1` も受け付ける．`--data-json` / `--table-json` を含むすべての入力に適用される．
 - `--data-json`: JSON 入力をデータ JSON（二次元配列 / オブジェクト配列 / Map-of-Arrays）として扱う．
 - `--table-json`: JSON 入力を高レベルな table JSON（`tables` / `header` / `rows`）として扱う．
 - `--compute`: 出力前に数式を評価する．
@@ -341,12 +343,14 @@ cat input.json | json2xlsx to-csv > output.csv
 
 ### `info` — 入力のサマリ
 
-XLSX または Workbook JSON を読み込み，シート構成を要約します．XLSX と JSON は magic byte で自動判定し，`-i` を省略すると標準入力を使います．
+XLSX または JSON を読み込み，シート構成を要約します．XLSX と JSON は magic byte で自動判定し，`-i` を省略すると標準入力を使います．JSON は SheetJS / データ JSON / table JSON を自動判定します．`--data-json` / `--table-json` を指定すると判定を上書きできます．列名が `rows` や `styles` と衝突する Map-of-Arrays など，判定が曖昧な場合は明示的にフラグを指定してください．
 
 ```bash
 json2xlsx info -i input.xlsx
 json2xlsx info -i input.xlsx --json
 json2xlsx info -i input.xlsx --sheet "売上"
+json2xlsx info -i table.json --table-json
+json2xlsx info -i data.json --data-json
 cat input.xlsx | json2xlsx info
 ```
 
@@ -404,7 +408,7 @@ json2xlsx mcp --create-allow-dir --allow-dir . --allow-dir /tmp/json2xlsx-out
 | `json2xlsx_convert` | JSON (table / SheetJS / data) → XLSX．`output_path` は必須 |
 | `json2xlsx_validate` | ファイルを書かずに入力を検証し `issues[]` を返す |
 | `json2xlsx_preview` | XLSX を書かずに Markdown として表示する |
-| `json2xlsx_inspect` | XLSX または Workbook JSON のサマリを返す |
+| `json2xlsx_inspect` | XLSX または JSON (SheetJS / データ / table) のサマリを返す |
 | `json2xlsx_to_json` | XLSX → JSON をファイルに出力する |
 | `json2xlsx_functions` | 対応する数式関数を検索する |
 
@@ -457,9 +461,9 @@ OpenCode の設定例:
 
 `json2xlsx` は，SheetJS 互換を意識した JSON を受け取り，セル単位で `.xlsx` に変換します．[3][4]
 
-入力表現は 2 つのモードがあります．
+入力表現は 3 つのモードがあります．
 
-**デフォルト（`--data-json` なし）:** SheetJS 形式の Workbook / Sheet JSON（セル参照形式または Cell Object 形式）を受け付けます．互換性のため，`SheetNames` と `Sheets` を持つ SheetJS ライブラリ形式の Workbook も受け付けます．`!ref` や `!cols` などの内部キーは無視されます．
+**デフォルト（`--data-json` なし）:** SheetJS 形式の Workbook / Sheet JSON（セル参照形式または Cell Object 形式）を受け付けます．互換性のため，`SheetNames` と `Sheets` を持つ SheetJS ライブラリ形式の Workbook も受け付けます．`!ref` や `!cols` などの内部キーは無視されます．`book` ラッパー形式では `book.sheetOrder` でシート順を指定できます（未指定時はシート名のアルファベット順）．重複するシート名は大文字小文字を無視してエラーになります．
 
 **`--data-json` 指定時:** 以下のデータ指向形式を受け付けます．
 - 二次元配列形式の JSON（例: `[["ヘッダ1", "ヘッダ2"], ["値1", 123]]`）

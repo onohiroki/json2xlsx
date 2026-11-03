@@ -289,6 +289,7 @@ Convert a Workbook to an HTML `<table>` fragment. Input detection works like `to
 json2xlsx to-html -i input.json -o output.html
 json2xlsx to-html -i input.xlsx -o output.html
 json2xlsx to-html -i input.json -o output.html --grid
+json2xlsx to-html -i input.json -o output.html --range B2:F10
 cat input.xlsx | json2xlsx to-html > output.html
 ```
 
@@ -297,6 +298,7 @@ cat input.xlsx | json2xlsx to-html > output.html
 - `--mode v` (default): formula cells display their computed value (`v`). No header row.
 - `--mode f`: show formulas (`=B2*C2`). Column names A/B/C and row numbers are shown in `<th>`.
 - `--mode both`: show both `v` and formula like `v<br />=f`.
+- `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 - `--table-json`: treat JSON input as high-level table JSON (`tables` / `header` / `rows`).
 - `--grid`: show thin gray borders on all cells, including empty ones (collapses cellspacing).
@@ -328,7 +330,7 @@ Options:
 
 - `--sheet`: extract a specific sheet by name (for multi-sheet XLSX or Workbook JSON).
 - `--sheet-index`: extract a sheet by 1-based index (for multi-sheet XLSX or Workbook JSON).
-- `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted (applies to sheet cell input only).
+- `--range A1:F20`: output only the given rectangular range. A single cell (`A1`) is also accepted. Applies to all inputs, including `--data-json` and `--table-json`.
 - `--data-json`: treat JSON input as data JSON (2D array, array of objects, or map-of-arrays).
 - `--table-json`: treat JSON input as high-level table JSON (`tables` / `header` / `rows`).
 - `--compute`: evaluate formulas before output.
@@ -337,12 +339,14 @@ Date cells (`t: "d"`) are automatically converted to readable strings (serial va
 
 ### `info` — summarize the input
 
-Read an XLSX or Workbook JSON and summarize its structure. The input kind is auto-detected via magic bytes; when `-i` is omitted, standard input is used.
+Read an XLSX or JSON and summarize its structure. XLSX vs JSON is auto-detected via magic bytes, and SheetJS / data / table JSON is auto-detected when no format flag is given; when `-i` is omitted, standard input is used. If detection is ambiguous (for example a map-of-arrays with a column named `rows` or `styles`), pass the format flag explicitly.
 
 ```bash
 json2xlsx info -i input.xlsx
 json2xlsx info -i input.xlsx --json
 json2xlsx info -i input.xlsx --sheet "Sales"
+json2xlsx info -i table.json --table-json
+json2xlsx info -i data.json --data-json
 cat input.xlsx | json2xlsx info
 ```
 
@@ -400,7 +404,7 @@ The server exposes these tools:
 | `json2xlsx_convert` | JSON (table / SheetJS / data) → XLSX. `output_path` is required |
 | `json2xlsx_validate` | Validate input and return `issues[]` without writing files |
 | `json2xlsx_preview` | Render as Markdown without writing an XLSX |
-| `json2xlsx_inspect` | Summarize an XLSX or workbook JSON |
+| `json2xlsx_inspect` | Summarize an XLSX or JSON (SheetJS / data / table) |
 | `json2xlsx_to_json` | XLSX → JSON on disk |
 | `json2xlsx_functions` | Search supported formula functions |
 
@@ -453,9 +457,9 @@ The server writes logs to stderr only. It never writes binary XLSX data to stdou
 
 `json2xlsx` accepts JSON inspired by SheetJS compatibility and converts it to `.xlsx` on a per-cell basis.[3][4]
 
-The expected input representations come in two modes:
+The expected input representations come in three modes:
 
-**Default (no `--data-json`):** expects SheetJS-style Workbook / Sheet JSON (cell reference or Cell Object form). For compatibility, SheetJS library workbook objects with `SheetNames` and `Sheets` are also accepted. Internal keys such as `!ref` and `!cols` are ignored.
+**Default (no `--data-json`):** expects SheetJS-style Workbook / Sheet JSON (cell reference or Cell Object form). For compatibility, SheetJS library workbook objects with `SheetNames` and `Sheets` are also accepted. Internal keys such as `!ref` and `!cols` are ignored. In the `book` wrapper form, `book.sheetOrder` controls sheet order (alphabetical when omitted). Duplicate sheet names are rejected case-insensitively.
 
 **With `--data-json`:** accepts the following data-oriented formats:
 - 2D array JSON (e.g. `[["Header1", "Header2"], ["val1", 123]]`)

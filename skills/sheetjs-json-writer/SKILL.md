@@ -43,7 +43,7 @@ Three formats are supported:
 }
 ```
 
-`book.sheets` is an object whose keys are sheet names. Chart definitions may be placed in `book.charts`.
+`book.sheets` is an object whose keys are sheet names. `book.sheetOrder` controls sheet order (alphabetical when omitted). Chart definitions may be placed in `book.charts`. Duplicate sheet names are rejected.
 
 ## Cell objects (`cells`)
 Keys are cell addresses like `A1`. Each value may contain the following fields:
