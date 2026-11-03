@@ -23,6 +23,7 @@ const (
 type Options struct {
 	Version         string
 	AllowDirs       []string
+	CreateAllowDirs bool
 	MaxInputBytes   int64
 	MaxOutputBytes  int64
 	MaxCells        int
@@ -81,7 +82,7 @@ func newServer(opts Options) (*server, error) {
 	if opts.MaxPreviewBytes <= 0 {
 		opts.MaxPreviewBytes = DefaultMaxPreviewBytes
 	}
-	roots, err := resolveRoots(opts.AllowDirs)
+	roots, err := resolveRoots(opts.AllowDirs, opts.CreateAllowDirs)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func (s *server) release() {
 	<-s.sem
 }
 
-func resolveRoots(dirs []string) ([]string, error) {
+func resolveRoots(dirs []string, create bool) ([]string, error) {
 	if len(dirs) == 0 {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -138,6 +139,11 @@ func resolveRoots(dirs []string) ([]string, error) {
 		abs, err := filepath.Abs(d)
 		if err != nil {
 			return nil, fmt.Errorf("resolve allow-dir %q: %w", d, err)
+		}
+		if create {
+			if err := os.MkdirAll(abs, 0o755); err != nil {
+				return nil, fmt.Errorf("create allow-dir %q: %w", d, err)
+			}
 		}
 		real, err := filepath.EvalSymlinks(abs)
 		if err != nil {

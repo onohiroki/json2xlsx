@@ -72,7 +72,7 @@ Usage:
   json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
   json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
   json2xlsx functions [--search X] [--category C] [--json]
-  json2xlsx mcp      [--allow-dir DIR]... [--max-input-bytes N] [--max-output-bytes N]
+  json2xlsx mcp      [--allow-dir DIR]... [--create-allow-dir] [--max-input-bytes N] [--max-output-bytes N]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
 
 オプション:
@@ -98,6 +98,7 @@ Usage:
   --compact / -c       to-md で列のパディングを抑制しコンパクトに表示する
   --grid               to-html で枠線未指定セルにグレーの細枠線を表示する
   --allow-dir          mcp で読み書きを許可するディレクトリ (複数指定可，既定はカレントディレクトリ)
+  --create-allow-dir   mcp の起動時に存在しない --allow-dir を作成する
   --max-input-bytes    mcp の入力サイズ上限 (既定 33554432)
   --max-output-bytes   mcp の出力サイズ上限 (既定 134217728)
 
@@ -125,7 +126,7 @@ Usage:
   json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
   json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
   json2xlsx functions [--search X] [--category C] [--json]
-  json2xlsx mcp      [--allow-dir DIR]... [--max-input-bytes N] [--max-output-bytes N]
+  json2xlsx mcp      [--allow-dir DIR]... [--create-allow-dir] [--max-input-bytes N] [--max-output-bytes N]
   json2xlsx         [-i input.json] [-o output.xlsx] [--autofit]
 
 Options:
@@ -151,6 +152,7 @@ Options:
   --compact / -c       Suppress column alignment padding for compact tables (to-md only)
   --grid               Show light gray gridlines for empty cells in to-html
   --allow-dir          Directory the mcp server may read and write (repeatable, default: cwd)
+  --create-allow-dir   Create missing --allow-dir directories at startup
   --max-input-bytes    mcp input size limit (default: 33554432)
   --max-output-bytes   mcp output size limit (default: 134217728)
 
@@ -467,9 +469,11 @@ func runMCP(args []string) {
 	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
 	fs.Usage = usage
 	var allowDirs stringList
+	var createAllowDirs bool
 	var maxInputBytes, maxOutputBytes int64
 	var maxCells, maxSheets, maxPreviewBytes int
 	fs.Var(&allowDirs, "allow-dir", "directory the server may read and write (repeatable, default: cwd)")
+	fs.BoolVar(&createAllowDirs, "create-allow-dir", false, "create missing allow-dir directories at startup")
 	fs.Int64Var(&maxInputBytes, "max-input-bytes", mcpserver.DefaultMaxInputBytes, "maximum input size in bytes")
 	fs.Int64Var(&maxOutputBytes, "max-output-bytes", mcpserver.DefaultMaxOutputBytes, "maximum output size in bytes")
 	fs.IntVar(&maxCells, "max-cells", mcpserver.DefaultMaxCells, "maximum number of cells per workbook")
@@ -480,6 +484,7 @@ func runMCP(args []string) {
 	opts := mcpserver.Options{
 		Version:         getVersion(),
 		AllowDirs:       allowDirs,
+		CreateAllowDirs: createAllowDirs,
 		MaxInputBytes:   maxInputBytes,
 		MaxOutputBytes:  maxOutputBytes,
 		MaxCells:        maxCells,

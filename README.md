@@ -387,6 +387,7 @@ Start a local MCP server over stdin/stdout. This lets MCP clients without a shel
 ```bash
 json2xlsx mcp
 json2xlsx mcp --allow-dir /path/to/work --allow-dir /tmp
+json2xlsx mcp --create-allow-dir --allow-dir . --allow-dir /tmp/json2xlsx-out
 ```
 
 The server exposes these tools:
@@ -405,6 +406,7 @@ Resources include `json2xlsx://schema`, `json2xlsx://schema/table`, `json2xlsx:/
 Options:
 
 - `--allow-dir DIR`: directory the server may read and write. Repeatable. Defaults to the current directory.
+- `--create-allow-dir`: create missing `--allow-dir` directories at startup. Off by default.
 - `--max-input-bytes N`: input size limit (default 33554432).
 - `--max-output-bytes N`: output size limit (default 134217728).
 - `--max-cells N`, `--max-sheets N`, `--max-preview-bytes N`: additional limits.

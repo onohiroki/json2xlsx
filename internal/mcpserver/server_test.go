@@ -887,3 +887,30 @@ func TestValidateStripsSheetJSInternalKeys(t *testing.T) {
 		t.Fatalf("valid = false, issues = %v", structured["issues"])
 	}
 }
+
+func TestCreateAllowDirs(t *testing.T) {
+	base := t.TempDir()
+	missing := filepath.Join(base, "nested", "out")
+
+	if _, err := NewServer(Options{Version: "test", AllowDirs: []string{missing}}); err == nil {
+		t.Fatal("expected an error when the allow-dir does not exist")
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("allow-dir should not exist yet: %v", err)
+	}
+
+	if _, err := NewServer(Options{
+		Version:         "test",
+		AllowDirs:       []string{missing},
+		CreateAllowDirs: true,
+	}); err != nil {
+		t.Fatalf("NewServer with CreateAllowDirs: %v", err)
+	}
+	info, err := os.Stat(missing)
+	if err != nil {
+		t.Fatalf("stat created allow-dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("%s is not a directory", missing)
+	}
+}

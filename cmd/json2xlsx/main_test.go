@@ -640,3 +640,27 @@ func TestCLI_MCP_ConvertTable(t *testing.T) {
 		t.Fatal("output is empty")
 	}
 }
+
+func TestCLI_MCP_CreateAllowDir(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nested", "out")
+
+	_, stderr, code := runCLIWithStdin(t, "", "mcp", "--allow-dir", missing)
+	if code == 0 {
+		t.Fatalf("expected failure without --create-allow-dir")
+	}
+	if !strings.Contains(stderr, "allow-dir") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+
+	_, stderr, code = runCLIWithStdin(t, "", "mcp", "--create-allow-dir", "--allow-dir", missing)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	info, err := os.Stat(missing)
+	if err != nil {
+		t.Fatalf("stat created allow-dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("%s is not a directory", missing)
+	}
+}

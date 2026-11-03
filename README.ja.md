@@ -391,6 +391,7 @@ stdin/stdout でローカル MCP サーバを起動します．シェルを持�
 ```bash
 json2xlsx mcp
 json2xlsx mcp --allow-dir /path/to/work --allow-dir /tmp
+json2xlsx mcp --create-allow-dir --allow-dir . --allow-dir /tmp/json2xlsx-out
 ```
 
 公開するツール:
@@ -409,6 +410,7 @@ resources として `json2xlsx://schema`，`json2xlsx://schema/table`，`json2xl
 オプション:
 
 - `--allow-dir DIR`: サーバが読み書きを許可するディレクトリ．複数指定可．既定はカレントディレクトリ．
+- `--create-allow-dir`: 起動時に存在しない `--allow-dir` を作成する．既定は無効．
 - `--max-input-bytes N`: 入力サイズ上限（既定 33554432）．
 - `--max-output-bytes N`: 出力サイズ上限（既定 134217728）．
 - `--max-cells N`，`--max-sheets N`，`--max-preview-bytes N`: 追加の上限．
