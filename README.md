@@ -37,7 +37,7 @@ In short: the design philosophy is to "have the AI produce data, not code" — i
 ## Features
 
 - Lightweight CLI that runs on Go 1.25+.[2]
-- Main dependencies are `excelize` (XLSX read/write) and `jsonschema/v6` (JSON validation).[1]
+- Main dependencies are `excelize` (XLSX read/write), `jsonschema/v6` (JSON validation), and `modelcontextprotocol/go-sdk` (MCP server).[1]
 - Accepts JSON in both SheetJS-style Cell Objects and simple 2D array formats.[4][3]
 - **High-level table JSON** — `--table-json` accepts a compact `tables` / `header` / `rows` format with per-column formats, named styles, formula templates, freeze panes, and autofilter.
 - **MCP server** — `json2xlsx mcp` exposes conversion, validation, preview, inspection, and schema resources to local MCP clients.
@@ -428,10 +428,11 @@ Example OpenCode configuration:
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "json2xlsx": {
-      "type": "local",
-      "command": ["json2xlsx", "mcp", "--allow-dir", "."],
-      "enabled": true
+    "servers": {
+      "json2xlsx": {
+        "type": "local",
+        "command": ["json2xlsx", "mcp", "--allow-dir", "."]
+      }
     }
   }
 }
@@ -715,14 +716,16 @@ Current dependencies are:
 
 ```go
 require (
-    github.com/xuri/excelize/v2 v2.8.1
-    github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+    github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
     github.com/mattn/go-runewidth v0.0.24
+    github.com/modelcontextprotocol/go-sdk v1.8.0
+    github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+    github.com/xuri/excelize/v2 v2.8.1
     golang.org/x/text v0.14.0
 )
 ```
 
-`excelize` is a widely used OSS library for reading and writing Excel files in Go, `jsonschema` is used for JSON Schema validation, `go-runewidth` is used to calculate text width for Markdown output, and `golang.org/x/text` is used for locale-aware error messages.[2][1]
+`excelize` reads and writes Excel files, `jsonschema` validates JSON input, `go-runewidth` calculates text width for Markdown output, `dateparse` parses date strings, `modelcontextprotocol/go-sdk` provides the local MCP server, and `golang.org/x/text` handles locale-aware error messages.[2][1]
 
 ## Go data structures
 

@@ -37,7 +37,7 @@ AI コーディングツールに「その場で XLSX を生成するコード�
 ## 特徴
 
 - Go 1.25+ で動作する軽量 CLI．[2]
-- 主要依存は `excelize` (XLSX 読み書き) と `jsonschema/v6` (JSON バリデーション)．[1]
+- 主要依存は `excelize` (XLSX 読み書き)，`jsonschema/v6` (JSON バリデーション)，`modelcontextprotocol/go-sdk` (MCP サーバ)．[1]
 - SheetJS 風の Cell Object に加え，シンプルな二次元配列形式の JSON を入力できる．[4][3]
 - **高レベルな table JSON** — `--table-json` で `tables` / `header` / `rows` 形式を受け付ける．列単位の書式，名前付きスタイル，数式テンプレート，固定ペイン，オートフィルタに対応する．
 - **MCP サーバ** — `json2xlsx mcp` で変換・検証・プレビュー・情報取得・スキーマ resources をローカル MCP クライアントに公開する．
@@ -432,10 +432,11 @@ OpenCode の設定例:
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "json2xlsx": {
-      "type": "local",
-      "command": ["json2xlsx", "mcp", "--allow-dir", "."],
-      "enabled": true
+    "servers": {
+      "json2xlsx": {
+        "type": "local",
+        "command": ["json2xlsx", "mcp", "--allow-dir", "."]
+      }
     }
   }
 }
@@ -719,14 +720,16 @@ JSON Schema は `schemas/table.schema.json` にあります．専用スキルは
 
 ```go
 require (
-    github.com/xuri/excelize/v2 v2.8.1
-    github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+    github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
     github.com/mattn/go-runewidth v0.0.24
+    github.com/modelcontextprotocol/go-sdk v1.8.0
+    github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+    github.com/xuri/excelize/v2 v2.8.1
     golang.org/x/text v0.14.0
 )
 ```
 
-`excelize` は Go で Excel ファイルを読み書きする代表的な OSS ライブラリ，`jsonschema` は JSON Schema バリデーション，`go-runewidth` は Markdown 出力時の文字幅計算，`golang.org/x/text` はエラーメッセージの多言語対応に使用しています．[2][1]
+`excelize` は Excel ファイルの読み書き，`jsonschema` は JSON 入力の検証，`go-runewidth` は Markdown 出力時の文字幅計算，`dateparse` は日付文字列の解析，`modelcontextprotocol/go-sdk` はローカル MCP サーバ，`golang.org/x/text` はエラーメッセージの多言語対応に使用しています．[2][1]
 
 ## Goのデータ構造
 
