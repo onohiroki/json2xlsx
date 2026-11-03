@@ -144,7 +144,7 @@ Accepts the same inputs as json2xlsx_convert, plus an XLSX path. Use this to che
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "json2xlsx_inspect",
 		Title:       "Inspect workbook",
-		Description: `Summarize an XLSX or workbook JSON file: sheets, used ranges, cell counts, formulas, tables, charts, pictures, and more.`,
+		Description: `Summarize an XLSX or JSON file (SheetJS / data / table, auto-detected): sheets, used ranges, cell counts, formulas, tables, charts, pictures, and more.`,
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:  true,
 			OpenWorldHint: boolPtr(false),
@@ -378,7 +378,7 @@ func (s *server) handleInspect(ctx context.Context, _ *mcp.CallToolRequest, in i
 	}
 	var info json2xlsx.BookInfo
 	if !isXLSXData(data) {
-		format := detectJSONFormat(data)
+		format := json2xlsx.DetectJSONFormat(data)
 		if format == "table" || format == "data" {
 			opts := json2xlsx.ConvertOptions{TableJSON: format == "table", DataJSON: format == "data"}
 			wb, err := json2xlsx.ParseWorkbook(data, opts)
@@ -623,7 +623,7 @@ func (s *server) loadWorkbook(ctx context.Context, spec InputSpec, allowXLSX boo
 
 		format := strings.ToLower(strings.TrimSpace(spec.Format))
 		if format == "" || format == "auto" {
-			format = detectJSONFormat(data)
+			format = json2xlsx.DetectJSONFormat(data)
 		}
 		opts := json2xlsx.ConvertOptions{}
 		switch format {
@@ -742,28 +742,6 @@ func unwrapInlineJSON(v any, name string) (any, error) {
 
 func isXLSXData(data []byte) bool {
 	return len(data) >= 4 && bytes.Equal(data[:4], []byte{'P', 'K', 3, 4})
-}
-
-func detectJSONFormat(data []byte) string {
-	trimmed := bytes.TrimSpace(data)
-	if len(trimmed) == 0 {
-		return "sheetjs"
-	}
-	switch trimmed[0] {
-	case '[':
-		return "data"
-	case '{':
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(trimmed, &m); err == nil {
-			if raw, ok := m["tables"]; ok {
-				var tables []map[string]any
-				if err := json.Unmarshal(raw, &tables); err == nil && len(tables) > 0 {
-					return "table"
-				}
-			}
-		}
-	}
-	return "sheetjs"
 }
 
 func parseDateMode(s string) (json2xlsx.DateMode, error) {

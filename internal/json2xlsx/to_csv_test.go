@@ -645,3 +645,97 @@ func TestToCSV_XLSXInput(t *testing.T) {
 		}
 	})
 }
+
+func runToCSVFormat(t *testing.T, input string, dataJSON, tableJSON bool, rangeStr string) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	err := ToCSVWithFormat(strings.NewReader(input), &out, "", 0, dataJSON, tableJSON, false, rangeStr)
+	return out.String(), err
+}
+
+func TestToCSV_DataJSON_NullValuesAreEmpty(t *testing.T) {
+	got, err := runToCSVFormat(t, `{"a":[1,null],"b":[2]}`, true, false, "")
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	want := "a,b\n1,2\n,\n"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestToCSV_DataJSON_Range(t *testing.T) {
+	got, err := runToCSVFormat(t, `[["a","b"],[1,2]]`, true, false, "A1:A1")
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	if got != "a\n" {
+		t.Fatalf("got %q, want %q", got, "a\n")
+	}
+}
+
+func TestToCSV_DataJSON_PreservesIntegerPrecision(t *testing.T) {
+	got, err := runToCSVFormat(t, `[[9007199254740993]]`, true, false, "")
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	if got != "9007199254740993\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestToCSV_DataJSON_EmptyArrayIsError(t *testing.T) {
+	if _, err := runToCSVFormat(t, `[]`, true, false, ""); err == nil {
+		t.Fatal("expected error for empty data JSON")
+	}
+}
+
+func TestToCSV_SheetJSLibraryShape(t *testing.T) {
+	input := `{"SheetNames":["B","A"],"Sheets":{"A":{"A1":{"t":"s","v":"a"}},"B":{"A1":{"t":"s","v":"b"}}}}`
+	got, err := runToCSV(t, input)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	if got != "b\n" {
+		t.Fatalf("got %q, want %q", got, "b\n")
+	}
+}
+
+func TestToCSV_StripSheetJSInternalKeys(t *testing.T) {
+	got, err := runToCSV(t, `{"cells":{"A1":{"t":"s","v":"a"},"!ref":"A1"}}`)
+	if err != nil {
+		t.Fatalf("ToCSV: %v", err)
+	}
+	if got != "a\n" {
+		t.Fatalf("got %q, want %q", got, "a\n")
+	}
+}
+
+func TestToCSV_BOMWithFormatFlags(t *testing.T) {
+	bom := "\xef\xbb\xbf"
+	got, err := runToCSVFormat(t, bom+`[["a"],[1]]`, true, false, "")
+	if err != nil {
+		t.Fatalf("data BOM: %v", err)
+	}
+	if got != "a\n1\n" {
+		t.Fatalf("got %q", got)
+	}
+	got, err = runToCSVFormat(t, bom+`{"tables":[{"rows":[[1]]}]}`, false, true, "")
+	if err != nil {
+		t.Fatalf("table BOM: %v", err)
+	}
+	if got != "1\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolveSheet_EffectiveName(t *testing.T) {
+	wb := Workbook{Sheets: []Sheet{{Cells: map[string]Cell{"A1": {V: "x"}}}}}
+	sh, err := resolveSheet(wb, "Sheet1", 0)
+	if err != nil {
+		t.Fatalf("resolveSheet: %v", err)
+	}
+	if sh.Cells["A1"].V != "x" {
+		t.Fatalf("unexpected sheet: %+v", sh)
+	}
+}

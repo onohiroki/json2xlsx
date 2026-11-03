@@ -17,6 +17,8 @@ type HTMLOptions struct {
 	DataJSON     bool
 	TableJSON    bool
 	EvalFormulas bool
+	// Range は出力対象の矩形範囲 ("A1:F20" または "A1")．空なら全体．
+	Range string
 	// Warn は警告の出力先．nil の場合は stderr に出力する．
 	Warn func(string)
 }
@@ -27,7 +29,7 @@ func ToHTML(r io.Reader, w io.Writer, opts HTMLOptions) error {
 	if err != nil {
 		return err
 	}
-	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
+	pendingWarnings := checkDataJSONModeWarning(res, opts.DataJSON, opts.ExplicitMode, opts.Mode)
 	return toHTML(res.Workbook, w, opts, pendingWarnings)
 }
 
@@ -49,7 +51,19 @@ func toHTML(wb *Workbook, w io.Writer, opts HTMLOptions, pendingWarnings []strin
 		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
 
-	out, hasWarning := renderHTML(*wb, opts)
+	var rng *CellRange
+	if strings.TrimSpace(opts.Range) != "" {
+		parsed, err := ParseCellRange(opts.Range)
+		if err != nil {
+			return err
+		}
+		rng = &parsed
+	}
+
+	out, hasWarning, err := renderHTML(*wb, opts, rng)
+	if err != nil {
+		return err
+	}
 	if _, err := io.WriteString(w, out); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
@@ -66,7 +80,7 @@ func toHTML(wb *Workbook, w io.Writer, opts HTMLOptions, pendingWarnings []strin
 }
 
 // renderHTML は Workbook を HTML 文字列にレンダリングする。
-func renderHTML(wb Workbook, opts HTMLOptions) (string, bool) {
+func renderHTML(wb Workbook, opts HTMLOptions, rng *CellRange) (string, bool, error) {
 	sheets := wb.Sheets
 	styles := wb.Styles
 
@@ -74,14 +88,17 @@ func renderHTML(wb Workbook, opts HTMLOptions) (string, bool) {
 
 	var b strings.Builder
 	var hasWarning bool
-	for _, sh := range sheets {
-		s, warn := renderSheetHTML(sh, stylesByID, opts)
+	for i, sh := range sheets {
+		s, warn, err := renderSheetHTML(sh, stylesByID, opts, rng)
+		if err != nil {
+			return "", false, fmt.Errorf("sheet %q: %w", effectiveSheetName(sh, i), err)
+		}
 		b.WriteString(s)
 		if warn {
 			hasWarning = true
 		}
 	}
-	return b.String(), hasWarning
+	return b.String(), hasWarning, nil
 }
 
 // buildStyleMap は Styles 配列を id → Style のマップに変換する。
@@ -228,10 +245,13 @@ func buildMergeMap(merges []Merge) (hidden map[string]bool, anchors map[string]m
 }
 
 // renderSheetHTML は単一シートを <table> としてレンダリングする。
-func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) (string, bool) {
-	cg, ok := BuildCellGrid(sh)
+func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions, rng *CellRange) (string, bool, error) {
+	cg, ok, err := BuildCellGridRange(sh, rng)
+	if err != nil {
+		return "", false, err
+	}
 	if !ok {
-		return "", false
+		return "", false, nil
 	}
 
 	hidden, anchors := buildMergeMap(sh.Merges)
@@ -256,14 +276,15 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) (stri
 		b.WriteString("</tr>\n")
 	}
 	for r := 1; r <= cg.MaxRow; r++ {
+		absRow := cg.RowOffset + r
 		b.WriteString("<tr>")
 		if withHeader {
 			b.WriteString("<th " + thStyle + ">")
-			b.WriteString(strconv.Itoa(r))
+			b.WriteString(strconv.Itoa(absRow))
 			b.WriteString("</th>")
 		}
 		for c := 1; c <= cg.MaxCol; c++ {
-			axis := cg.ColNames[c] + strconv.Itoa(r)
+			axis := cg.ColNames[c] + strconv.Itoa(absRow)
 			if hidden[axis] {
 				continue
 			}
@@ -335,7 +356,7 @@ func renderSheetHTML(sh Sheet, stylesByID map[int]Style, opts HTMLOptions) (stri
 		b.WriteString("</tr>\n")
 	}
 	b.WriteString("</table>\n")
-	return b.String(), hasWarning
+	return b.String(), hasWarning, nil
 }
 
 // htmlEsc は style 属性値として安全な文字列にエスケープする。

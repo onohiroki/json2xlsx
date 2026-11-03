@@ -717,3 +717,62 @@ func TestCLI_ToJSON_ImageOverwriteGuard(t *testing.T) {
 		t.Fatalf("JSON output: %v", err)
 	}
 }
+
+func TestCLI_Info_TableAndDataJSON(t *testing.T) {
+	table := `{"tables":[{"name":"S1","header":["A"],"rows":[[1]]}]}`
+	stdout, stderr, code := runCLIWithStdin(t, table, "info")
+	if code != 0 {
+		t.Fatalf("table info exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "S1") || !strings.Contains(stdout, "cells=2") {
+		t.Errorf("unexpected table info: %s", stdout)
+	}
+
+	data := `[["a"],[1]]`
+	stdout, stderr, code = runCLIWithStdin(t, data, "info")
+	if code != 0 {
+		t.Fatalf("data info exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Sheet1") || !strings.Contains(stdout, "A1:A2") {
+		t.Errorf("unexpected data info: %s", stdout)
+	}
+
+	stdout, stderr, code = runCLIWithStdin(t, table, "info", "--table-json")
+	if code != 0 {
+		t.Fatalf("explicit table info exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "S1") {
+		t.Errorf("unexpected explicit table info: %s", stdout)
+	}
+}
+
+func TestCLI_Info_FormatFlagConflict(t *testing.T) {
+	_, stderr, code := runCLIWithStdin(t, `{}`, "info", "--data-json", "--table-json")
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2 (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stderr, "cannot be used together") {
+		t.Errorf("unexpected stderr: %s", stderr)
+	}
+}
+
+func TestCLI_ToHTML_Range(t *testing.T) {
+	book := `{"cells":{"A1":{"t":"s","v":"a"},"B1":{"t":"s","v":"b"},"B2":{"t":"s","v":"d"}}}`
+	stdout, stderr, code := runCLIWithStdin(t, book, "to-html", "--mode", "f", "--range", "B2:B2")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, ">B</th>") || !strings.Contains(stdout, ">2</th>") || !strings.Contains(stdout, ">d</td>") {
+		t.Errorf("unexpected HTML: %s", stdout)
+	}
+}
+
+func TestCLI_ToCSV_DataJSON_Range(t *testing.T) {
+	stdout, stderr, code := runCLIWithStdin(t, `[["a","b"],[1,2]]`, "to-csv", "--data-json", "--range", "A1:A1")
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "a" {
+		t.Errorf("stdout = %q, want \"a\"", stdout)
+	}
+}

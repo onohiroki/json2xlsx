@@ -44,12 +44,12 @@ func ToCSVWithFormat(r io.Reader, w io.Writer, sheetName string, sheetIndex int,
 	}
 
 	br := bufio.NewReader(r)
-	head, err := br.Peek(4)
-	if err != nil && err != io.EOF {
+	isXLSX, err := inputIsXLSX(br)
+	if err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
 
-	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
+	if isXLSX {
 		res, err := ReadWorkbook(br, dataJSON)
 		if err != nil {
 			return err
@@ -91,7 +91,14 @@ func ToCSVWithFormat(r io.Reader, w io.Writer, sheetName string, sheetIndex int,
 	}
 
 	if dataJSON {
-		return convertDataJSONToCSV(data, w)
+		wb, err := UnmarshalWorkbook(data, true)
+		if err != nil {
+			return err
+		}
+		if err := convertWorkbookObjectToCSV(*wb, w, data, sheetName, sheetIndex, rng); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	isWorkbook, trimmed, err := detectCSVInputFormat(data)
@@ -236,26 +243,6 @@ func convertArrayOfObjectsToCSV(data []byte, w io.Writer) error {
 	return csvw.Error()
 }
 
-func convertDataJSONToCSV(data []byte, w io.Writer) error {
-	wb, err := UnmarshalWorkbook(data, true)
-	if err != nil {
-		return err
-	}
-
-	csvw := csv.NewWriter(w)
-	for _, row := range wb.Rows {
-		record := make([]string, len(row))
-		for i, v := range row {
-			record[i] = fmt.Sprint(v)
-		}
-		if err := csvw.Write(record); err != nil {
-			return fmt.Errorf("write csv row: %w", err)
-		}
-	}
-	csvw.Flush()
-	return csvw.Error()
-}
-
 func detectCSVInputFormat(data []byte) (isWorkbook bool, trimmed []byte, err error) {
 	trimmed = bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) == 0 {
@@ -292,17 +279,16 @@ func detectCSVInputFormat(data []byte) (isWorkbook bool, trimmed []byte, err err
 }
 
 func convertWorkbookToCSV(data []byte, w io.Writer, sheetName string, sheetIndex int, compute bool, rng *CellRange) ([]string, error) {
-	var wb Workbook
-	if err := json.Unmarshal(data, &wb); err != nil {
+	wb, err := UnmarshalWorkbook(data, false)
+	if err != nil {
 		return nil, fmt.Errorf("parse workbook json: %w", err)
 	}
-	normalizeWorkbook(&wb)
-	normalizeDateCells(&wb)
+	normalizeDateCells(wb)
 	var formulaWarnings []string
 	if compute {
-		formulaWarnings = EvalWorkbookFormulas(&wb)
+		formulaWarnings = EvalWorkbookFormulas(wb)
 	}
-	if err := convertWorkbookObjectToCSV(wb, w, data, sheetName, sheetIndex, rng); err != nil {
+	if err := convertWorkbookObjectToCSV(*wb, w, data, sheetName, sheetIndex, rng); err != nil {
 		return nil, err
 	}
 	return formulaWarnings, nil
@@ -355,8 +341,8 @@ func writeCSVRecords(w io.Writer, records [][]string) error {
 func resolveSheet(wb Workbook, sheetName string, sheetIndex int) (Sheet, error) {
 	switch {
 	case sheetName != "":
-		for _, s := range wb.Sheets {
-			if s.Name == sheetName {
+		for i, s := range wb.Sheets {
+			if s.Name == sheetName || effectiveSheetName(s, i) == sheetName {
 				return s, nil
 			}
 		}

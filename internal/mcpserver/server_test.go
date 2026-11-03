@@ -1033,3 +1033,65 @@ func TestToJSONImageConflict(t *testing.T) {
 		t.Fatalf("image was not replaced: %q", got)
 	}
 }
+
+func TestConvertAutoDetectsMapOfArrays(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	inPath := filepath.Join(dir, "map.json")
+	if err := os.WriteFile(inPath, []byte(`{"a":[1,2],"b":[3,4]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "map.xlsx")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"input_path":  inPath,
+			"output_path": outPath,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+	f, err := excelize.OpenFile(outPath)
+	if err != nil {
+		t.Fatalf("open output: %v", err)
+	}
+	defer f.Close()
+	got, _ := f.GetCellValue("Sheet1", "A1")
+	if got != "a" {
+		t.Fatalf("A1 = %q, want a", got)
+	}
+}
+
+func TestConvertAutoDetectKeepsSheetJSWithTables(t *testing.T) {
+	dir := t.TempDir()
+	cs, cleanup := newTestSession(t, dir)
+	defer cleanup()
+	ctx := context.Background()
+
+	inPath := filepath.Join(dir, "sheetjs.json")
+	input := `{"cells":{"A1":{"t":"s","v":"x"}},"tables":[{"range":"A1:A1"}]}`
+	if err := os.WriteFile(inPath, []byte(input), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "sheetjs.xlsx")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "json2xlsx_convert",
+		Arguments: map[string]any{
+			"input_path":  inPath,
+			"output_path": outPath,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %v", res.Content)
+	}
+}

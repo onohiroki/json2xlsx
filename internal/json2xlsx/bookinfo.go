@@ -65,7 +65,8 @@ func BuildBookInfoWithCharts(wb *Workbook, charts []Chart) BookInfo {
 	info := BookInfo{Schema: InfoSchema, Sheets: []SheetInfo{}}
 	for i := range wb.Sheets {
 		sh := &wb.Sheets[i]
-		si := SheetInfo{Name: sh.Name}
+		name := effectiveSheetName(*sh, i)
+		si := SheetInfo{Name: name}
 
 		minC, minR, maxC, maxR, ok := sheetUsedBounds(sh)
 		if ok {
@@ -83,7 +84,7 @@ func BuildBookInfoWithCharts(wb *Workbook, charts []Chart) BookInfo {
 		si.Freeze = sh.Freeze
 
 		for _, c := range charts {
-			if c.Sheet == sh.Name {
+			if c.Sheet == name {
 				si.Charts++
 			}
 		}
@@ -192,15 +193,24 @@ func sheetFormulaCount(sh *Sheet) int {
 
 // ReadBookInfoSource は入力 (XLSX または Workbook JSON) を読み込み，
 // サマリ計算に必要な Workbook とグラフ一覧を返す．
-// XLSX の場合はシート順を保持するため book ラッパーを使わずに抽出する．
+// JSON の場合は SheetJS / data / table を自動判定する．
 func ReadBookInfoSource(r io.Reader) (*Workbook, []Chart, error) {
+	return ReadBookInfoSourceWithFormat(r, false, false)
+}
+
+// ReadBookInfoSourceWithFormat は dataJSON / tableJSON を指定して入力をパースする．
+// どちらも false の場合は JSON の形式を自動判定する．
+func ReadBookInfoSourceWithFormat(r io.Reader, dataJSON, tableJSON bool) (*Workbook, []Chart, error) {
+	if dataJSON && tableJSON {
+		return nil, nil, fmt.Errorf("--data-json and --table-json cannot be used together")
+	}
 	br := bufio.NewReader(r)
-	head, err := br.Peek(4)
+	isXLSX, err := inputIsXLSX(br)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read input: %w", err)
 	}
 
-	if bytes.Equal(head, []byte{'P', 'K', 0x03, 0x04}) {
+	if isXLSX {
 		data, err := io.ReadAll(br)
 		if err != nil {
 			return nil, nil, fmt.Errorf("read input: %w", err)
@@ -231,11 +241,18 @@ func ReadBookInfoSource(r io.Reader) (*Workbook, []Chart, error) {
 		return nil, nil, fmt.Errorf("read input: %w", err)
 	}
 	data = trimBOM(data)
-	wb, err := UnmarshalWorkbook(data, false)
+	if !dataJSON && !tableJSON {
+		switch DetectJSONFormat(data) {
+		case "data":
+			dataJSON = true
+		case "table":
+			tableJSON = true
+		}
+	}
+	wb, err := ParseWorkbook(data, ConvertOptions{DataJSON: dataJSON, TableJSON: tableJSON})
 	if err != nil {
 		return nil, nil, err
 	}
 	normalizeDateCells(wb)
-	normalizeWorkbook(wb)
 	return wb, nil, nil
 }

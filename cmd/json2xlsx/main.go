@@ -68,9 +68,9 @@ Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json|--table-json] [--compute] [--autofit]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--range A1:F20] [--data-json|--table-json] [--compute]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json|--table-json] [--compute]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--range A1:F20] [--data-json|--table-json] [--compute]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--range A1:F20] [--data-json|--table-json] [--compute]
-  json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
+  json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--data-json|--table-json] [--json]
   json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
   json2xlsx functions [--search X] [--category C] [--json]
   json2xlsx mcp      [--allow-dir DIR]... [--create-allow-dir] [--max-input-bytes N] [--max-output-bytes N]
@@ -85,7 +85,7 @@ Usage:
   --autofit            列幅を内容に合わせて自動調整し，改行セルに折り返しを設定する
   --sheet              to-csv / info / eval で対象にするシート名
   --sheet-index        to-csv で入力 XLSX または JSON から抽出するシート番号 (1から開始)
-  --range              to-md / to-csv で出力する矩形範囲 (例 A1:F20，単一セル A1)．範囲外はエラー
+  --range              to-md / to-html / to-csv で出力する矩形範囲 (例 A1:F20，単一セル A1)．範囲外はエラー
   --cell               eval で数式の評価原点にするセル (既定 A1)
   --json               info / eval / functions で JSON を出力する
   --search             functions で関数名を部分一致 (大文字小文字無視) で絞り込む
@@ -110,7 +110,8 @@ to-md / to-html / to-xlsx は入力の magic byte (PK\x03\x04) で XLSX か JSON
 JSON の場合は SheetJS Cell Object 形式を基本とするが，--data-json を指定すると二次元配列・オブジェクト配列・Map-of-Arrays の 3 形式を受け付ける．
 --table-json を指定すると，tables / header / rows を使う高レベルな表形式を受け付ける．
 to-csv は JSON (SheetJS / 二次元配列 / csvtk / xlsx-cli) または XLSX を CSV に戻す．
-info / eval は XLSX と Workbook JSON の両方を受け付ける (-i 省略時 stdin)．
+info は XLSX と JSON (SheetJS / データ JSON / table JSON) を受け付け，JSON の形式は未指定時に自動判定する (-i 省略時 stdin)．
+eval は XLSX と Workbook JSON を受け付ける (-i 省略時 stdin)．
 eval は組込みの数式エンジンで評価するため Excel 完全互換ではない (配列数式・3D 参照・外部ブック参照などは未対応)．
 --range は A1:F20 または単一セル A1 のみを受け付ける．範囲外はエラーになる．
 サブコマンドを省略した場合は to-xlsx として動作する．`)
@@ -123,9 +124,9 @@ Usage:
   json2xlsx to-json [-i input.xlsx] [-o output.json] [--date-display|--date-rfc3339|--date-serial] [--image-mode base64|file]
   json2xlsx to-xlsx [-i input.json] [-o output.xlsx] [--data-json|--table-json] [--compute] [--autofit]
   json2xlsx to-md   [-i input.(json|xlsx)] [-o output.md] [--mode f|v|both] [--first-row-header] [--compact] [--range A1:F20] [--data-json|--table-json] [--compute]
-  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--data-json|--table-json] [--compute]
+  json2xlsx to-html [-i input.(json|xlsx)] [-o output.html] [--mode f|v|both] [--grid] [--range A1:F20] [--data-json|--table-json] [--compute]
   json2xlsx to-csv  [-i input.(json|xlsx)] [-o output.csv] [--sheet name] [--sheet-index n] [--range A1:F20] [--data-json|--table-json] [--compute]
-  json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--json]
+  json2xlsx info    [-i input.(json|xlsx)] [--sheet name] [--data-json|--table-json] [--json]
   json2xlsx eval    [-i input.(json|xlsx)] [--sheet name] [--cell A1] [--json] '<formula>'
   json2xlsx functions [--search X] [--category C] [--json]
   json2xlsx mcp      [--allow-dir DIR]... [--create-allow-dir] [--max-input-bytes N] [--max-output-bytes N]
@@ -140,7 +141,7 @@ Options:
   --autofit            Auto-adjust column widths and enable wrap text for cells with newlines
   --sheet              Sheet name for to-csv / info / eval
   --sheet-index        Sheet index for to-csv (1-based)
-  --range              Rectangular range for to-md / to-csv (e.g. A1:F20 or single cell A1)
+  --range              Rectangular range for to-md / to-html / to-csv (e.g. A1:F20 or single cell A1)
   --cell               eval origin cell for the evaluation context (default A1)
   --json               Output JSON for info / eval / functions
   --search             functions: filter by name substring (case-insensitive)
@@ -166,7 +167,8 @@ Without --data-json, JSON input must be SheetJS Cell Object format.
 With --data-json, accepts 2D array / array of objects / map-of-arrays.
 With --table-json, accepts the high-level tables / header / rows format.
 to-csv converts JSON or XLSX back to CSV.
-info / eval accept both XLSX and Workbook JSON (stdin when -i is omitted).
+info accepts XLSX and JSON (SheetJS / data / table) and auto-detects the JSON format when no flag is given (stdin when -i is omitted).
+eval accepts both XLSX and Workbook JSON (stdin when -i is omitted).
 eval uses the built-in formula engine, so it is not fully Excel-compatible
 (array formulas, 3D references, external workbook references, etc. are unsupported).
 --range accepts A1:F20 or a single cell A1 only; out-of-range is an error.`)
@@ -454,11 +456,12 @@ func runToMD(args []string) {
 func runToHTML(args []string) {
 	fs := flag.NewFlagSet("to-html", flag.ExitOnError)
 	fs.Usage = usage
-	var input, output, mode string
+	var input, output, mode, rangeStr string
 	var grid, dataJSON, tableJSON, compute bool
 	fs.StringVar(&input, "i", "", "input file: JSON Workbook or XLSX (default: stdin)")
 	fs.StringVar(&output, "o", "", "output HTML file (default: stdout)")
 	fs.StringVar(&mode, "mode", "v", "cell display mode: f|v|both (default: v)")
+	fs.StringVar(&rangeStr, "range", "", "output only the given range (e.g. A1:F20)")
 	fs.BoolVar(&grid, "grid", false, "collapse cellspacing and show thin gray borders on all cells")
 	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
 	fs.BoolVar(&tableJSON, "table-json", false, "accept high-level table JSON (tables/header/rows)")
@@ -498,6 +501,7 @@ func runToHTML(args []string) {
 		DataJSON:     dataJSON,
 		TableJSON:    tableJSON,
 		EvalFormulas: compute,
+		Range:        rangeStr,
 	}
 	if err := json2xlsx.ToHTML(r, w, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "to-html: %v\n", err)
@@ -632,11 +636,18 @@ func runInfo(args []string) {
 	fs := flag.NewFlagSet("info", flag.ExitOnError)
 	fs.Usage = usage
 	var input, sheet string
-	var asJSON bool
+	var asJSON, dataJSON, tableJSON bool
 	fs.StringVar(&input, "i", "", "input XLSX or Workbook JSON file (default: stdin)")
 	fs.StringVar(&sheet, "sheet", "", "restrict output to one sheet name")
 	fs.BoolVar(&asJSON, "json", false, "output as JSON")
+	fs.BoolVar(&dataJSON, "data-json", false, "accept 2D array, array of objects, or map-of-arrays JSON")
+	fs.BoolVar(&tableJSON, "table-json", false, "accept high-level table JSON (tables/header/rows)")
 	_ = fs.Parse(args)
+
+	if dataJSON && tableJSON {
+		fmt.Fprintln(os.Stderr, "info: --data-json and --table-json cannot be used together")
+		os.Exit(2)
+	}
 
 	r, closeR, err := openInput(input)
 	if err != nil {
@@ -645,7 +656,7 @@ func runInfo(args []string) {
 	}
 	defer closeR()
 
-	wb, charts, err := json2xlsx.ReadBookInfoSource(r)
+	wb, charts, err := json2xlsx.ReadBookInfoSourceWithFormat(r, dataJSON, tableJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "info: %v\n", err)
 		os.Exit(1)

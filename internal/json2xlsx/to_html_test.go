@@ -302,3 +302,38 @@ func TestToHTML_XLSXPath(t *testing.T) {
 		t.Fatalf("missing values. got:\n%s", got)
 	}
 }
+
+func TestToHTML_Range(t *testing.T) {
+	in := `{"cells":{
+		"A1":{"t":"s","v":"a"},"B1":{"t":"s","v":"b"},
+		"A2":{"t":"s","v":"c"},"B2":{"t":"s","v":"d"}}}`
+	got := runToHTML(t, in, HTMLOptions{Mode: MarkdownModeFormula, Range: "B2:B2"})
+	want := "<table style=\"border-collapse:collapse\">\n" +
+		"<tr><th style=\"font-weight:bold;border:1px solid #000\"></th><th style=\"font-weight:bold;border:1px solid #000\">B</th></tr>\n" +
+		"<tr><th style=\"font-weight:bold;border:1px solid #000\">2</th><td>d</td></tr>\n" +
+		"</table>\n"
+	if got != want {
+		t.Fatalf("mismatch.\n got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToHTML_RangeWithMerge(t *testing.T) {
+	in := `{"cells":{
+		"A1":{"t":"s","v":"m"},"A2":{"t":"s","v":"x"},"B2":{"t":"s","v":"y"}},
+		"merges":[{"range":"A1:B1"}]}`
+	got := runToHTML(t, in, HTMLOptions{Mode: MarkdownModeFormula, Range: "A1:B2", GridLines: true})
+	if !strings.Contains(got, `colspan="2"`) {
+		t.Fatalf("expected colspan in %s", got)
+	}
+	if !strings.Contains(got, ">1</th><td colspan") {
+		t.Fatalf("expected absolute row number in %s", got)
+	}
+}
+
+func TestToHTML_RangeOutOfBounds(t *testing.T) {
+	var out bytes.Buffer
+	err := ToHTML(strings.NewReader(`{"cells":{"A1":{"t":"s","v":"x"}}}`), &out, HTMLOptions{Range: "Z9:Z10"})
+	if err == nil {
+		t.Fatal("expected range error")
+	}
+}

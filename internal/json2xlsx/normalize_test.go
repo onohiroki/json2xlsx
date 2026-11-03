@@ -66,44 +66,52 @@ func TestTrimBOM(t *testing.T) {
 	}
 }
 
-func TestCheckJSONArrayWarning_NoWarningForXLSX(t *testing.T) {
+func TestCheckDataJSONModeWarning_NoWarningForXLSX(t *testing.T) {
 	res := &ReadWorkbookResult{IsXLSX: true}
-	w := checkJSONArrayWarning(res, true, MarkdownModeFormula)
+	w := checkDataJSONModeWarning(res, true, true, MarkdownModeFormula)
 	if len(w) != 0 {
 		t.Errorf("expected no warnings for XLSX input, got %v", w)
 	}
 }
 
-func TestCheckJSONArrayWarning_NoWarningForDefaultMode(t *testing.T) {
+func TestCheckDataJSONModeWarning_NoWarningForDefaultMode(t *testing.T) {
 	res := &ReadWorkbookResult{RawData: []byte(`[{"A1":1}]`)}
-	w := checkJSONArrayWarning(res, false, MarkdownModeFormula)
+	w := checkDataJSONModeWarning(res, true, false, MarkdownModeFormula)
 	if len(w) != 0 {
 		t.Errorf("expected no warnings when mode is not explicitly set, got %v", w)
 	}
 }
 
-func TestCheckJSONArrayWarning_WarningForFormulaMode(t *testing.T) {
-	res := &ReadWorkbookResult{RawData: []byte(`[{"A1":1}]`)}
-	w := checkJSONArrayWarning(res, true, MarkdownModeFormula)
-	if len(w) != 1 {
-		t.Fatalf("expected 1 warning for formula mode with JSON array, got %v", w)
+func TestCheckDataJSONModeWarning_NoWarningForSheetJS(t *testing.T) {
+	res := &ReadWorkbookResult{RawData: []byte(`{"cells":{"A1":{"t":"s","v":"x"}}}`)}
+	w := checkDataJSONModeWarning(res, false, true, MarkdownModeFormula)
+	if len(w) != 0 {
+		t.Errorf("expected no warnings for SheetJS input, got %v", w)
 	}
-	if w[0] != "Warning: --mode=f is ignored for JSON array input (formulas not supported in this format)." {
+}
+
+func TestCheckDataJSONModeWarning_WarningForFormulaMode(t *testing.T) {
+	res := &ReadWorkbookResult{RawData: []byte(`[{"A1":1}]`)}
+	w := checkDataJSONModeWarning(res, true, true, MarkdownModeFormula)
+	if len(w) != 1 {
+		t.Fatalf("expected 1 warning for formula mode with data JSON, got %v", w)
+	}
+	if w[0] != "Warning: --mode=f has no effect for data JSON input (formulas are not supported in this format)." {
 		t.Errorf("unexpected warning message: %q", w[0])
 	}
 }
 
-func TestCheckJSONArrayWarning_WarningForBothMode(t *testing.T) {
-	res := &ReadWorkbookResult{RawData: []byte(`[{"A1":1}]`)}
-	w := checkJSONArrayWarning(res, true, MarkdownModeBoth)
+func TestCheckDataJSONModeWarning_WarningForMapOfArrays(t *testing.T) {
+	res := &ReadWorkbookResult{RawData: []byte(`{"a":[1,2]}`)}
+	w := checkDataJSONModeWarning(res, true, true, MarkdownModeBoth)
 	if len(w) != 1 {
-		t.Fatalf("expected 1 warning for both mode with JSON array, got %v", w)
+		t.Fatalf("expected 1 warning for map-of-arrays input, got %v", w)
 	}
 }
 
-func TestCheckJSONArrayWarning_NoWarningForValueMode(t *testing.T) {
+func TestCheckDataJSONModeWarning_NoWarningForValueMode(t *testing.T) {
 	res := &ReadWorkbookResult{RawData: []byte(`[{"A1":1}]`)}
-	w := checkJSONArrayWarning(res, true, MarkdownModeValue)
+	w := checkDataJSONModeWarning(res, true, true, MarkdownModeValue)
 	if len(w) != 0 {
 		t.Errorf("expected no warnings for value mode, got %v", w)
 	}

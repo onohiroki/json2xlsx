@@ -149,3 +149,59 @@ func TestReadBookInfoSourceXLSX(t *testing.T) {
 		t.Errorf("usedRange = %q, want A1:A2", info.Sheets[0].UsedRange)
 	}
 }
+
+func TestReadBookInfoSource_TableJSON(t *testing.T) {
+	input := `{"tables":[{"name":"S1","header":["A"],"rows":[[1]]}]}`
+	wb, _, err := ReadBookInfoSource(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ReadBookInfoSource: %v", err)
+	}
+	info := BuildBookInfo(wb)
+	if len(info.Sheets) != 1 || info.Sheets[0].Name != "S1" {
+		t.Fatalf("unexpected sheets: %+v", info.Sheets)
+	}
+	if info.Sheets[0].Cells != 2 {
+		t.Errorf("cells = %d, want 2", info.Sheets[0].Cells)
+	}
+	if len(info.Sheets[0].Tables) != 0 {
+		t.Errorf("tables = %d, want 0", len(info.Sheets[0].Tables))
+	}
+}
+
+func TestReadBookInfoSource_DataJSON(t *testing.T) {
+	input := `[["a"],[1]]`
+	wb, _, err := ReadBookInfoSource(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ReadBookInfoSource: %v", err)
+	}
+	info := BuildBookInfo(wb)
+	if len(info.Sheets) != 1 || info.Sheets[0].Name != "Sheet1" {
+		t.Fatalf("unexpected sheets: %+v", info.Sheets)
+	}
+	if info.Sheets[0].UsedRange != "A1:A2" {
+		t.Errorf("usedRange = %q, want A1:A2", info.Sheets[0].UsedRange)
+	}
+}
+
+func TestReadBookInfoSource_MapOfArraysAutoDetect(t *testing.T) {
+	input := `{"a":[1,2],"b":[3,4]}`
+	wb, _, err := ReadBookInfoSource(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ReadBookInfoSource: %v", err)
+	}
+	info := BuildBookInfo(wb)
+	if len(info.Sheets) != 1 || info.Sheets[0].UsedRange != "A1:B3" {
+		t.Fatalf("unexpected info: %+v", info.Sheets)
+	}
+}
+
+func TestReadBookInfoSource_ShortInput(t *testing.T) {
+	wb, _, err := ReadBookInfoSource(strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("ReadBookInfoSource: %v", err)
+	}
+	info := BuildBookInfo(wb)
+	if len(info.Sheets) != 1 || info.Sheets[0].Name != "Sheet1" {
+		t.Fatalf("unexpected sheets: %+v", info.Sheets)
+	}
+}

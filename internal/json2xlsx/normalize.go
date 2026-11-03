@@ -1,7 +1,6 @@
 package json2xlsx
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 )
@@ -28,12 +27,12 @@ func trimBOM(data []byte) []byte {
 	return data
 }
 
-func checkJSONArrayWarning(res *ReadWorkbookResult, explicitMode bool, mode MarkdownMode) []string {
-	var warnings []string
-	if !res.IsXLSX && len(res.RawData) > 0 && bytes.TrimSpace(res.RawData)[0] == '[' {
-		if explicitMode && (mode == MarkdownModeFormula || mode == MarkdownModeBoth) {
-			warnings = append(warnings, fmt.Sprintf("Warning: --mode=%s is ignored for JSON array input (formulas not supported in this format).", mode))
-		}
+func checkDataJSONModeWarning(res *ReadWorkbookResult, dataJSON, explicitMode bool, mode MarkdownMode) []string {
+	if !dataJSON || res.IsXLSX || !explicitMode {
+		return nil
 	}
-	return warnings
+	if mode != MarkdownModeFormula && mode != MarkdownModeBoth {
+		return nil
+	}
+	return []string{fmt.Sprintf("Warning: --mode=%s has no effect for data JSON input (formulas are not supported in this format).", mode)}
 }

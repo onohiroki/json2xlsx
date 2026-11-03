@@ -338,3 +338,11 @@ func TestToMarkdown_XLSXPath(t *testing.T) {
 		t.Fatalf("missing values. got:\n%s", got)
 	}
 }
+
+func TestToMarkdown_MultiSheetUnnamed(t *testing.T) {
+	in := `{"sheets":[{"cells":{"A1":{"t":"s","v":"a"}}},{"cells":{"A1":{"t":"s","v":"b"}}}]}`
+	got := runToMD(t, in, MarkdownOptions{Mode: MarkdownModeValue})
+	if !strings.Contains(got, "## Sheet1") || !strings.Contains(got, "## Sheet2") {
+		t.Fatalf("expected effective sheet names, got:\n%s", got)
+	}
+}

@@ -47,7 +47,7 @@ func ToMarkdown(r io.Reader, w io.Writer, opts MarkdownOptions) error {
 	if err != nil {
 		return err
 	}
-	pendingWarnings := checkJSONArrayWarning(res, opts.ExplicitMode, opts.Mode)
+	pendingWarnings := checkDataJSONModeWarning(res, opts.DataJSON, opts.ExplicitMode, opts.Mode)
 	return toMarkdown(res.Workbook, w, opts, pendingWarnings)
 }
 
@@ -169,17 +169,18 @@ func renderMarkdownRange(wb Workbook, opts MarkdownOptions, rng *CellRange) (str
 	var hasWarning bool
 	multi := len(sheets) > 1
 	for i, sh := range sheets {
+		name := effectiveSheetName(sh, i)
 		if multi {
 			if i > 0 {
 				b.WriteString("\n")
 			}
 			b.WriteString("## ")
-			b.WriteString(sh.Name)
+			b.WriteString(name)
 			b.WriteString("\n\n")
 		}
 		out, w, err := renderSheetRange(sh, opts, rng)
 		if err != nil {
-			return "", false, fmt.Errorf("sheet %q: %w", sh.Name, err)
+			return "", false, fmt.Errorf("sheet %q: %w", name, err)
 		}
 		b.WriteString(out)
 		if w {
